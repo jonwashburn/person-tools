@@ -9,6 +9,21 @@ const ALLOW = [
   ["POST", /^members\/mt_[a-z0-9]{4,80}\/tasks\/tk_[a-z0-9]{4,80}$/],   // OWNER_all_7: the person answers a task
   ["GET", /^members\/mt_[a-z0-9]{4,80}\/tasks\/tk_[a-z0-9]{4,80}\/media$/],   // OWNER_all_8: the piece a person checks, played in this page only
   ["POST", /^members\/mt_[a-z0-9]{4,80}\/(on|leave|delete|settings|push|feedback)$/],
+  // OWNER_all_10 B and C: the person's own AIs, from this page (connect, list, quiet, revoke, a new signing secret, the AI's picture)
+  ["GET", /^members\/mt_[a-z0-9]{4,80}\/connections$/],
+  ["GET", /^members\/mt_[a-z0-9]{4,80}\/blocks$/],   // OWNER_router_4 item 1
+  ["POST", /^members\/mt_[a-z0-9]{4,80}\/blocks$/],
+  ["DELETE", /^members\/mt_[a-z0-9]{4,80}\/blocks\/bk_[a-z0-9]{4,80}$/],
+  ["POST", /^members\/mt_[a-z0-9]{4,80}\/connections$/],
+  ["DELETE", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}$/],
+  ["POST", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}\/(quiet|block|secret)$/],
+  ["GET", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}\/icon$/],
+  // OWNER_router_10: passkey accounts and the admin console, through this page's own address (the credential in the header)
+  ["POST", /^account\/(start|passkey\/options|passkey|login\/options|login|logout|memberships)$/],
+  ["GET", /^account$/],
+  ["GET", /^admin\/[a-z0-9_\/]{2,120}$/],
+  ["POST", /^admin\/[a-z0-9_\/]{2,120}$/],
+  ["DELETE", /^admin\/[a-z0-9_\/]{2,120}$/],
   ["GET", /^join\/jc_[a-z0-9]{4,80}$/],
   ["POST", /^join\/jc_[a-z0-9]{4,80}$/],
   ["POST", /^arrivals\/ar_[A-Za-z0-9_\-.]{8,600}$/],   // a person an outside panel sent (the /p/ page)

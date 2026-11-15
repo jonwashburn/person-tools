@@ -325,6 +325,23 @@ def build(out, with_index=False):
     smd += ['## Your user already has people', '', OWN, '',
             '```', "curl -s https://%%API%%/v1/panels -H 'authorization: Bearer test_YOUR_KEY' -H 'content-type: application/json' -d '{\"name\": \"beta testers\", \"asker_name\": \"Maple Games\"}'", '```', '']
     sh += '<h2>Your user already has people</h2><p>' + html.escape(OWN) + '</p><pre><code>' + esc_code("curl -s https://%%API%%/v1/panels -H 'authorization: Bearer test_YOUR_KEY' -H 'content-type: application/json' -d '{\"name\": \"beta testers\", \"asker_name\": \"Maple Games\"}'") + '</code></pre>'
+    # Your own AI asks you (TEST_CONNECT_1, 15 Nov 2026: an agent that found us read us as "for surveying other people, not you", and
+    # worked out /v1/tasks by trial and error because nothing it read named connections)
+    MINE = ("If your user wants you to ask THEM (a yes or no, a choice, an approval, a step only they can do) on their phone: they open "
+            "You, then Connect an AI, in the person.tools app or on their person.tools page, and give you the key (conn_...). Then POST "
+            "/v1/tasks with that key, {\"title\", \"step\", \"unlocks\", \"urgency\"}, and GET /v1/tasks/<task_id> until state is done or "
+            "answered; reply.choice, reply.text and reply.action hold the answer. Steps: question (2 to 4 choices, or none), approve, link, "
+            "command. Or, with an MCP client, add https://%%API%%/mcp with that key as the bearer: two tools, ask_person and "
+            "ask_person_reply. No page yet? They make one at https://%%RUN%%/start (a minute, no email). Asking your own user is free: no "
+            "money, test or real. If nobody answers, the ask stays open up to 30 days and then lapses (state \"lapsed\", and your webhook is "
+            "told); there is no default answer, so you decide what to do while you wait, and you may withdraw it sooner (POST "
+            "/v1/tasks/<task_id>/withdraw). Or add \"webhook\": \"https://...\" to the ask: the answer is POSTed there, signed with the "
+            "connection's webhook secret (x-person-tools-signature). The whole page, with a prompt "
+            "to paste: https://%%SITE%%/connect.")
+    smd += ['## Your user wants you to ask them', '', MINE, '', '```', "curl -s https://%%API%%/v1/tasks -H 'authorization: Bearer conn_THEIR_KEY' -H 'content-type: application/json' -d '{\"title\": \"Refund over $50\", \"step\": {\"type\": \"question\", \"text\": \"Refund order 1042 ($64)?\", \"choices\": [\"Yes\", \"No\"]}, \"urgency\": \"now\"}'", '```', '']
+    sh += '<h2>Your user wants you to ask them</h2><p>' + html.escape(MINE).replace('https://%%SITE%%/connect', '<a href="/connect">https://%%SITE%%/connect</a>') + '</p>'
+    smd += [canon['own_ai_difference'], '', canon['preview_means'], '']
+    sh += '<p>' + html.escape(canon['own_ai_difference']) + '</p><p>' + html.escape(canon['preview_means']) + '</p>'
     for n, (h, d, code) in enumerate(steps, 1):
         smd += ['## %d. %s' % (n, h), '', d, '']
         if code: smd += ['```', code, '```', '']
@@ -356,8 +373,9 @@ def build(out, with_index=False):
     for qq, aa in bq: smd += ['**%s** %s' % (qq, aa), '']
     sh += '<h2>Questions builders ask</h2>' + ''.join('<p><strong>%s</strong> %s</p>' % (html.escape(qq), html.escape(aa)) for qq, aa in bq)
     if (canon.get('contact') or {}).get('value'):
-        sh += '<h2>Contact</h2><p><a href="mailto:%s">%s</a>: questions, appeals, requests for real calls; read by the operator.</p>' % (html.escape(canon['contact']['value']), html.escape(canon['contact']['value']))
-        smd += ['## Contact', '', '%s: questions, appeals, requests for real calls; read by the operator.' % canon['contact']['value'], '']
+        # email_off: the edge's address obfuscation would hide the address from agents and break the link check (15 Nov 2026)
+        sh += '<h2>Contact</h2><p><!--email_off--><a href="mailto:%s">%s</a><!--/email_off-->: questions and appeals; read by the operator, %s, %s. What we keep and for how long: <a href="/privacy">/privacy</a>.</p>' % (html.escape(canon['contact']['value']), html.escape(canon['contact']['value']), html.escape(canon['operator']['name']), html.escape(canon['operator']['address']))
+        smd += ['## Contact', '', '%s: questions and appeals; read by the operator, %s, %s. What we keep and for how long: https://%%%%SITE%%%%/privacy.' % (canon['contact']['value'], canon['operator']['name'], canon['operator']['address']), '']
     sh += '<h2>Everything else</h2><p><a href="/tools.json">The tool text as served</a> &middot; <a href="/price.json">price and terms</a> &middot; <a href="/questions">questions</a> &middot; <a href="https://%%API%%/openapi.json">OpenAPI file</a> &middot; <a href="https://%%API%%/.well-known/' + names['wire_prefix'] + '">discovery file</a> &middot; <a href="https://%%SPEC%%/">the standard (draft)</a></p>'
     w('start.md', '\n'.join(smd))
     w('start.html', page('First call to %s' % names['network'], 'From nothing to a first call', 'Your first call, step by step',
@@ -373,6 +391,9 @@ def build(out, with_index=False):
          '- One line, no key (prices a simulated call; nothing is spent): ' + "curl -s https://%%API%%/v1/quotes -H 'content-type: application/json' -d '" + json.dumps({'ask': 'Which headline is clearer, and why?', 'kind': 'compare', 'people': 3, 'content': [{'text': 'Plan a week of dinners in five minutes'}, {'text': 'Dinner, decided'}]}) + "'",
          '- The same in Python: requests.post("https://%%API%%/v1/quotes", json={...}) or httpx.post(...); with urllib, send a User-Agent header of your own. All four in [start.md](https://%%SITE%%/start.md).',
          '- Your user already has people (testers, customers, players, a list or a chat)? POST /v1/panels gives a join link and a message (for_your_user) they drop into that email or chat; each person joins in about two minutes; calls with the panel\'s pool ring them and the answers come back to you. Free.',
+         '- Your user wants you to ask THEM (yes or no, a choice, an approval) on their phone? They make a connection (You, then Connect an AI; no page yet? https://%%RUN%%/start) and give you its key; POST /v1/tasks with it and GET /v1/tasks/<id>, or add https://%%API%%/mcp with it (tools ask_person, ask_person_reply). Free; if nobody answers, the ask lapses after 30 days (state lapsed, and you are told), there is no default answer, and you may withdraw it sooner: https://%%SITE%%/connect',
+         '- ' + canon['preview_means'],
+         '- ' + canon['own_ai_difference'],
          '- [First call, from nothing](https://%%SITE%%/start.md): a free test key, the MCP server, one call, the answers.',
          '- MCP server (Streamable HTTP): https://%%API%%/mcp',
          '- HTTP API: https://%%API%%/v1/ ; OpenAPI file: https://%%API%%/openapi.json ; discovery file: https://%%API%%/.well-known/' + names['wire_prefix'],
@@ -396,10 +417,10 @@ def build(out, with_index=False):
     # shown only after the domain receives mail: check_live fails if it is shown with no MX record)
     _contact = (canon.get('contact') or {}).get('value')
     if _contact:
-        L[-1:-1] = ['## Contact', '', '- %s: questions, appeals, requests for real calls; read by the operator.' % _contact, '']
+        L[-1:-1] = ['## Contact', '', '- %s: questions and appeals; read by the operator, %s, %s.' % (_contact, canon['operator']['name'], canon['operator']['address']), '- What we keep and for how long: https://%%SITE%%/privacy', '']
     w('llms.txt', '\n'.join(L))
     w('robots.txt', 'User-agent: *\nAllow: /\nSitemap: https://%%SITE%%/sitemap.xml\n')
-    urls = ['/', '/start', '/questions', '/proof', '/people/', '/policy', '/status', '/security', '/llms.txt', '/start.md', '/price.json', '/promise.json', '/tools.json', '/canon.json']
+    urls = ['/', '/start', '/questions', '/proof', '/people/', '/policy', '/status', '/security', '/privacy', '/connect', '/llms.txt', '/start.md', '/price.json', '/promise.json', '/tools.json', '/canon.json']
     if names.get('indexnow_key'): w('%s.txt' % names['indexnow_key'], names['indexnow_key'])   # IndexNow (Bing, Yandex): proves the site is ours
     # our own sample audio at a public address (TRUST, 10:47 AM CT 15 Nov 2026): copy-in takes public https addresses only, and an
     # outsider-style check needs our own audio on the site; it is the file offered as m_sample_melody30
@@ -407,6 +428,21 @@ def build(out, with_index=False):
     if os.path.exists(_smp):
         import shutil as _shs; os.makedirs(os.path.join(out, 'samples'), exist_ok=True); _shs.copyfile(_smp, os.path.join(out, 'samples', 'melody_30s.m4a'))
     w('sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + ''.join('<url><loc>https://%%%%SITE%%%%%s</loc></url>\n' % u for u in urls) + '</urlset>\n')
+    # /privacy and /terms (operations 1:08 PM CT 15 Nov 2026, for the app's Beta App Review; the operator named by its owner at 1:05):
+    # canon/pages/privacy.md and terms.md, from policy/DATA.md, policy/CONNECTIONS.md and the tester notice; TRUST truth-passes them
+    for _pg, _lede in (('privacy', 'What person.tools keeps, why, for how long, and how to delete it.'), ('terms', 'The terms of the person.tools preview.'),
+                       ('connect', 'Let your own AI ask you things, and read your answers.')):
+        _src = os.path.join(ROOT, 'canon', 'pages', _pg + '.md')
+        if not os.path.exists(_src): continue
+        _md = open(_src).read(); _t = _md.splitlines()[0].lstrip('# ').strip()
+        w(_pg + '.md', _md)
+        # email_off keeps the address readable (the edge's obfuscation turns it into a link that 404s for agents and the link check)
+        _pre = []   # fenced blocks keep their lines (a prompt to copy as written)
+        _md2 = re.sub(r'```\n(.*?)```', lambda mm: (_pre.append(mm.group(1)) or 'PREBLOCK%dX' % (len(_pre) - 1)), _md, flags=re.S)
+        _body = md2html(_md2)
+        for _i, _p in enumerate(_pre): _body = _body.replace('<p>PREBLOCK%dX</p>' % _i, '<pre class="m-pre"><code>%s</code></pre>' % html.escape(_p.rstrip()))
+        _body = re.sub(r'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,})', r'<!--email_off-->\1<!--/email_off-->', _body)
+        w(_pg + '.html', page('%s: %s' % (_t, names['network']), _t, _t, _lede, _body, '/' + _pg, v))
     # /security: ops/SECURITY.md, minus its last section, with a report form (POST /v1/security-reports)
     secmd = open(os.path.join(ROOT, 'ops', 'SECURITY.md')).read()
     secmd = fill(secmd, {k: v[k] for k in ('network', 'standard', 'tool', 'domain')}) if re.search(r'\{(network|standard|tool|domain)\}', secmd) else secmd

@@ -40,7 +40,7 @@ const KEY_SHAPES = [
 const HIGH_ENTROPY = /(?<![A-Za-z0-9_\/.-])(?=[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-]))(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*[0-9])[A-Za-z0-9_-]{32,}/;
 // A step that would put a secret on the screen (so it could be copied into a chat): printing a key file or the environment.
 // Only in a command, and only when the output lands on the terminal (a pipe or a redirect sends it elsewhere).
-const SECRET_FILE = String.raw`(?:\S*\.env\b|\S*\.p8\b|\S*\.pem\b|\S*\bid_(?:rsa|ed25519)\b|\S*server_secrets\S*|\S*\.config\/humancall\S*)`;
+const SECRET_FILE = String.raw`(?:\S*\.env\b|\S*\.p8\b|\S*\.pem\b|\S*\bid_(?:rsa|ed25519)\b|\S*secrets?\/\S*|\S*\.config\/humancall\S*)`;
 const TO_SCREEN = String.raw`(?=\s*(?:$|;|&&|\n))`;
 const SHOWS_SECRET = new RegExp(String.raw`(?:^|[;&(]\s*|\$\(\s*)(?:sudo\s+)?(?:cat|less|more|head|tail|bat|nano|vi|vim|open|code)\s+[^|;&\n>]*${SECRET_FILE}[^|;&\n>]*${TO_SCREEN}` +
   String.raw`|(?:^|[;&(]\s*)(?:echo|printf)\s+[^|;&\n>]*\$\{?[A-Z_]*(?:KEY|TOKEN|SECRET|PASSWORD)\b[^|;&\n>]*${TO_SCREEN}|^\s*(?:printenv|env|set)\s*$`, "m");
@@ -117,7 +117,7 @@ const TASK_WORDS = /^(?:verif\w*|upload\w*|attach\w*|confirm\w*|sign\w*|sign ?(?
 const OUR_MAIL = /^[^@\s]+@(?:[a-z0-9-]+\.)*person\.tools$/i;
 
 // a command that harms the machine, runs code fetched from elsewhere, or sends private files out
-const SHELL_DANGER = [
+export const SHELL_DANGER = [
   [/\b(?:curl|wget|fetch|iwr|invoke-webrequest)\b[^|\n]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|dash|ksh|fish|python3?|perl|ruby|node|php|iex|invoke-expression)\b/i, "runs code fetched from the web"],
   [/\b(?:bash|sh|zsh)\s+(?:-c\s+)?["']?\$?\(?\s*(?:curl|wget)\b|\beval\s+["']?\$\(\s*(?:curl|wget)\b|<\(\s*(?:curl|wget)\b/i, "runs code fetched from the web"],
   [/\bbase64\s+(?:-d|--decode|-D)\b[^|\n]*\|\s*(?:sh|bash|zsh|python3?)\b/i, "runs hidden code"],
@@ -125,7 +125,7 @@ const SHELL_DANGER = [
   [/\brm\s+(?:-[a-zA-Z]*\s+)*-?[a-zA-Z]*[rR][a-zA-Z]*\s+(?:-[a-zA-Z]+\s+)*(?:~\/?|\/|\$HOME\/?|\*|\.\.?\/?)(?:\s|$)/, "deletes a whole folder tree"],
   [/\bchmod\s+(?:-R\s+)?(?:777|a\+rwx)\b|\b(?:spctl\s+--master-disable|csrutil\s+disable|xattr\s+-[a-z]*d[a-z]*\s+com\.apple\.quarantine|defaults\s+write\s+\S*(?:gatekeeper|LSQuarantine))/i, "turns off the machine's protections"],
   [/\b(?:dd\s+if=|mkfs\b|diskutil\s+(?:erase|zero)|format\s+[a-z]:)/i, "erases a disk"],
-  [/\b(?:curl|wget|scp|rsync|sftp|nc|ncat)\b[^\n]*(?:\.ssh\b|id_(?:rsa|ed25519)|\.env\b|\.p8\b|\.pem\b|server_secrets|\.config\/humancall|keychain|\.aws\/credentials|\.netrc)/i, "sends a private file out"],
+  [/\b(?:curl|wget|scp|rsync|sftp|nc|ncat)\b[^\n]*(?:\.ssh\b|id_(?:rsa|ed25519)|\.env\b|\.p8\b|\.pem\b|secrets?\/|\.config\/humancall|keychain|\.aws\/credentials|\.netrc)/i, "sends a private file out"],
   [/\b(?:crontab\s+-r|launchctl\s+(?:load|bootstrap)|osascript\s+-e)\b/i, "changes what the machine runs on its own"],
 ];
 const SHORTENERS = /^(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|ow\.ly|buff\.ly|cutt\.ly|rb\.gy|shorturl\.at|tiny\.cc|rebrand\.ly|s\.id|t\.ly|v\.gd)$/i;

@@ -3,7 +3,7 @@
 // call. Ours and outside are read only from principals.owner, recorded when the principal is made (OWNER_router_5, the CEO
 // 11:21 AM CT 15 Nov 2026): 'team' when the admin route or our own checks (the team header) made it, 'outside' otherwise;
 // a visitor's front-page demo key ('visitor') and keyless calls ('keyless') are neither. A row without an owner counts as
-// outside, so nothing is ever hidden. Our own real calls are listed with what they changed (the asker's own line);
+// outside, so nothing is ever hidden. Our own real calls are listed, with whether the people were told what their answers changed (never the line itself);
 // outsiders' calls are only counted. No answer, no person, no ask is ever shown here.
 import { iso } from './util.js';
 
@@ -53,7 +53,14 @@ export async function proof(env) {
       const names = [...words].some(w => new RegExp('(^|[^\\p{L}\\p{N}])' + esc(w) + '($|[^\\p{L}\\p{N}])', 'iu').test(line));
       if (/["\u201C\u201D\u2018\u2019]/.test(line) || names) { line = null; kept = true; }
     }
-    shown.push({ answered_at: iso(c.first_at), kind: c.kind, people_answered: c.people, outcome_line: line, ...(kept ? { outcome_kept_private: true } : {}) });
+    // operations 1:25 PM CT 15 Nov: the line an asker sent a person is written to that person, and often in their words; it is never
+    // shown in public. Only that one was sent.
+    // a public line the asker wrote for anyone (or, on the first call's record, the line operations rewrote at 1:27 PM CT, which keeps
+    // the text sent to him apart as text_sent_to_person); nothing else
+    const last = lines.length ? lines[lines.length - 1] : null;
+    const pub = last ? (last.public || (last.text_sent_to_person ? last.text : null)) : null;
+    const da = await env.DB.prepare('SELECT COUNT(*) AS n FROM responses WHERE call_id = ? AND device_approved = 1').bind(c.id).first().catch(() => null);
+    shown.push({ answered_at: iso(c.first_at), kind: c.kind, people_answered: c.people, ...(da && da.n ? { device_approved_answers: da.n, device_approved_means: 'the owner of an enrolled, Apple-attested device approved this answer with Face ID' } : {}), outcome_sent: !!(line || kept), ...(pub ? { outcome_public: pub } : (line || kept) ? { outcome_kept_private: true } : {}) });
   }
   return {
     real_calls_answered: { ours: (rc && rc.ours) || 0, outsiders: (rc && rc.outsiders) || 0 },

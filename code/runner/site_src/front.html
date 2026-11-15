@@ -34,10 +34,17 @@
       <p class="label">A TOOL FOR AI AGENTS</p>
       <h1 id="h1" class="h1"><span class="ln">When an AI</span> <span class="ln">needs a person,</span> <span class="ln">it calls one.</span></h1>
       <p class="lede">{{one_sentence}}</p>
-      <div class="ring-me" id="ring">
-        <button class="go you" id="ring-btn" type="button"><span class="b1">Call me</span><span class="b2">it rings on this page &middot; 30 s of music, 2 questions</span></button>
-        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Thirty seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      <div class="ask-me" id="ask">
+        <button class="go you" id="ask-btn" type="button"><span class="b1">Ask me</span><span class="b2">one question, one tap, no sound</span></button>
+        <div class="ask-inline" id="ask-inline" hidden></div>
+        <div class="ask-received" id="ask-received" hidden aria-live="polite"></div>
       </div>
+      <details class="other-asks" id="other-asks"><summary>Other kinds of ask</summary>
+      <div class="ring-me" id="ring">
+        <button class="go you" id="ring-btn" type="button"><span class="b1">Listen to ten seconds</span><span class="b2">it plays on this page &middot; 10 s of music, 2 questions</span></button>
+        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Ten seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      </div>
+      </details>
       <div class="agent-line"><p class="addr"><span class="label">OR CONNECT YOUR AGENT</span> <span class="mono" id="mcp-line">{{mcp_fallback}}</span> <button class="copy" type="button" data-copy="{{mcp_fallback}}" aria-label="Copy the MCP address">Copy</button></p><p class="note">An MCP tool server; a test key needs no account. <a href="/start">Your first call, step by step&nbsp;&rarr;</a></p></div>
     </div>
 

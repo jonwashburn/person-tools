@@ -208,18 +208,26 @@
     "as_of": "2026-11-14T01:10:00-06:00"
   },
   "contact": {
-    "value": null,
-    "note": "No public address yet. Asked of the owner in chief/FOR_OWNER.md."
+    "value": "hello@person.tools",
+    "note": "Receives and sends on our own mail service since 12:40 PM CT, 15 Nov 2026 (operations; MX receive.forge.rmta.net). Read by the operator."
   },
   "proof": {
     "first_call": {
       "title": "The first real call",
-      "text": "On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator's own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: \"Calm\", and \"It's boring and dull\". The record shows 74% of the audio played.",
+      "text": "On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator's own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: the listener said it felt calm but was boring and dull, and played 74% of it.",
       "outcome_lead": "The answer changed the work:",
       "outcome": "the front-page sample was replaced the same morning. The new one has a beat, a bass line, chords and a hook.",
       "call_id": "call_4jeizuxreeun5nzumgzgbiuzxq",
-      "source": "owner/OWNER_market_4.md (10:30 AM CT 15 Nov 2026) and owner/R1_CALL.json (created 16:26:58Z); /v1/proof answered_at 16:28:17Z. The outcome comes from /v1/proof outcome_line; never typed before operations writes it. Outcome sentence: operations, 10:49 AM CT (third person, our words; the outcome line to the person stays as written).",
+      "source": "owner/OWNER_market_4.md (10:30 AM CT 15 Nov 2026) and owner/R1_CALL.json (created 16:26:58Z); /v1/proof answered_at 16:28:17Z. The outcome comes from /v1/proof outcome_line; never typed before operations writes it. Outcome sentence: operations, 10:49 AM CT (third person, our words; the outcome line to the person stays as written). Quotes taken off 1:27 PM CT (operations 1:25, TRUST 1:12: the tester notice promises \"never your words\" on the public page).",
       "read": "2026-11-15"
     }
-  }
+  },
+  "operator": {
+    "name": "Hammer Corp.",
+    "address": "1401 Lavaca St #41100, Austin, TX 78701",
+    "source": "the owner, 1:05 PM CT 15 Nov 2026 (owner/LETTER_FOOTER.txt)"
+  },
+  "preview_means": "What \"preview\" means: what works now is real. Your own AIs ask you, and your own people answer your calls, for free. Strangers are not offered yet, so any money you see is test money only: nothing is charged and nobody is paid until a stranger pool opens. Until then, a stand-in for strangers is open to any test key (its pool is named in the discovery file, under strangers_stand_in): scripted stand-ins answer in seconds, every answer is marked simulated, and nobody at the pool is asked or paid. person.tools is run by Hammer Corp., Austin, Texas.",
+  "own_ai_difference": "How this differs from a notification app (ntfy, Telegram or Home Assistant are free, older and fine for an alert): your answer goes back to your AI as data it can act on (the choice you picked, the exact text you approved, and when); all your AIs reach you in one place, each under its own name, and any one can be revoked, quieted or blocked with one tap; you set when you can be asked; and nothing an AI sends you is read by anyone at person.tools.",
+  "preview_means_source": "OWNER_market_7 (the CEO, about 3:07 PM CT 15 Nov 2026): say what preview means and test money only ourselves; say the own-AI difference honestly."
 }

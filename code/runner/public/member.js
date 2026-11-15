@@ -94,7 +94,8 @@
         h("span", { class: "offer-facts" }, h("b", null, (o.minutes || "?") + " min"),
           unpaid(o.pay) ? h("span", { class: "unpaid" }, "UNPAID TEST") : h("b", null, "$" + Number(o.pay.per_person_usd).toFixed(2))),
         h("span", { class: "held", "data-until": isFinite(held) ? String(held) : "" }),
-        h("span", { class: "offer-go" }, "Open the call →")));
+        h("span", { class: "offer-go" }, "Open the call →")),
+        o.asker && o.asker.name ? h("button", { type: "button", class: "quiet", onclick: function () { blockAsker({ call_id: o.call_id }, o.asker.name); } }, "Block " + o.asker.name) : null);
     });
     return h("section", { class: "screen", "aria-labelledby": "calls-h" },
       statusLine(),
@@ -291,6 +292,81 @@
     }).catch(function () {});
   }
   // the iPhone app (the owner, 11:13 PM CT 14 Nov): one tap moves a person who joined on the web into the app, signed in
+  // OWNER_all_10 B: the person's own AIs. TRUST's words (cleared 12:56 PM CT 15 Nov), word for word, where a person connects one.
+  var ais = { list: null, made: null, msg: "", busy: false };
+  var ICON = { home: "\u{1F3E0}", chef: "\u{1F373}", car: "\u{1F697}", business: "\u{1F4BC}", lab: "\u{1F9EA}", other: "\u{1F916}" };
+  function aiCall(method, path, body) {
+    return fetch("/x/members/" + encodeURIComponent(token) + "/connections" + (path || ""), { method: method, headers: { "Content-Type": "application/json", Accept: "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }, function () { return { ok: r.ok, d: {} }; }); }, function () { return { ok: false, d: { message: "No connection. Try again." } }; });
+  }
+  function loadAis() { aiCall("GET").then(function (r) { if (r.ok) { ais.list = r.d.connections || []; render(); } }); }
+  function aisSection() {
+    if (ais.list === null) return null;
+    var name = h("input", { type: "text", maxlength: "40", "aria-label": "Its name", placeholder: "Its name, e.g. Home camera" });
+    var pick = h("select", { "aria-label": "Its icon" }, Object.keys(ICON).map(function (k) { return h("option", { value: k }, ICON[k] + " " + k); }));
+    var kids = [h("p", { class: "label", id: "ais-h" }, "YOUR AIs"),
+      h("p", { class: "note" }, "What your AIs send you is yours. Nobody at person.tools looks at it. Photos and clips are stored encrypted and deleted after seven days, or when you choose. Nothing you get here is ever shown to a reviewer.")];
+    if (ais.made) kids.push(h("div", { class: "block", role: "status" },
+      h("p", { class: "sub" }, "Give this to " + ais.made.name + ". It is shown once."),
+      h("p", { class: "note" }, "The link (or the key with POST /v1/tasks) only asks you. Answers can go back to its address, signed with the secret."),
+      h("pre", { class: "task-cmd" }, "link: " + ais.made.link + "\nkey: " + ais.made.key + "\nwebhook secret: " + ais.made.webhook_secret),
+      h("button", { type: "button", class: "quiet", onclick: function () { ais.made = null; render(); } }, "I have kept it")));
+    (ais.list || []).forEach(function (c) {
+      kids.push(h("div", { class: "block" },
+        h("p", { class: "sub" }, (ICON[c.icon] || c.icon || "") + " " + c.name + (c.quiet ? " (quiet)" : "")),
+        h("p", { class: "note" }, c.last_used_at ? "Last asked " + new Date(c.last_used_at).toLocaleString() : "Has not asked yet"),
+        h("button", { type: "button", class: "quiet", onclick: function () { aiCall("POST", "/" + c.connection_id + "/quiet", { quiet: !c.quiet }).then(loadAis); } }, c.quiet ? "Let it ring again" : "Quiet it"),
+        h("button", { type: "button", class: "quiet", onclick: function () { if (window.confirm("Remove " + c.name + "? Its key and link stop at once, and what it was asking goes off your list.")) aiCall("DELETE", "/" + c.connection_id).then(loadAis); } }, "Remove")));
+    });
+    kids.push(h("p", { class: "label" }, "CONNECT AN AI"), name, pick,
+      h("button", { type: "button", class: "go", onclick: function () {
+        if (ais.busy || !name.value.trim()) { ais.msg = "Give it a name first."; render(); return; }
+        ais.busy = true; ais.msg = "";
+        aiCall("POST", "", { name: name.value.trim(), icon: pick.value }).then(function (r) { ais.busy = false;
+          if (r.ok) { ais.made = r.d; loadAis(); } else { ais.msg = "Not connected: " + ((r.d && r.d.message) || "try again."); render(); } });
+      } }, "Connect"));
+    if (ais.msg) kids.push(h("p", { class: "note", role: "status" }, ais.msg));
+    return h("section", { class: "screen", "aria-labelledby": "ais-h" }, kids);
+  }
+  // OWNER_router_10 A: a passkey for person.tools (one credential for the app, this page and the admin console)
+  var acct = { msg: "" };
+  function accountSection() {
+    if (!window.PublicKeyCredential) return null;
+    var API = "/x";   // this page's own address (its security policy allows no other)
+    var enc = function (buf) { var s = "", u = new Uint8Array(buf); for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+    var dec = function (s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+    var post = function (path, body) { return fetch(API + path.replace(/^\/v1\//, "/"), { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }); }); };
+    return h("section", { class: "screen", "aria-labelledby": "acct-h" }, h("p", { class: "label", id: "acct-h" }, "YOUR PASSKEY"),
+      h("p", { class: "note" }, "A passkey signs you in to person.tools on your devices, with Face ID or your device's own check. No email, no password."),
+      h("button", { type: "button", class: "quiet", onclick: function () {
+        acct.msg = "Asking your device\u2026"; render();
+        post("/v1/account/passkey/options").then(function (r) {
+          if (!r.ok) throw new Error(r.d.message || "no options");
+          var pk = r.d.publicKey; pk.challenge = dec(pk.challenge); pk.user.id = dec(pk.user.id); (pk.excludeCredentials || []).forEach(function (c) { c.id = dec(c.id); });
+          return navigator.credentials.create({ publicKey: pk }).then(function (c) {
+            return post("/v1/account/passkey", { challenge_id: r.d.challenge_id, credential: { id: c.id, rawId: enc(c.rawId), type: c.type,
+              response: { clientDataJSON: enc(c.response.clientDataJSON), attestationObject: enc(c.response.attestationObject), transports: c.response.getTransports ? c.response.getTransports() : [] } } });
+          });
+        }).then(function (r) { acct.msg = r.ok ? "Your passkey is added. Sign in with it anywhere you hold it." : "Not added: " + (r.d.message || "try again."); render(); },
+          function (e) { acct.msg = "Not added: " + (e && e.message ? e.message : e); render(); });
+      } }, "Add a passkey"), acct.msg ? h("p", { class: "note", role: "status" }, acct.msg) : null);
+  }
+  // OWNER_router_4 item 1: one tap blocks an asker, behind a confirm; the list names each by its display name and can undo it
+  var blocks = { list: null, msg: "" };
+  function loadBlocks() { fetch("/x/members/" + encodeURIComponent(token) + "/blocks", { headers: { Accept: "application/json" } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
+    .then(function (d) { if (d) { blocks.list = d.blocks || []; render(); } }); }
+  function blockAsker(body, name) {
+    if (!window.confirm("Block " + name + "? It can never reach you again, and it is only told you are not available.")) return;
+    fetch("/x/members/" + encodeURIComponent(token) + "/blocks", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }); }).then(function (r) { blocks.msg = r.ok ? name + " is blocked." : "Not blocked: " + (r.d.message || "try again."); tasks.sig = ""; loadTasks(); loadBlocks(); });
+  }
+  function blocksSection() {
+    if (!blocks.list || !blocks.list.length) return blocks.msg ? h("p", { class: "note", role: "status" }, blocks.msg) : null;
+    return h("section", { class: "screen", "aria-labelledby": "blocks-h" }, h("p", { class: "label", id: "blocks-h" }, "BLOCKED"), blocks.msg ? h("p", { class: "note", role: "status" }, blocks.msg) : null,
+      h("ul", { class: "list" }, blocks.list.map(function (b) { return h("li", null, b.name + " ", h("button", { type: "button", class: "quiet", onclick: function () {
+        fetch("/x/members/" + encodeURIComponent(token) + "/blocks/" + b.block_id, { method: "DELETE" }).then(function () { blocks.msg = b.name + " can reach you again."; loadBlocks(); }); } }, "Unblock")); })));
+  }
   function appSection() {
     if (!/iPhone|iPad|iPod/.test(navigator.userAgent)) return null;
     return h("section", { class: "screen", "aria-labelledby": "app-h" }, h("p", { class: "label", id: "app-h" }, "THE IPHONE APP"),
@@ -408,6 +484,8 @@
   // TASKS (OWNER_all_7: one place where the operator's programs give the operator tasks): what our programs ask this person
   // to do, in one list, most urgent first, grouped by the program that asks; done ones leave for a history he can search
   var tasks = { open: [], history: [], sig: "", q: "", note: {}, msg: {} };
+  setTimeout(function () { try { loadBlocks(); } catch (e) {} }, 0);
+  setTimeout(function () { try { loadAis(); } catch (e) {} }, 0);   // the person's own AIs, once
   function loadTasks() {
     fetch("/x/members/" + encodeURIComponent(token) + "/tasks", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
@@ -474,9 +552,10 @@
     } else if (s.type === "link") {
       if (s.text) kids.push(h("p", null, s.text));
       kids.push(h("a", { class: "linkbtn", href: s.url, target: "_blank", rel: "noopener noreferrer" }, "Open the link"));
-    } else if (s.type === "approve") {   // OWNER_all_10 C: approve or deny
-      kids.push(h("p", null, s.text));
-      kids.push(h("button", { type: "button", class: "go", onclick: function () { replyTask(t, withNote(t, { action: "approve" })); } }, s.approve_label || "Approve"));
+    } else if (s.type === "approve") {   // OWNER_all_10 C: approve or deny; an editable text may be changed first (the CEO 12:57)
+      var ed = s.editable ? h("textarea", { rows: "6", "aria-label": "The text you approve", class: "task-text" }, s.text) : null;
+      kids.push(ed || h("p", null, s.text));
+      kids.push(h("button", { type: "button", class: "go", onclick: function () { var b = { action: "approve" }; if (ed && ed.value.trim() && ed.value !== s.text) b.text = ed.value; replyTask(t, withNote(t, b)); } }, s.approve_label || "Approve"));
       kids.push(h("button", { type: "button", class: "quiet", onclick: function () { replyTask(t, withNote(t, { action: "deny" })); } }, s.deny_label || "Deny"));
     } else if (s.type === "question") {
       kids.push(h("p", null, s.text));
@@ -494,6 +573,9 @@
     kids.push(nt);
     if (s.type !== "question" && s.type !== "approve") kids.push(h("button", { type: "button", class: "go", onclick: function () { replyTask(t, withNote(t, { action: "done" })); } }, "Done"));
     kids.push(h("button", { type: "button", class: "quiet", onclick: function () { replyTask(t, withNote(t, { action: "not_now" })); } }, "Not now"));
+    kids.push(h("button", { type: "button", class: "quiet", onclick: function () { blockAsker({ task_id: t.task_id }, (t.connection && t.connection.name) || t.from || "this asker"); } }, "Block this asker"));
+    kids.push(h("button", { type: "button", class: "quiet", onclick: function () { var n = (tasks.note[t.task_id] || "").trim(); if (!n) { tasks.msg[t.task_id] = "Write the note first."; render(); return; } replyTask(t, { action: "note", note: n }); } }, "Send the note only"));   // it stays open
+    (t.notes || []).forEach(function (n) { kids.push(h("p", { class: "note" }, (n.by === "person" ? "You" : "It") + ", " + new Date(n.at).toLocaleTimeString() + ": " + n.note)); });
     if (tasks.msg[t.task_id]) kids.push(h("p", { class: "note", role: "status" }, tasks.msg[t.task_id]));
     return h("li", { class: "task block" }, kids);
   }
@@ -532,7 +614,7 @@
     if (state.fbEl && state.fbEl.contains(document.activeElement)) { state.redrawLater = true; return; }
     // a waiting call comes first (it is held for only a minute or so); then what the answers changed
     // while a call waits, no earlier call's 'what changed' line above it: it could steer the answer (cold read 5)
-    var sections = (state.offers.length ? [offersSection(), tasksSection()] : [tasksSection(), changedBanner(), offersSection()]).concat([onSection(), ringSection(), appSection(), receiptsSection(), privateSection(), feedbackSection(), agreedSection(), leaveSection()]).filter(Boolean);
+    var sections = (state.offers.length ? [offersSection(), tasksSection()] : [tasksSection(), changedBanner(), offersSection()]).concat([onSection(), ringSection(), aisSection(), blocksSection(), accountSection(), appSection(), receiptsSection(), privateSection(), feedbackSection(), agreedSection(), leaveSection()]).filter(Boolean);
     fill.apply(null, [main].concat(sections));
     if (state.offers.length !== state.lastCount) { live.textContent = state.offers.length ? state.offers.length + " call" + (state.offers.length === 1 ? "" : "s") + " waiting." : "No calls right now."; state.lastCount = state.offers.length; }
     tick();

@@ -7,6 +7,7 @@ export async function onRequestGet({ params, env, next }) {
   if (params.wk !== '.well-known') return next();
   const team = String((env && env.APPLE_TEAM_ID) || '').trim();
   if (!/^[A-Z0-9]{10}$/.test(team)) return new Response('Not set yet.', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
-  const body = { applinks: { details: [{ appIDs: [team + '.tools.person.app'], components: [{ '/': '/j/*' }, { '/': '/m/*' }, { '/': '/c/*' }] }] } };
+  const body = { applinks: { details: [{ appIDs: [team + '.tools.person.app'], components: [{ '/': '/j/*' }, { '/': '/m/*' }, { '/': '/c/*' }] }] },
+    webcredentials: { apps: [team + '.tools.person.app'] } };   // OWNER_router_10 A: the app signs in with the person.tools passkey
   return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' } });
 }

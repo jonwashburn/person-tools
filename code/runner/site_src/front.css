@@ -182,3 +182,11 @@ details.req[open] summary { margin-bottom: 6px; }
 .budget-list b { color: var(--ink); }
 .cap-btn { align-self: flex-start; min-height: 48px; border: 2px solid var(--ink); background: transparent; font-weight: 700; padding: 8px 16px; cursor: pointer; }
 .gap-top { margin-top: 22px; }
+
+/* OWNER_market_5: one question, one tap, no sound (market/DEMO_ONE_TAP.md) */
+.ask-inline, .ask-received { margin-top: 1rem; max-width: 34rem; }
+.ask-inline .pick { display: block; width: 100%; margin: .6rem 0; padding: .9rem 1.1rem; text-align: left; font-size: 1.05rem; line-height: 1.35; white-space: normal; }
+.ask-received pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: .4rem 0; }
+.other-asks { margin-top: 1rem; }
+.other-asks > summary { cursor: pointer; font-weight: 600; }
+.other-asks[open] > summary { margin-bottom: .6rem; }

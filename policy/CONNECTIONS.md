@@ -32,6 +32,14 @@ the person sets (seven days unless they say otherwise), and never put in front o
    HMAC-SHA256 over the exact body with the connection's own secret (shown once when made; the person can rotate it), with a
    timestamp, retried with backoff for up to 24 hours. Nothing but the answer to that ask goes in it.
 
+8. **Brands and cards (OWNER_router_9).** A principal or connection may brand its asks (a name, a mark, colours) and lay an ask
+   out as a card from a fixed set of blocks. The service's own "from" line (who answers for the ask, and how we know) and the
+   person's Report and Stop are always drawn by us, never by a brand or a card. A brand's name passes the same check as an
+   asker's name (OWN_PANELS rule 12): it may not say it is person.tools, official or verified, or name a company it is not.
+   Pictures come only from our own store. No block carries code, a script or a remote address, and no input asks for a password,
+   a one-time code, a card or bank number, an ID number or a key. Calls to anyone but the person's own AI pass the full call
+   screen over every block.
+
 ## On the page (the words the person reads where they connect an AI)
 
 "What your AIs send you is yours. Nobody at person.tools looks at it. Photos and clips are stored encrypted and deleted after

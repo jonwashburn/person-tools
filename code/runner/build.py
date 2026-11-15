@@ -15,7 +15,7 @@ promise = json.load(open(os.path.join(CANON, "promise.json")))
 PRICE = json.load(open(os.path.join(WORK, canon["offer"]["price"].get("source_file", "money/price.json"))))["public"]
 
 
-FIRST_CALL_ON = False   # the front page's first-call paragraph (REACH 10:34); held by the CEO at 11:00 AM CT 15 Nov
+FIRST_CALL_ON = True   # the front page's first-call paragraph (REACH 10:34); held 11:00, the hold lifted by the CEO 12:38 PM CT 15 Nov
 
 def fill(s):
     return (s.replace("{network}", names["network"]).replace("{standard}", names["standard"]).replace("{tool}", names["tool"])

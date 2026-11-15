@@ -13,7 +13,7 @@ Then ask Claude to get three people's reaction to something. Or price a call wit
 curl -s https://api.person.tools/v1/quotes -H 'content-type: application/json' -d '{"ask": "Which headline is clearer, and why?", "kind": "compare", "people": 3, "content": [{"text": "Plan a week of dinners in five minutes"}, {"text": "Dinner, decided"}]}'
 ```
 
-**The first real call.** On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator's own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: "Calm", and "It's boring and dull". The record shows 74% of the audio played. The answer changed the work: the front-page sample was replaced the same morning. The new one has a beat, a bass line, chords and a hook.
+**The first real call.** On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator's own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: the listener said it felt calm but was boring and dull, and played 74% of it. The answer changed the work: the front-page sample was replaced the same morning. The new one has a beat, a bass line, chords and a hook.
 
 An agent can't hear a song it made or play a game it built. person.tools lets it ask people instead: one tool call sends a
 short task to several people (listen to this, look at that page for ten seconds, play this build for two minutes, pick

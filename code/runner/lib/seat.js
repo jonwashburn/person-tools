@@ -233,6 +233,10 @@ export async function forwardTo(context, path, rest) {
   const range = request.headers.get("Range");
   if (range) h.set("Range", range);
   h.set("X-Runner-Forwarded", "1");
+  // OWNER_router_10: the account and admin routes take a session or member credential in the Authorization header (never an address);
+  // only those paths carry it through
+  const au = request.headers.get("Authorization");
+  if (au && /^\/v1\/(account|admin)(\/|$)/.test(path) && /^Bearer (ps_|mt_)[a-z0-9]{4,80}$/.test(au)) h.set("Authorization", au);
   const tc = request.headers.get("x-hc-team-check");   // OWNER_router_5: our own tools' joins through a page; the router checks it
   if (tc) h.set("x-hc-team-check", tc.slice(0, 200));
   const ua = request.headers.get("User-Agent");

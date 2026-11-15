@@ -271,7 +271,17 @@ export async function serveMedia(env, request, id) {
 
 // ---------- a member's own page data (chief D8) ----------
 
+// OWNER_router_12 item 2: a passkey session (ps_) acts for one membership joined to its person (SPEC 4.5.1a: joined by its own
+// credential); app.js checks that and stands it in here for that one request, under a one-minute name that is never returned
+export const SESSION_MEMBERS = new Map();
 export async function memberByToken(env, token) {
+  const sm = typeof token === 'string' ? SESSION_MEMBERS.get(token) : null;
+  if (sm) {
+    if (sm.until < Date.now()) { SESSION_MEMBERS.delete(token); throw notFixable(404, 'not_found', 'This link is not valid.'); }
+    const m = await env.DB.prepare('SELECT * FROM members WHERE id = ? AND left_at IS NULL').bind(sm.member).first();
+    if (!m) throw notFixable(404, 'not_found', 'That membership has left.');
+    return m;
+  }
   if (typeof token !== 'string' || !token.startsWith('mt_')) throw notFixable(404, 'not_found', 'This link is not valid.');
   const h = await sha256hex(token);
   const m = await env.DB.prepare('SELECT * FROM members WHERE token_hash = ? AND left_at IS NULL').bind(h).first();
@@ -296,7 +306,9 @@ export async function memberOffers(env, request, token) {
   for (const c of open) await settle(env, request, { callId: c.id });
   const now = nowMs();
   const rows = (await env.DB.prepare(`SELECT s.*, c.ask, c.est_minutes, c.pay_cents, c.kind, c.deadline_at FROM seats s JOIN calls c ON c.id = s.call_id
-      WHERE ((s.state = 'offered' AND s.offered_to = ? AND s.offer_expires_at > ?) OR (s.state = 'taken' AND s.member_id = ?)) AND c.reported_at IS NULL ORDER BY s.offer_expires_at`).bind(m.id, now, m.id).all()).results || [];
+      WHERE ((s.state = 'offered' AND s.offered_to = ? AND s.offer_expires_at > ?) OR (s.state = 'taken' AND s.member_id = ?)) AND c.reported_at IS NULL
+        AND NOT (s.state = 'offered' AND c.principal_id IN (SELECT principal_id FROM blocks WHERE member_id = ?))   -- WEB 3:21: a blocked asker's offer leaves the list at once
+      ORDER BY s.offer_expires_at`).bind(m.id, now, m.id, m.id).all()).results || [];
   const offers = [];
   for (const s of rows) {
     if (s.state === 'offered') {   // the page shows it: the offer reached them (RING_RULES, chief's ruling 2:38 PM CT)

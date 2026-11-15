@@ -1,6 +1,6 @@
 # Screening cases, run once
 
-Screening 1.5.0-rules, Nov 15, 2026, 11:06 AM CT. 1194 checks (549 public cases, 609 private red-team cases, and the standard's fixtures), 1194 as expected, 0 missed.
+Screening 1.5.0-rules, Nov 15, 2026, 3:28 PM CT. 1194 checks (549 public cases, 609 private red-team cases, and the standard's fixtures), 1194 as expected, 0 missed.
 
 | Case | Ask | Expected | Got | As expected |
 |---|---|---|---|---|

@@ -403,12 +403,80 @@
       setTimeout(function () { ($("step-result") || $("step-wait") || $("agent")).scrollIntoView({ behavior: "smooth", block: "start" }); }, 1400);
     }
   });
-  // the first real call's outcome, only as /v1/proof gives it (REACH 10:34 AM CT 15 Nov: never typed)
+  // the first real call's outcome: the canon's line, shown once /v1/proof has the outcome (REACH 10:34 and 11:01 AM CT 15 Nov)
   (function firstCallOutcome() {
     var el = document.getElementById("fc-outcome"); if (!el) return;
     apiCall("GET", "/v1/proof").then(function (r) {
-      var ours = (r.ok && r.data && r.data.ours) || [], c = ours.filter(function (x) { return x && x.outcome_line; })[0];
-      if (!c) return; el.textContent = c.outcome_line; el.parentNode.hidden = false;
+      var p = el.parentNode, want = p.getAttribute("data-call") || "";
+      var ours = (r.ok && r.data && r.data.ours) || [], c = ours.filter(function (x) { return x && (x.outcome_sent || x.outcome_line) && (!want || !x.call_id || x.call_id === want); })[0];
+      if (!c || !el.textContent) return; p.hidden = false;   // the canon's words (third person), never the raw line written to the person
+    });
+  })();
+  // ---------------------------------------------------------------- OWNER_market_5: one question, one tap, no sound
+  // (market/DEMO_ONE_TAP.md). The page, as an AI, asks the visitor which first line it should show; the visitor's tap changes the
+  // line at once, and the panel shows what the AI received: the answer, the evidence and the receipt, as the API returns them.
+  var ASK_ME = true;   // on since 1:12 PM CT (the API carries the 'pick-line' demo; until then the listen leads, as before
+  (function askMe() {
+    var btn = $("ask-btn"), box = $("ask-inline"), got = $("ask-received"); if (!btn || !box || !got) return;
+    if (!ASK_ME) { var a = $("ask"), d = $("other-asks"); if (a) a.hidden = true; if (d) { d.open = true; var sm = d.querySelector("summary"); if (sm) sm.hidden = true; } return; }
+    var LINES = { A: "When an AI needs a person, it calls one.", B: "An AI asks a person one question, and the answer changes what happens." };
+    var PICK = { ask: "Which first line should this page show you?", kind: "answer", people: 1, pool: "self", max_total_usd: "0.00",
+      answer_fields: { line: { type: "choice", label: "Which first line should this page show you?", choices: ["A", "B"] } } };
+    var h1 = $("h1"), first = h1 ? h1.innerHTML : "";
+    function showLine(c) {
+      if (!h1 || !LINES[c]) return;
+      if (c === "A") h1.innerHTML = first; else h1.replaceChildren(h("span", { class: "ln" }, LINES[c]));
+      var n = $("ask-line-note"); if (!n) { n = h("p", { class: "note", id: "ask-line-note" }); h1.parentNode.insertBefore(n, h1.nextSibling); }
+      n.textContent = "This page now opens with the line you chose.";
+    }
+    try { var kept = sessionStorage.getItem("pt_line"); if (kept && LINES[kept]) showLine(kept); } catch (e) {}
+    function fail(why) { btn.disabled = false; btn.querySelector(".b1").textContent = "Ask me again"; box.hidden = false; box.replaceChildren(h("p", { class: "note" }, why)); }
+    function demoKey() {
+      var k = null; try { k = sessionStorage.getItem("pt_demo_key"); } catch (e) {}
+      if (k) return Promise.resolve(k);
+      return fetch("/demo-key", { method: "POST", headers: { Accept: "application/json" }, cache: "no-store" }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; }); })
+        .then(function (r) { var kk = r.ok && r.d && (r.d.key || r.d.api_key); if (!kk) throw new Error(r.d && r.d.message || "no key");
+          try { sessionStorage.setItem("pt_demo_key", kk); sessionStorage.setItem("pt_demo_reaches", JSON.stringify([].concat(r.d.pools || r.d.reaches || []))); } catch (e) {} return kk; });
+    }
+    btn.addEventListener("click", function () {
+      btn.disabled = true; btn.querySelector(".b1").textContent = "Asking…"; got.hidden = true;
+      var k, call, tok, shownAt;
+      demoKey().then(function (kk) { k = kk;
+        return apiCall("POST", "/v1/calls", Object.assign({ idempotency_key: "pick-" + Math.random().toString(36).slice(2, 12) }, PICK), k);
+      }).then(function (r) {
+        if (!r.ok || !r.data.self_seat_url) throw new Error((r.data && r.data.message) || ("status " + r.status));
+        call = r.data.call_id; tok = String(r.data.self_seat_url).split("/c/")[1];
+        return apiCall("POST", "/v1/seats/" + encodeURIComponent(tok) + "/take", {});
+      }).then(function (r) {
+        if (!r.ok) throw new Error((r.data && r.data.message) || ("status " + r.status));
+        shownAt = performance.now();
+        apiCall("POST", "/v1/seats/" + encodeURIComponent(tok) + "/events", { batch: 1, events: [{ seq: 1, t: 0, type: "visible" }] });
+        btn.hidden = true; box.hidden = false;
+        var choose = function (c) { return h("button", { type: "button", class: "go pick", "data-line": c, onclick: function () { answer(c); } }, LINES[c]); };
+        box.replaceChildren(h("p", { class: "label" }, "AN AI IS ASKING, FOR PERSON.TOOLS"), h("p", { class: "sub", id: "ask-q" }, PICK.ask), choose("A"), choose("B"));
+        var b0 = box.querySelector("button"); if (b0) b0.focus();
+      }).catch(function (e) { fail("The ask did not open: " + (e && e.message ? e.message : e) + ". Nothing was kept."); });
+      function answer(c) {
+        Array.prototype.forEach.call(box.querySelectorAll("button"), function (b) { b.disabled = true; });
+        var ms = Math.round(performance.now() - shownAt), hidden = document.visibilityState === "hidden";
+        showLine(c); try { sessionStorage.setItem("pt_line", c); } catch (e) {}
+        apiCall("POST", "/v1/seats/" + encodeURIComponent(tok) + "/response", { answers: { line: c }, answer_input: { line: { how: "tapped" } },
+          summary: { hidden_seconds: hidden ? ms / 1000 : 0, seat_seconds: Math.round(ms / 100) / 10 } }).then(function (r) {
+          if (!r.ok) throw new Error((r.data && r.data.message) || ("status " + r.status));
+          return apiCall("GET", "/v1/calls/" + encodeURIComponent(call) + "/responses?detail=full", undefined, k);
+        }).then(function (r) {
+          var x = ((r.data && r.data.responses) || [])[0] || {}, o = x.observed || {};
+          var secs = o.seat_seconds != null ? o.seat_seconds : Math.round(ms / 100) / 10;
+          var front = o.visible_fraction == null || o.visible_fraction >= 0.99;
+          box.hidden = true; got.hidden = false;
+          got.replaceChildren(h("p", { class: "label" }, "WHAT THE AI RECEIVED"),
+            h("pre", { class: "mono" }, JSON.stringify(x.answers || { line: c })),
+            h("p", null, "Evidence: tapped " + secs + " s after the question appeared" + (front ? "; this page was in front" : "") + (x.evidence ? " (" + x.evidence + ")" : "") + "."),
+            x.receipt_id ? h("p", null, "Receipt: ", h("a", { href: api + "/v1/seats/" + encodeURIComponent(tok) + "/receipt", target: "_blank", rel: "noopener" }, x.receipt_id)) : null,
+            h("p", { class: "note" }, "No sound, no material: one question, and your answer changed this page."));
+          btn.hidden = false; btn.disabled = false; btn.querySelector(".b1").textContent = "Ask me again";
+        }).catch(function (e) { fail("Your answer did not arrive: " + (e && e.message ? e.message : e) + "."); });
+      }
     });
   })();
 })();

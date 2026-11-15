@@ -50,8 +50,9 @@ async function resolvePool(env, key, spec) {
       else mode = 'live';
       spec.pool_account = 'principal';
     }
-    // recorded mode is the team's own check of the adapter path; live mode needs the owner's grant and a live key
-    if (mode === 'recorded' && !key.team) throw fixable('unknown_pool', 'pool', `The pool "${spec.pool}" is not open yet. Pools this key may use: "simulated".`, 'simulated', { pools: ['simulated'] });
+    // recorded mode: the stand-in for strangers. Since OWNER_market_7 item 3 (the CEO, 3:07 PM CT 15 Nov) any test key may use it, in test
+    // money, with scripted stand-ins answering and nobody at the pool asked or paid; live mode needs the owner's grant and a live key
+    if (mode === 'recorded' && !key.team && (key.anon || key.class !== 'test')) throw fixable('unknown_pool', 'pool', `The pool "${spec.pool}" is not open to this key. Pools this key may use: "simulated".`, 'simulated', { pools: ['simulated'] });
     if (mode === 'live' && key.class !== 'real') throw fixable('forbidden_for_key_class', 'pool', `The pool "${spec.pool}" reaches real people and needs a live key.`, 'simulated', {}, 403);
     ad.check(spec);
     const floor = Math.ceil(Math.max(PAY_FLOOR_CENTS_PER_HOUR, ad.floor_cents_per_hour) * spec.minutes / 60);
@@ -148,7 +149,7 @@ async function materialFor(env, items) {
 // ---------- the quote (section 12.1) ----------
 
 function expectation(spec, pool) {
-  if (pool && pool.adapter) return { m: pool.adapter.expected.minutes, note: pool.adapter.expected.note + (pool.mode === 'recorded' ? '; this is the recorded stand-in of the pool, answering in seconds with scripted people' : '') };
+  if (pool && pool.adapter) return { m: pool.adapter.expected.minutes, note: pool.adapter.expected.note + (pool.mode === 'recorded' ? '; this is the stand-in for real strangers: test money only, nobody at the pool is asked or paid, and scripted stand-ins answer in seconds (every answer is marked simulated)' : '') };
   if (spec.pool_kind === 'self') return { m: null, note: 'one seat, yours: it is answered when you open the link' };
   if (spec.pool_kind === 'simulated') return spec.pace === 'human' ? { m: 6, note: 'simulated people at human pace answer over 1 to 6 minutes' } : { m: 0.2, note: 'simulated people answer within 10 seconds' };
   if (pool && pool.panel && pool.panel.kind === 'team-test') return { m: 2, note: "the team's own headless test members answer within a few minutes" };
@@ -835,7 +836,8 @@ async function offerSeat(env, call, s, now) {
       AND m.id NOT IN (SELECT COALESCE(member_id, '') FROM seats WHERE call_id = ? AND member_id IS NOT NULL)
       AND m.id NOT IN (SELECT COALESCE(json_extract(e.body_json, '$.declined_by'), json_extract(e.body_json, '$.missed_by'), '') FROM events e JOIN seats s2 ON s2.id = e.seat_id
                        WHERE s2.call_id = ? AND (e.body_json LIKE '{"declined_by"%' OR e.body_json LIKE '{"missed_by"%'))
-      ORDER BY COALESCE(m.last_ring_at, 0) LIMIT 20`).bind(call.panel_id, call.id, call.id, call.id).all()).results || [];
+      AND m.id NOT IN (SELECT member_id FROM blocks WHERE principal_id = ?)   -- OWNER_router_4 item 1: a person who blocked this asker is never offered its calls
+      ORDER BY COALESCE(m.last_ring_at, 0) LIMIT 20`).bind(call.panel_id, call.id, call.id, call.id, call.principal_id).all()).results || [];
   // RING_RULES rule 11 (trust R12): a person is offered a call at most once; after declining it or letting it lapse, never again
   const { canRing } = await import('./rings.js');
   const eligible = botsOnly ? members.filter(m => !m.is_real) : members;
@@ -1179,6 +1181,8 @@ function responseOut(r, kind, detail, offer, jwsBySeat) {
     answer_input: Object.fromEntries(Object.entries(r.input || {}).map(([k, v]) => [k, typeof v === 'string' ? v : (v && v.how) || 'typed'])),
     minutes: rec.observed && rec.observed.seat_seconds != null ? Math.round(rec.observed.seat_seconds / 6) / 10 : null,
     paid_usd: fmt(rec.paid_cents || 0), receipt_id: rec.receipt_id || null, received_at: iso(r.created_at) };
+  // OWNER_router_4 item 2: the person's enrolled, Apple-attested device signed this answer after Face ID (SPEC 4.5.3), in these words only
+  if (r.device_approved) { o.device_approved = true; o.device_approved_means = 'the owner of an enrolled, Apple-attested device approved this answer with Face ID'; }
   if (rec.top_up_cents) o.top_up_usd = fmt(rec.top_up_cents);
   if (o.status === 'stopped') o.stop_reason = rec.stop_reason || 'stopped';
   if (detail === 'full') {
@@ -1337,7 +1341,11 @@ export async function cancelCall(env, request, key, callId) {
 export async function outcome(env, request, key, callId, body, ipHash, screenOutcome) {
   const call = await getCallFor(env, key, callId);
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw fixable('invalid_json', null, 'The body is {"text": "...", "idempotency_key": "..."}.', null);
-  for (const k of Object.keys(body)) if (!['text', 'idempotency_key', 'ext'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of this operation; it takes text and idempotency_key.`, null);
+  for (const k of Object.keys(body)) if (!['text', 'idempotency_key', 'ext', 'public'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of this operation; it takes text, public and idempotency_key.`, null);
+  // operations 1:27 PM CT 15 Nov ("never your words"): text goes to the people who answered; an optional public line, written by the
+  // asker for anyone to read, is the only thing /v1/proof ever shows
+  const pub = body.public === undefined ? null : body.public;
+  if (pub !== null && (typeof pub !== 'string' || !pub.trim() || pub.length > 280 || /[\r\n]/.test(pub))) throw fixable('invalid_field', 'public', 'public is one line of at most 280 characters anyone may read, in your own words, never the people\'s.', null);
   const text = body.text;
   if (typeof text !== 'string' || !text.trim() || text.length > 280 || /[\r\n]/.test(text)) throw fixable(text === undefined ? 'missing_field' : 'invalid_field', 'text', 'text is one line of at most 280 characters saying what you did with the answers.', 'We moved the chorus earlier because most of you drifted at 40 seconds.');
   const now = nowMs();
@@ -1370,7 +1378,7 @@ export async function outcome(env, request, key, callId, body, ipHash, screenOut
   if (decision === 'HOLD') {
     out = { status: 'held', people: 0, note: 'Held for a person to read before anyone sees it.' };
     const before = (await env.DB.prepare('SELECT outcomes_json FROM calls WHERE id = ?').bind(callId).first()).outcomes_json;
-    lines.push({ text, status: 'held', at: iso(now) });
+    lines.push({ text, status: 'held', at: iso(now), ...(pub ? { public: pub.trim() } : {}) });
     const cas = await env.DB.prepare('UPDATE calls SET outcomes_json = ? WHERE id = ? AND outcomes_json IS ?').bind(JSON.stringify(lines), callId, before).run();
     if (cas.meta.changes !== 1) throw notFixable(409, 'outcome_not_allowed', 'Another outcome line for this call arrived at the same moment; send yours again.');
   } else {
@@ -1378,7 +1386,7 @@ export async function outcome(env, request, key, callId, body, ipHash, screenOut
     const before = (await env.DB.prepare('SELECT outcomes_json FROM calls WHERE id = ?').bind(callId).first()).outcomes_json;
     // how many had answered when the line was sent, so a person's page can say 'to the 3 people who answered' (runner, 8:13)
     const answeredN = (await env.DB.prepare('SELECT COUNT(*) AS n FROM seats WHERE call_id = ? AND state = \'answered\'').bind(callId).first()).n;
-    lines.push({ text, status: 'delivered', at: iso(now), people: answeredN });
+    lines.push({ text, status: 'delivered', at: iso(now), people: answeredN, ...(pub ? { public: pub.trim() } : {}) });
     const cas = await env.DB.prepare('UPDATE calls SET what_changed = ?, what_changed_at = ?, outcomes_json = ? WHERE id = ? AND outcomes_json IS ?').bind(text, now, JSON.stringify(lines), callId, before).run();
     if (cas.meta.changes !== 1) throw notFixable(409, 'outcome_not_allowed', 'Another outcome line for this call arrived at the same moment; send yours again.');
     const st = [];
@@ -1395,4 +1403,31 @@ export async function outcome(env, request, key, callId, body, ipHash, screenOut
   }
   await env.DB.prepare('INSERT OR IGNORE INTO idempotency (key_id, op, idem_key, request_hash, status, response_json, created_at) VALUES (?,?,?,?,?,?,?)').bind(scope, op, idem, reqHash, 200, JSON.stringify(out), now).run();
   return out;
+}
+
+// The operator releases an outcome line the screen held (operations 1:27 PM CT 15 Nov: the line to our own owner, held as "undecided"
+// at 12:16): it is delivered as if it had passed, with the receipts issued again and the people's phones told; public, if given, is the
+// only line /v1/proof shows.
+export async function releaseHeldOutcome(env, request, callId, pub) {
+  const now = nowMs();
+  const row = await env.DB.prepare('SELECT outcomes_json FROM calls WHERE id = ?').bind(callId).first();
+  if (!row) throw notFixable(404, 'not_found', 'No such call.');
+  const lines = JSON.parse(row.outcomes_json || '[]'); const i = lines.map(l => l.status).lastIndexOf('held');
+  if (i < 0) throw notFixable(409, 'not_held', 'This call has no held outcome line.');
+  if (pub !== undefined && pub !== null && (typeof pub !== 'string' || !pub.trim() || pub.length > 280 || /[\r\n]/.test(pub))) throw fixable('invalid_field', 'public', 'public is one line of at most 280 characters.', null);
+  const answeredN = (await env.DB.prepare('SELECT COUNT(*) AS n FROM seats WHERE call_id = ? AND state = \'answered\'').bind(callId).first()).n;
+  const text = lines[i].text;
+  lines[i] = { ...lines[i], status: 'delivered', released_at: iso(now), people: answeredN, ...(pub ? { public: pub.trim() } : {}) };
+  const cas = await env.DB.prepare('UPDATE calls SET what_changed = ?, what_changed_at = ?, outcomes_json = ? WHERE id = ? AND outcomes_json IS ?').bind(text, now, JSON.stringify(lines), callId, row.outcomes_json).run();
+  if (cas.meta.changes !== 1) throw notFixable(409, 'conflict', 'The call changed at the same moment; release it again.');
+  const st = [];
+  for (const rc of (await env.DB.prepare('SELECT * FROM receipts WHERE call_id = ?').bind(callId).all()).results || []) {
+    const p = JSON.parse(rc.body_json); const np = { ...p, rev: (p.rev || 1) + 1, issued_at: iso(now), outcomes: [...(p.outcomes || []), { text, at: iso(now) }] }; delete np.outcome;
+    const signed = await signJws(env, np);
+    st.push(env.DB.prepare('UPDATE receipts SET body_json = ?, signature = ?, key_id = ? WHERE id = ?').bind(JSON.stringify(np), signed.jws, signed.kid, rc.id));
+  }
+  if (st.length) await env.DB.batch(st);
+  const ms = (await env.DB.prepare('SELECT m.* FROM members m JOIN seats s ON s.member_id = m.id WHERE s.call_id = ? AND s.state IN (\'answered\',\'stopped\') AND m.push_json IS NOT NULL AND m.left_at IS NULL').bind(callId).all()).results || [];
+  for (const m of ms) { try { await ringMember(env, m); } catch { } }
+  return { call_id: callId, status: 'delivered', people: answeredN, public: pub ? pub.trim() : null };
 }

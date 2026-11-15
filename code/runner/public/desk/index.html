@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="desk-api" content="https://api.person.tools">
+<meta name="desk-passkey" content="on">
+<title>Desk · person.tools</title>
+<link id="favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' fill='%23faf8f3' stroke='%231d1d1b' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="desk.css">
+<script src="desk.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#card">Skip to the ask</a>
+<p id="booting" class="booting" role="status">Opening your Desk…</p>
+
+<!-- Sign-in: shown until a page link is accepted -->
+<main id="signin" class="signin" hidden>
+  <div class="signin-sheet">
+    <p class="wordmark">person.tools <span>Desk</span></p>
+    <h1 class="signin-h">Answer your AIs from this computer.</h1>
+    <p class="signin-lede">The asks your AIs send you, in one list, with the keyboard. Nothing makes a sound.</p>
+    <form id="signin-form" class="signin-form" autocomplete="off">
+      <label for="signin-link" class="label">Your person.tools page link</label>
+      <input id="signin-link" name="link" type="password" inputmode="url" spellcheck="false" autocapitalize="off"
+             placeholder="run.person.tools/m/…" aria-describedby="signin-help signin-error">
+      <p id="signin-help" class="help">It is the link that opens your own person.tools page: you got it when you joined.
+        It works like a key, so it is hidden as you paste it, and the Desk never puts it in the address bar.</p>
+      <label class="check"><input id="signin-remember" type="checkbox"> Remember this computer
+        <span class="help-inline">(otherwise this tab forgets it when it closes)</span></label>
+      <p id="signin-error" class="error" role="alert" hidden></p>
+      <div id="signin-pick" class="pick" hidden></div>
+      <button class="btn btn-you" type="submit">Open my Desk</button>
+    </form>
+    <p id="signin-or" class="signin-or" hidden><span>or</span></p>
+    <button id="signin-passkey" class="btn" type="button" hidden>Sign in with a passkey</button>
+  </div>
+</main>
+
+<!-- The Desk -->
+<div id="desk" class="desk" hidden>
+  <header class="top">
+    <h1 class="wordmark">person.tools <span>Desk</span></h1>
+    <nav class="views" aria-label="Views">
+      <button class="view on" data-view="asks" aria-current="page">Asks <span class="count" id="count-asks">0</span><kbd>I</kbd></button>
+      <button class="view" data-view="history">History<kbd>H</kbd></button>
+      <button class="view" data-view="ais">Your AIs<kbd>A</kbd></button>
+      <button class="view" data-view="settings">Settings<kbd>,</kbd></button>
+    </nav>
+    <div class="top-right">
+      <span class="checked" id="checked" aria-live="off"></span>
+      <button class="btn btn-quiet" id="refresh" title="Look for new asks now">Refresh<kbd>R</kbd></button>
+      <button class="btn btn-quiet" id="keys-open" title="Every key">Keys<kbd>?</kbd></button>
+      <button class="btn btn-quiet" id="signout">Sign out</button>
+    </div>
+  </header>
+
+  <main id="main" class="main">
+  <div id="banner" class="banner" role="status" hidden></div>
+
+  <!-- Asks -->
+  <section id="view-asks" class="panes">
+    <aside class="list-pane" aria-label="Open asks">
+      <div class="list-head">
+        <div class="who-chips" id="chips" role="group" aria-label="Who is asking"></div>
+        <label class="sort"><span class="label">Sort</span>
+          <select id="sort">
+            <option value="fair">Fair: urgent first, AIs take turns</option>
+            <option value="ai">By AI</option>
+            <option value="quick">Quickest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest first</option>
+          </select>
+        </label>
+      </div>
+      <ol id="list" class="list" role="listbox" aria-label="Open asks" tabindex="0"></ol>
+    </aside>
+    <section id="card" class="card-pane" aria-label="The ask" tabindex="-1"></section>
+  </section>
+
+  <!-- History -->
+  <section id="view-history" class="panes" hidden>
+    <aside class="list-pane" aria-label="Answered asks">
+      <div class="list-head">
+        <label class="search"><span class="label">Search</span>
+          <input id="search" type="search" placeholder="Words, an AI, your answer" spellcheck="false"><kbd>/</kbd></label>
+      </div>
+      <ol id="hlist" class="list" role="listbox" aria-label="Answered asks" tabindex="0"></ol>
+    </aside>
+    <section id="hcard" class="card-pane" aria-label="The answered ask" tabindex="-1"></section>
+  </section>
+
+  <!-- Your AIs -->
+  <section id="view-ais" class="page" hidden></section>
+
+  <!-- Settings -->
+  <section id="view-settings" class="page" hidden></section>
+  </main>
+
+  <!-- Undo: one line at the foot of the window -->
+  <div id="undo" class="undo" role="status" aria-live="polite" hidden></div>
+</div>
+
+<!-- Keys -->
+<div id="keys" class="overlay" role="dialog" aria-modal="true" aria-labelledby="keys-h" hidden>
+  <div class="sheet">
+    <h2 id="keys-h" class="sheet-h">Keys</h2>
+    <p class="help">Every key has a button on the screen that does the same thing.</p>
+    <dl class="keymap" id="keymap"></dl>
+    <button class="btn" data-close>Close<kbd>Esc</kbd></button>
+  </div>
+</div>
+
+<!-- Confirm (revoke, sign out with an answer waiting) -->
+<div id="confirm" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="confirm-h" hidden>
+  <div class="sheet">
+    <h2 id="confirm-h" class="sheet-h"></h2>
+    <p id="confirm-p"></p>
+    <div class="row">
+      <button class="btn" data-close>Keep it<kbd>Esc</kbd></button>
+      <button class="btn btn-stop" id="confirm-yes"></button>
+    </div>
+  </div>
+</div>
+
+<p id="sr" class="sr" aria-live="assertive"></p>
+<noscript><p class="noscript">The Desk needs JavaScript. Your asks are also on your person.tools page.</p></noscript>
+</body>
+</html>

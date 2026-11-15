@@ -220,12 +220,15 @@ export async function joinInfo(env, request, code) {
   if (await isOwnPanel(env, p)) {
     if (!p.asker_name) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: whoever made it has not named themselves.');
     return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, own: true, asker: askerDisplay(p.asker_name), principal_name: p.asker_name,
-      notice_id: OWN_NOTICE_IDS[0], accepted_notice_ids: OWN_NOTICE_IDS, notice_url: '/tester_notice_own.json' };
+      notice_id: OWN_NOTICE_IDS[0], accepted_notice_ids: OWN_NOTICE_IDS, notice_url: '/tester_notice_own.json', attestations: attest(OWN_NOTICE_IDS[0]) };
   }
-  return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, notice_id: CURRENT_NOTICE, accepted_notice_ids: ACCEPTED_NOTICES };
+  return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, notice_id: CURRENT_NOTICE, accepted_notice_ids: ACCEPTED_NOTICES, attestations: attest(CURRENT_NOTICE) };
 }
 
 // The runner's join page posts here: {adult: true, us_resident: true, notice_accepted: true, notice_id, tz, quiet_start, quiet_end, alias}
+// WEB gap 26 (router_12 item 3): the join's attestations, named: the body POST /v1/join/{code} needs, word for word
+const attest = (noticeId) => ({ send: { adult: true, us_resident: true, notice_accepted: true, notice_id: noticeId }, optional: ['alias', 'tz', 'quiet_start', 'quiet_end'],
+  means: 'adult: you are 18 or older; us_resident: you live in the United States; notice_accepted with notice_id: you read this notice and accept it' });
 export async function joinPanel(env, request, code, body) {
   const { p, link } = await panelByCode(env, code);
   if (!p) throw notFixable(404, 'not_found', 'This join link is not valid.');

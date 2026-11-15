@@ -48,10 +48,17 @@ export async function serveIcon(env, memberByToken, token, id) {
   return new Response(o.body, { status: 200, headers: { 'Content-Type': c.icon.slice(4), 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
 }
 
+const URGENCIES = ['now', 'today', 'whenever'];
+export const allowedUrgencies = (c) => { try { const a = JSON.parse(c.urgencies || 'null'); return Array.isArray(a) && a.length ? a : URGENCIES; } catch { return URGENCIES; } };
+function urgencies(v) {
+  if (v === null) return null;
+  if (!Array.isArray(v) || !v.length || v.some(x => !URGENCIES.includes(x)) || new Set(v).size !== v.length) throw fixable('invalid_field', 'urgencies', 'urgencies is a list of "now", "today" and "whenever" (at least one); null allows all three.', ['today', 'whenever']);
+  return JSON.stringify(URGENCIES.filter(x => v.includes(x)));
+}
 function view(c, request) {
   const pic = String(c.icon || '').startsWith('img:');
   return { connection_id: c.id, id: c.id, name: c.name, icon: pic ? null : (c.icon || null), ...(pic ? { icon_url: apiBase(request) + '/v1/member/connections/' + c.id + '/icon' } : {}), made_at: iso(c.created_at), last_used_at: iso(c.last_used_at), quiet: !!c.quiet, blocked: !!c.blocked,
-    revoked_at: iso(c.revoked_at), lab: !!c.lab };
+    revoked_at: iso(c.revoked_at), lab: !!c.lab, urgencies: allowedUrgencies(c) };
 }
 const how = (request, key) => ({
   key_use: 'Send "Authorization: Bearer <key>" with POST ' + apiBase(request) + '/v1/tasks {"title", "step", "urgency"} to ask this person one thing; GET /v1/tasks/{task_id} reads the reply. That is all this key does.',
@@ -60,7 +67,8 @@ const how = (request, key) => ({
 });
 
 async function make(env, request, m, b, lab) {
-  for (const k of Object.keys(b || {})) if (!['name', 'icon'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a connection; send name and icon.`, null);
+  for (const k of Object.keys(b || {})) if (!['name', 'icon', 'urgencies'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a connection; send name, icon and urgencies.`, null);
+  const urg = b.urgencies === undefined ? null : urgencies(b.urgencies);
   const name = str(b.name, 'name', 2, 40, 'Home camera');
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM connections WHERE member_id = ? AND revoked_at IS NULL').bind(m.id).first();
   if (n && n.n >= MAX_PER_PERSON) throw fixable('invalid_field', 'name', `At most ${MAX_PER_PERSON} AIs connected at once; revoke one you no longer use.`, null);
@@ -70,8 +78,8 @@ async function make(env, request, m, b, lab) {
     // its own principal: a person's own AI is neither the team's nor an outsider's ('person'); the lab's programs are the team's
     env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'test', name, 0, null, now, lab ? 'team' : 'person'),
     env.DB.prepare('INSERT INTO keys (id, principal_id, key_hash, class, label, cap_call_cents, cap_day_cents, team, created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(kid, pr, await sha256hex(key), 'test', 'connection', 0, 0, 0, now),
-    env.DB.prepare('INSERT INTO connections (id, member_id, panel_id, person_name, principal_id, key_id, name, icon, lab, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-      .bind(id, m.id, m.panel_id, m.person_name || null, pr, kid, name, ic, lab ? 1 : 0, now),
+    env.DB.prepare('INSERT INTO connections (id, member_id, panel_id, person_name, principal_id, key_id, name, icon, lab, created_at, urgencies) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(id, m.id, m.panel_id, m.person_name || null, pr, kid, name, ic, lab ? 1 : 0, now, urg),
   ]);
   const { newSecret } = await import('./own.js'); const sec = await newSecret(env, id); await sec.stmt.run();   // OWNER_all_10 C: signs the answers sent to its webhook
   const c = await env.DB.prepare('SELECT * FROM connections WHERE id = ?').bind(id).first();
@@ -102,13 +110,14 @@ async function mine(env, m, id) {
 
 export async function changeConnection(env, request, memberByToken, token, id, b) {
   const m = await memberByToken(env, token); const c = await mine(env, m, id);
-  for (const k of Object.keys(b || {})) if (!['name', 'icon', 'quiet', 'blocked'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not something to change here; send name, icon, quiet or blocked.`, null);
+  for (const k of Object.keys(b || {})) if (!['name', 'icon', 'quiet', 'blocked', 'urgencies'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not something to change here; send name, icon, quiet, blocked or urgencies.`, null);
+  const urg = b.urgencies === undefined ? c.urgencies : urgencies(b.urgencies);
   for (const k of ['quiet', 'blocked']) if (b[k] !== undefined && typeof b[k] !== 'boolean') throw fixable('invalid_field', k, `${k} is true or false.`, true);
   const name = b.name === undefined ? c.name : str(b.name, 'name', 2, 40, 'Home camera');
   const ic = b.icon === undefined ? c.icon : await icon(env, b.icon, c.id);
   const quiet = b.quiet === undefined ? c.quiet : (b.quiet ? 1 : 0), blocked = b.blocked === undefined ? c.blocked : (b.blocked ? 1 : 0);
   await env.DB.batch([
-    env.DB.prepare('UPDATE connections SET name = ?, icon = ?, quiet = ?, blocked = ? WHERE id = ?').bind(name, ic, quiet, blocked, c.id),
+    env.DB.prepare('UPDATE connections SET name = ?, icon = ?, quiet = ?, blocked = ?, urgencies = ? WHERE id = ?').bind(name, ic, quiet, blocked, urg, c.id),
     env.DB.prepare('UPDATE principals SET name = ? WHERE id = ?').bind(name, c.principal_id),
   ]);
   return view(await env.DB.prepare('SELECT * FROM connections WHERE id = ?').bind(c.id).first(), request);
@@ -137,11 +146,22 @@ export async function revokeConnection(env, request, memberByToken, token, id) {
 export async function connectionForKey(env, keyId) {
   return env.DB.prepare('SELECT * FROM connections WHERE key_id = ?').bind(keyId).first();
 }
-export const CONNECTION_PATHS = [/^\/v1\/tasks$/, /^\/v1\/tasks\/media$/, /^\/v1\/tasks\/tk_[a-z0-9]+$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/withdraw$/];
+export const CONNECTION_PATHS = [/^\/v1\/tasks$/, /^\/v1\/tasks\/media$/, /^\/v1\/tasks\/tk_[a-z0-9]+$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/withdraw$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/notes$/, /^\/v1\/brand$/, /^\/v1\/brand\/mark$/, /^\/v1\/brand\/verify$/, /^\/mcp$/];   // its own brand too (OWNER_router_9)
 
 // The app's proposal (APP_FOR_SERVICE 11:55): POST .../quiet {"quiet": true|false} and POST .../block {"blocked"?: true|false}
 export async function quietOrBlock(env, request, memberByToken, token, id, which, b) {
   const v = which === 'quiet' ? (b && b.quiet !== undefined ? b.quiet : true) : (b && b.blocked !== undefined ? b.blocked : true);
   if (typeof v !== 'boolean') throw fixable('invalid_field', which === 'quiet' ? 'quiet' : 'blocked', 'true or false.', true);
   return changeConnection(env, request, memberByToken, token, id, which === 'quiet' ? { quiet: v } : { blocked: v });
+}
+
+// The operator changes a connection it made for a lab program (operations 12:25: urgencies); the person's own AIs are only theirs
+export async function adminChangeConnection(env, request, id, b) {
+  const c = await env.DB.prepare('SELECT * FROM connections WHERE id = ? AND revoked_at IS NULL AND lab = 1').bind(String(id || '')).first();
+  if (!c) throw notFixable(404, 'not_found', 'No connection the operator made has that id.');
+  for (const k of Object.keys(b || {})) if (!['urgencies', 'quiet'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not something the operator changes here; send urgencies or quiet.`, null);
+  const urg = b.urgencies === undefined ? c.urgencies : urgencies(b.urgencies);
+  const quiet = b.quiet === undefined ? c.quiet : (b.quiet === true ? 1 : b.quiet === false ? 0 : (() => { throw fixable('invalid_field', 'quiet', 'true or false.', true); })());
+  await env.DB.prepare('UPDATE connections SET urgencies = ?, quiet = ? WHERE id = ?').bind(urg, quiet, c.id).run();
+  return view(await env.DB.prepare('SELECT * FROM connections WHERE id = ?').bind(c.id).first(), request);
 }

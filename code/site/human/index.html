@@ -13,10 +13,10 @@
 <meta property="og:title" content="person.tools: when an AI needs a person, it calls one">
 <meta property="og:description" content="person.tools lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person&#x27;s answer with a record of what their page observed.">
 <link rel="preload" href="/h/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/h/front.css?v=2f1d2f8588">
+<link rel="stylesheet" href="/h/front.css?v=edcf432181">
 <script type="application/json" id="hc-hosts">{"primary": {"site": ["person.tools", "www.person.tools"], "api": "api.person.tools", "run": "run.person.tools"}, "fallback": {"site": ["askpeople-site.pages.dev"], "api": "askpeople-api.pages.dev", "run": "askpeople-run.pages.dev"}}</script>
 <script type="application/json" id="hc-call">{"_tool": "ask_people", "ask": "Listen once, to the end. Then say what you felt, in your own words.", "kind": "listen", "content": "m_sample_melody30", "people": 1, "pool": "self", "answer_fields": {"felt": {"type": "text", "label": "What did you feel?"}, "would_play_again": {"type": "boolean", "label": "Would you play it again?"}}}</script>
-<script src="/h/front.js?v=2f1d2f8588" defer></script>
+<script src="/h/front.js?v=edcf432181" defer></script>
 </head>
 <body>
 <a class="skip" href="#ring">Skip to the live call</a>
@@ -25,7 +25,7 @@
   <nav class="top-nav" aria-label="Pages"><a href="/start">Connect an agent</a><a href="https://spec.person.tools/">The standard</a><a href="/people/">For people</a><a href="/questions">Questions</a><a href="/proof">Proof</a></nav>
 </header>
 <p class="pre-band">A preview. Simulated people for everyone, free. Your own people answer for real: they join your panel from a link on their phones, and your calls ring them. Strangers are not offered yet: ask for them in the call (wants_strangers), and your request and contact go to the operator. No money is charged: every amount is test money.</p>
-
+<section class="first-call" aria-labelledby="fc-h"><h2 id="fc-h">The first real call</h2><p>On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator&#x27;s own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: the listener said it felt calm but was boring and dull, and played 74% of it.</p><p class="fc-outcome" hidden data-call="call_4jeizuxreeun5nzumgzgbiuzxq"><strong>The answer changed the work:</strong> <span id="fc-outcome">the front-page sample was replaced the same morning. The new one has a beat, a bass line, chords and a hook.</span></p><p><a href="/proof">The record</a></p></section>
 
 <main id="main">
   <div class="stage">
@@ -34,10 +34,17 @@
       <p class="label">A TOOL FOR AI AGENTS</p>
       <h1 id="h1" class="h1"><span class="ln">When an AI</span> <span class="ln">needs a person,</span> <span class="ln">it calls one.</span></h1>
       <p class="lede">person.tools lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person&#x27;s answer with a record of what their page observed.</p>
-      <div class="ring-me" id="ring">
-        <button class="go you" id="ring-btn" type="button"><span class="b1">Call me</span><span class="b2">it rings on this page &middot; 30 s of music, 2 questions</span></button>
-        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Thirty seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      <div class="ask-me" id="ask">
+        <button class="go you" id="ask-btn" type="button"><span class="b1">Ask me</span><span class="b2">one question, one tap, no sound</span></button>
+        <div class="ask-inline" id="ask-inline" hidden></div>
+        <div class="ask-received" id="ask-received" hidden aria-live="polite"></div>
       </div>
+      <details class="other-asks" id="other-asks"><summary>Other kinds of ask</summary>
+      <div class="ring-me" id="ring">
+        <button class="go you" id="ring-btn" type="button"><span class="b1">Listen to ten seconds</span><span class="b2">it plays on this page &middot; 10 s of music, 2 questions</span></button>
+        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Ten seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      </div>
+      </details>
       <div class="agent-line"><p class="addr"><span class="label">OR CONNECT YOUR AGENT</span> <span class="mono" id="mcp-line">https://api.person.tools/mcp</span> <button class="copy" type="button" data-copy="https://api.person.tools/mcp" aria-label="Copy the MCP address">Copy</button></p><p class="note">An MCP tool server; a test key needs no account. <a href="/start">Your first call, step by step&nbsp;&rarr;</a></p></div>
     </div>
 

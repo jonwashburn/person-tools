@@ -15,7 +15,7 @@ import * as SCREENING from './screening/index.js';
 
 const VERSION = '0.1';
 const VH = BUILD.wire_prefix + '-version';
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': `Authorization, Content-Type, Idempotency-Key, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Session-Id, ${VH}`, 'Access-Control-Expose-Headers': `Mcp-Session-Id, ${VH}` };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': `Authorization, Content-Type, Idempotency-Key, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Session-Id, X-Person-Member, ${VH}`, 'Access-Control-Expose-Headers': `Mcp-Session-Id, ${VH}` };
 
 // the private paths only (a reader that ignores Allow lines must still see /v1/status and the discovery file as open)
 const ROBOTS_TXT = 'User-agent: *\n' + ['/internal/', '/mcp', '/v1/members/', '/v1/seats/', '/v1/join/', '/v1/arrivals/', '/v1/approvals/', '/v1/calls/', '/v1/quotes',
@@ -122,16 +122,32 @@ function discovery(request) {
     test_money: true,
     ext: { [(BUILD.names && (BUILD.names.domain || BUILD.names.network)) || 'person.tools']: { status: CANON_STATUS.plain || 'preview: simulated people for everyone; real calls by invitation; all money is test money', names: BUILD.names,
       wire_note: 'The wire name is a placeholder until the standard is final; it changes once, then never.', what_you_pay: WHAT_YOU_PAY,
-      mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'], no_key: 'quotes and simulated calls work without a key', build: BUILD.stamp } },
+      mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'], no_key: 'quotes and simulated calls work without a key', build: BUILD.stamp,
+      // REACH 2:39 PM CT: agents learn connections where they read the API
+      connections: { what: 'A person connects their own AI and gives it a key (conn_...) or a link; the key only asks that person, under the name they gave it, and reads the answer.',
+        make_a_page: 'https://run.' + new URL(base).host.replace(/^api\./, '').replace(/^askpeople-api\.pages\.dev$/, 'person.tools') + '/start', ask: 'POST ' + base + '/v1/tasks {"title", "step", "unlocks"?, "urgency"?}',
+        read: 'GET ' + base + '/v1/tasks/{task_id}: reply.action, reply.choice, reply.text, reply.approved_text', link: 'POST <link> with the same body; GET <link>/{task_id}',
+        mcp: base + '/mcp with Authorization: Bearer conn_...: tools ask_person and ask_person_reply only', step_types: ['question', 'approve', 'link', 'command'] },
+      // OWNER_market_7 item 3: the stand-in for strangers, reached by name, never listed in pools (it completes calls only with stand-ins)
+      strangers_stand_in: { pool: 'prolific', keys: 'any test key (POST /v1/keys); not without a key', money: 'test money only', people: 'scripted stand-ins: nobody at Prolific is asked or paid, and every answer is marked simulated',
+        real: 'Real strangers open later, on the operator\'s own Prolific account first; this stand-in runs the same path end to end' } } },
   };
 }
 
 function route(path) { return path.replace(/\/+$/, '') || '/'; }
+// operations 12:37 PM CT 15 Nov (found by the app builder): a path that holds a credential is never echoed. Each such segment is
+// written as {token}, {seat}, {code} or {id} in any message, log line or note.
+const SECRET_SEGMENTS = [[/^mt_/, '{token}'], [/^st_/, '{seat}'], [/^jc_/, '{code}'], [/^conn_/, '{id}'], [/^ar_/, '{arrival}'], [/^(?:test|real)_/, '{key}']];
+export function shownPath(path) {
+  return String(path || '').split('/').map((seg) => { for (const [rx, w] of SECRET_SEGMENTS) if (rx.test(seg)) return w; return seg.length > 40 ? '{id}' : seg; }).join('/');
+}
 // SPEC 8.1 (OWNER_router_7): a person client sends its member credential as "Authorization: Bearer mt_...", never in an address.
 // /v1/member/<op> is served by the same code as the older /v1/members/<credential>/<op>, which keeps working until the app and the
 // runner page have moved over. 8.1's names: devices (the older device).
 function memberPath(request, path) {
   if (!path.startsWith('/v1/member/')) return path;
+  if (/^Bearer\s+ps_[a-z0-9]{20,80}$/i.test((request.headers.get('authorization') || '').trim())) return '/v1/member-session/' + path.slice('/v1/member/'.length);   // OWNER_router_12 item 2
+  if (/^Bearer\s+ds_[a-z0-9]{20,80}$/i.test((request.headers.get('authorization') || '').trim())) return '/v1/member-desk/' + path.slice('/v1/member/'.length);   // OWNER_router_14
   const t = /^Bearer\s+(mt_[a-z0-9]{4,80})$/i.exec((request.headers.get('authorization') || '').trim());
   if (!t) return '/v1/member-credential-missing';
   const rest = path.slice('/v1/member/'.length).replace(/^devices(?=$|\/)/, 'device');
@@ -163,7 +179,7 @@ async function retentionFromTraffic(env) {
 
 export async function handle(request, env, ctx) {
   const url = new URL(request.url);
-  const path = memberPath(request, route(url.pathname));
+  let path = memberPath(request, route(url.pathname));
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, [VH]: VERSION, 'Access-Control-Max-Age': '86400' } });
   if (ctx && typeof ctx.waitUntil === 'function' && env.DB && teamCheck(env, request)) ctx.waitUntil(rememberTeamAddress(env, request).catch(() => {}));
   if (ctx && typeof ctx.waitUntil === 'function' && env.DB && !path.startsWith('/internal/')) ctx.waitUntil(retentionFromTraffic(env).catch(e => console.log('retention from traffic', String(e && e.message || e))));
@@ -173,11 +189,35 @@ export async function handle(request, env, ctx) {
   const isCallsPost = path === '/v1/calls' && request.method === 'POST';
   let m0;
   try {
+    // OWNER_router_12 item 2: a passkey session names one of its own memberships (X-Person-Member: mb_..., or ?member=mb_...), never by name
+    if (path.startsWith('/v1/member-session/')) {
+      const { personOf } = await import('./accounts.js'); const person = await personOf(env, request, false);
+      const want = String(request.headers.get('x-person-member') || url.searchParams.get('member') || '');
+      if (!/^mb_[a-z0-9]{4,80}$/.test(want)) throw fixable('missing_field', 'X-Person-Member', 'Name the membership with the header X-Person-Member: mb_... (or ?member=mb_...); GET /v1/account lists yours.', null, {}, 400);
+      if (!(await env.DB.prepare('SELECT 1 AS x FROM person_members WHERE member_id = ? AND person_id = ?').bind(want, person).first())) throw notFixable(404, 'not_found', 'No membership of yours has that id.');
+      const { SESSION_MEMBERS } = await import('./seats.js'); const now = Date.now();
+      for (const [k, v] of SESSION_MEMBERS) if (v.until < now) SESSION_MEMBERS.delete(k);
+      const eph = rid('mt_', 32); SESSION_MEMBERS.set(eph, { member: want, until: now + 60000 });
+      path = '/v1/members/' + eph + '/' + path.slice('/v1/member-session/'.length);
+    }
+    // OWNER_router_14: a ds_ session (the Desk, signed in by the phone) acts for its one membership; never for the desk routes themselves
+    if (path.startsWith('/v1/member-desk/')) {
+      const rest = path.slice('/v1/member-desk/'.length);
+      if (rest.startsWith('desk/')) throw notFixable(403, 'forbidden', 'A computer signed in by the phone cannot sign in other computers or list them: use the phone.');
+      const { deskMember } = await import('./desk.js'); const tokD = /^Bearer\s+(ds_[a-z0-9]{20,80})$/i.exec((request.headers.get('authorization') || '').trim())[1];
+      const mid = await deskMember(env, tokD);
+      const { SESSION_MEMBERS } = await import('./seats.js'); const now = Date.now();
+      for (const [k, v] of SESSION_MEMBERS) if (v.until < now) SESSION_MEMBERS.delete(k);
+      const eph = rid('mt_', 32); SESSION_MEMBERS.set(eph, { member: mid, until: now + 60000 });
+      path = '/v1/members/' + eph + '/' + rest;
+    }
     const want = request.headers.get(VH);
     if (want && want.trim() !== VERSION) throw fixable('version_unsupported', VH, `Version ${want} is not served here; this server serves ${VERSION}.`, VERSION, { versions: [VERSION] });
     if (!path.startsWith('/internal/')) { try { await settle(env, request, { limit: 8 }); } catch (e) { console.log('settle', String(e && e.stack || e)); } }
 
-    if (path === '/mcp') return withHeaders(await handleMcp(env, request, await authKey(env, request), await ipHashOf(env, request)));
+    if (path === '/mcp') { const a = await authKey(env, request);   // a person's own AI (conn_ key) sees only its two tools (REACH 2:09)
+      if (a.key && a.key.connection) { const { personMcp } = await import('./mcp_person.js'); return withHeaders(await personMcp(env, request, a.key)); }
+      return withHeaders(await handleMcp(env, request, a, await ipHashOf(env, request))); }
     if (path === '/' && request.method === 'GET') return json({ service: `${BUILD.names.network} API (preview)`, discovery: apiBase(request) + '/.well-known/' + BUILD.wire_prefix, mcp: apiBase(request) + '/mcp', openapi: apiBase(request) + '/openapi.json', test_keys: 'POST ' + apiBase(request) + '/v1/keys', status: CANON_STATUS.plain || 'preview: simulated people for everyone; all money is test money' });
     if (path === '/.well-known/' + BUILD.wire_prefix || path === '/.well-known/' + BUILD.wire_prefix + '.json') return json(discovery(request), 200, { 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'all' });
     if (path === '/.well-known/jwks.json') return json(jwks(), 200, { 'Cache-Control': 'public, max-age=300' });
@@ -194,7 +234,8 @@ export async function handle(request, env, ctx) {
       const media = await env.DB.prepare(`SELECT
           SUM(CASE WHEN h.released_at IS NULL THEN 1 ELSE 0 END) AS waiting,
           SUM(CASE WHEN c.created_at >= ? THEN 1 ELSE 0 END) AS day
-        FROM held_calls h JOIN calls c ON c.id = h.call_id WHERE c.screening_json LIKE '%"uninspected_material"%'`).bind(nowMs() - 86400000).first().catch(() => null);
+        FROM held_calls h JOIN calls c ON c.id = h.call_id JOIN principals p ON p.id = c.principal_id
+        WHERE c.screening_json LIKE '%"uninspected_material"%' AND COALESCE(p.owner, 'outside') = 'outside'`).bind(nowMs() - 86400000).first().catch(() => null);   // outsiders only, as /v1/proof counts (TRUST 12:35)
       return json({ ok: l.s === 0 && b.s === 0, ledger_sum_cents: l.s, ledger_lines: l.n, balances_sum_cents: b.s, held_calls_waiting: held.n, build: BUILD.stamp,
         last_tick: lt ? lt.v : null, oldest_event_at: oe && oe.t ? iso(oe.t) : null, oldest_idempotency_at: oi && oi.t ? iso(oi.t) : null,
         screening: SCREENING.MISSING ? 'missing (every call from a live key is held)' : 'installed ' + (SCREENING.SCREENING_VERSION || SCREENING.VERSION || ''), time: iso(nowMs()),
@@ -245,7 +286,7 @@ export async function handle(request, env, ctx) {
       if (request.method === 'GET') return json(await acc.getAccount(env, k, m0[1]));
       if (request.method === 'PUT' || request.method === 'POST') return json(await acc.connectAccount(env, k, m0[1], await body(request)));
       if (request.method === 'DELETE') return json(await acc.disconnectAccount(env, k, m0[1]));
-      throw notFixable(404, 'not_found', `No route ${request.method} ${path}: it takes GET, PUT or DELETE.`);
+      throw notFixable(404, 'not_found', `No route ${request.method} ${shownPath(path)}: it takes GET, PUT or DELETE.`);
     }
 
     // ---- a person an outside pool sent (ADAPTERS.md step 3): the runner's /p/<token> page posts the pool's identifiers
@@ -355,6 +396,45 @@ export async function handle(request, env, ctx) {
       if (op === '/media' && request.method === 'GET') return withHeaders(await seatMedia(env, request, tok, m[3] ? m[3].slice(1) : null));
       if (op === '/receipt' && request.method === 'GET') return json(await seatReceipt(env, request, tok));
     }
+    // OWNER_router_10 B: one admin, two scopes (owner, operator), one interface; every action logged
+    if (path.startsWith('/v1/admin/')) { const { handleAdmin } = await import('./admin.js'); return json(await handleAdmin(env, request, path, ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) ? await body(request) : null)); }
+    // OWNER_router_10 A: accounts by passkey (SPEC 8.1 names)
+    if (path.startsWith('/v1/account')) {
+      const AC = await import('./accounts.js');
+      if (path === '/v1/account/start' && request.method === 'POST') return json(await AC.startPage(env, request, await body(request), await ipHashOf(env, request), teamCheck(env, request)), 201);   // the CEO 2:21: a stranger's own page
+      if (path === '/v1/account/passkey/options' && request.method === 'POST') return json(await AC.passkeyOptions(env, request));
+      if (path === '/v1/account/passkey' && request.method === 'POST') return json(await AC.addPasskey(env, request, await body(request)), 201);
+      if (path === '/v1/account/login/options' && request.method === 'POST') return json(await AC.loginOptions(env));
+      if (path === '/v1/account/login' && request.method === 'POST') return json(await AC.login(env, request, await body(request)));
+      if (path === '/v1/account/logout' && request.method === 'POST') return json(await AC.logout(env, request));
+      if (path === '/v1/account/memberships' && request.method === 'POST') return json(await AC.linkMembership(env, request, await body(request)));   // TRUST 1:29
+      if (path === '/v1/account' && request.method === 'GET') return json(await AC.account(env, request));
+    }
+    // OWNER_router_4 item 1 (SPEC 8.1 blocks): one tap blocks the asker behind a call or task; listed by its display name; removable
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/blocks(?:\/(bk_[a-z0-9]+))?$/.exec(path))) {
+      const { memberByToken } = await import('./seats.js'); const BL = await import('./blocks.js'); const mm = await memberByToken(env, m0[1]);
+      if (!m0[2] && request.method === 'POST') return json(await BL.addBlock(env, mm, await body(request)), 201);
+      if (!m0[2] && request.method === 'GET') return json(await BL.listBlocks(env, mm));
+      if (m0[2] && request.method === 'DELETE') return json(await BL.removeBlock(env, mm, m0[2]));
+    }
+    // OWNER_router_4 item 2 (SPEC 8.1: device_key, signatures): the device's key, attested by Apple, and the answers it signs
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/(device_key\/nonce|device_key|signatures|answers\/(call_[a-z0-9]+)\/signature)$/.exec(path))) {
+      const { memberByToken } = await import('./seats.js'); const D = await import('./devicekeys.js'); const mm = await memberByToken(env, m0[1]);
+      if (m0[2] === 'device_key/nonce' && request.method === 'GET') return json(await D.deviceNonce(env, mm));
+      if (m0[2] === 'device_key' && request.method === 'POST') return json(await D.enrolDevice(env, mm, await body(request)), 201);
+      if (m0[2] === 'signatures' && request.method === 'POST') return json(await D.signAnswer(env, mm, await body(request)));
+      if (m0[3] && request.method === 'POST') return json(await D.signAnswer(env, mm, { ...(await body(request)), call_id: m0[3] }));
+    }
+    // OWNER_router_14: the Desk signs in with the phone (a QR, a number to match, one approval); a ds_ session acts for that one membership
+    if (path === '/v1/desk/sign_in' && request.method === 'POST') { const { startDesk } = await import('./desk.js'); return json(await startDesk(env, request, await ipHashOf(env, request)), 201); }
+    if ((m0 = /^\/v1\/desk\/sign_in\/(dp[a-z0-9]{20,64})$/.exec(path)) && request.method === 'GET') { const { pollDesk } = await import('./desk.js'); const r = await pollDesk(env, m0[1]); return json(r.body, r.status); }
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/desk\/(preview|approve|sessions)(?:\/(dk_[a-z0-9]+))?$/.exec(path))) {
+      const { memberByToken } = await import('./seats.js'); const D = await import('./desk.js'); const mm = await memberByToken(env, m0[1]);
+      if (m0[2] === 'preview' && request.method === 'POST' && !m0[3]) return json(await D.previewDesk(env, mm, await body(request)));
+      if (m0[2] === 'approve' && request.method === 'POST' && !m0[3]) return json(await D.approveDesk(env, mm, await body(request)));
+      if (m0[2] === 'sessions' && request.method === 'GET' && !m0[3]) return json(await D.listDesks(env, mm));
+      if (m0[2] === 'sessions' && request.method === 'DELETE' && m0[3]) return json(await D.revokeDesk(env, mm, m0[3]));
+    }
     if (path === '/v1/member-credential-missing') throw fixable('unauthorized', 'Authorization', 'Send the member credential you got on joining as "Authorization: Bearer mt_...".', 'Bearer mt_...', {}, 401);
     // OWNER_all_10 B: the person's own AIs: connect one (its key and link shown once), list, change (name, icon, quiet, blocked), revoke
     if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/connections(?:\/(cn_[a-z0-9]+))?$/.exec(path))) {
@@ -402,6 +482,13 @@ export async function handle(request, env, ctx) {
     if (path === '/v1/panels' && request.method === 'GET') { const k = needKey(await authKey(env, request)); return json(await listPanels(env, request, k)); }
     if (path === '/v1/panels' && request.method === 'POST') { const k = needKey(await authKey(env, request)); return json(await createPanel(env, request, k, await body(request)), 201); }
     // TASKS (OWNER_all_7, the CEO 8:28 AM CT 15 Nov): our programs ask one named person on the key's own panel
+    if ((m0 = /^\/v1\/tasks\/(tk_[a-z0-9]+)\/notes$/.exec(path)) && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { askerNote } = await import('./tasks.js'); return json(await askerNote(env, request, k, m0[1], await body(request))); }   // operations 1:00
+    // OWNER_router_9: the asker's brand (its own principal's), a brand picture, and the picture served from our store
+    if (path === '/v1/brand' && (request.method === 'PUT' || request.method === 'GET')) { const k = needKey(await authKey(env, request)); const C = await import('./cards.js');
+      return json(request.method === 'PUT' ? await C.putBrand(env, k, await body(request)) : await C.getBrand(env, k)); }
+    if (path === '/v1/brand/verify' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { verifyBrand } = await import('./cards.js'); return json(await verifyBrand(env, k)); }   // OWNER_router_10 C
+    if (path === '/v1/brand/mark' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { uploadMark } = await import('./cards.js'); return json(await uploadMark(env, request, k), 201); }
+    if ((m0 = /^\/v1\/brand_media\/(m_[a-z0-9_]+)$/.exec(path)) && request.method === 'GET') { const { serveMark } = await import('./cards.js'); return withHeaders(await serveMark(env, m0[1])); }
     if (path === '/v1/tasks/media' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { uploadOwn } = await import('./own.js'); return json(await uploadOwn(env, request, k), 201); }   // OWNER_all_10 C
     if (path === '/v1/tasks' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { createTask } = await import('./tasks.js'); const r = await createTask(env, request, k, await body(request)); return json(r.body, r.status); }
     if (path === '/v1/tasks' && request.method === 'GET') { const k = needKey(await authKey(env, request)); const { listTasks } = await import('./tasks.js'); return json(await listTasks(env, request, k, url.searchParams.get('state') || 'open')); }
@@ -522,6 +609,18 @@ export async function handle(request, env, ctx) {
         if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
         const { taskRefusals } = await import('./tasks.js'); return json(await taskRefusals(env, url.searchParams.get('hours')));
       }
+      if ((m = /^\/internal\/calls\/(call_[a-z0-9]+)\/refuse_held$/.exec(path)) && request.method === 'POST') {   // TRUST 12:35: our own probes' held calls, refused so the list starts at zero
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request); const why = typeof b.why === 'string' && b.why.trim() ? b.why.trim().slice(0, 200) : null;
+        if (!why) throw fixable('missing_field', 'why', 'why is one line.', 'our own probe, closed');
+        const c = await env.DB.prepare('SELECT c.id FROM calls c JOIN principals p ON p.id = c.principal_id WHERE c.id = ? AND c.status = \'held\' AND p.owner = \'team\'').bind(m[1]).first();
+        if (!c) throw notFixable(404, 'not_found', 'No held call of the team\'s own has that id (an outsider\'s held call is read and decided, never refused from here).');
+        const { refuseHeld } = await import('./calls.js'); return json(await refuseHeld(env, c.id, 'Refused by the operator: ' + why));
+      }
+      if ((m = /^\/internal\/connections\/(cn_[a-z0-9]+)$/.exec(path)) && request.method === 'PATCH') {   // operations 12:25: urgencies on a lab connection
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { adminChangeConnection } = await import('./connections.js'); return json(await adminChangeConnection(env, request, m[1], await body(request)));
+      }
       if ((m = /^\/internal\/members\/(mb_[a-z0-9]+)\/connections$/.exec(path)) && request.method === 'POST') {   // OWNER_all_10 B: the operator connects a lab program to a person
         if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
         const { adminConnection } = await import('./connections.js'); return json(await adminConnection(env, request, m[1], await body(request)), 201);
@@ -631,7 +730,7 @@ export async function handle(request, env, ctx) {
         return json(await adminKey(env, request, await body(request)), 201);
       }
     }
-    throw notFixable(404, 'not_found', `No route ${request.method} ${path}. Start at ${apiBase(request)}/.well-known/${BUILD.wire_prefix} or the MCP server at ${apiBase(request)}/mcp.`, { route: 'unknown' });   // a client never mistakes this for a member who left
+    throw notFixable(404, 'not_found', `No route ${request.method} ${shownPath(path)}. Start at ${apiBase(request)}/.well-known/${BUILD.wire_prefix} or the MCP server at ${apiBase(request)}/mcp.`, { route: 'unknown' });   // a client never mistakes this for a member who left
   } catch (e) {
     let st, b;
     if (e instanceof CallError) { st = e.status; b = { ...e.body }; }

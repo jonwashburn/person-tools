@@ -41,10 +41,10 @@ export async function onRequest(ctx) {
     const when = data.counted_at ? new Date(data.counted_at).toLocaleString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium', timeStyle: 'short' }) + ' CT' : '';
     const total = (ours || 0) + (outs || 0);
     const h1 = total === 0 ? 'No real call has been answered yet' : `${total} real ${total === 1 ? 'call has' : 'calls have'} been answered`;
-    const list = (data.ours || []).map(c => `<li><strong>${esc(c.kind || 'call')}</strong>, answered ${esc(c.answered_at ? new Date(c.answered_at).toLocaleDateString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium' }) : '')} by ${esc(c.people_answered)} ${c.people_answered === 1 ? 'person' : 'people'}${c.outcome_line ? `. The people were told what it changed: “${esc(c.outcome_line)}”` : ''}</li>`).join('');
+    const list = (data.ours || []).map(c => `<li><strong>${esc(c.kind || 'call')}</strong>, answered ${esc(c.answered_at ? new Date(c.answered_at).toLocaleDateString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium' }) : '')} by ${esc(c.people_answered)} ${c.people_answered === 1 ? 'person' : 'people'}${c.outcome_public ? `. What it changed: ${esc(c.outcome_public)}` : ((c.outcome_sent || c.outcome_line) ? '. The people were told what their answers changed' : '')}</li>`).join('');
     main = `<h1>${esc(h1)}</h1>
 <p class="m-lede">Counted by the API at ${esc(when)}, read when this page was asked for (kept for up to a minute). A real call is one a real person answered: not a simulated one.</p>
-${(ours || 0) > 0 && EXPECT.first_call && EXPECT.first_call.text ? `<h2>${esc(EXPECT.first_call.title)}</h2><p>${esc(EXPECT.first_call.text)}${(() => { const sent = (data.ours || []).some(c => c.outcome_line); return sent && EXPECT.first_call.outcome ? ' ' + esc(EXPECT.first_call.outcome_lead) + ' ' + esc(EXPECT.first_call.outcome) : ''; })()}</p>` : ''}
+${(ours || 0) > 0 && EXPECT.first_call && EXPECT.first_call.text ? `<h2>${esc(EXPECT.first_call.title)}</h2><p>${esc(EXPECT.first_call.text)}${(() => { const sent = (data.ours || []).some(c => c.outcome_sent || c.outcome_line); return sent && EXPECT.first_call.outcome ? ' ' + esc(EXPECT.first_call.outcome_lead) + ' ' + esc(EXPECT.first_call.outcome) : ''; })()}</p>` : ''}
 <table class="m-table"><tbody>
 <tr><td><strong>${esc(ours)}</strong></td><td>Real calls answered that our own programs made (the films, pages, songs and games we make for people)</td></tr>
 <tr><td><strong>${esc(outs)}</strong></td><td>Real calls answered that someone outside made</td></tr>

@@ -77,14 +77,24 @@ export async function retention(env, now, until = Infinity) {
   // 14. tester feedback: 90 days (the one-tap leave deletes it at once)
   try { out.feedback = (await env.DB.prepare('DELETE FROM feedback WHERE created_at < ?').bind(now - 90 * DAY).run()).meta.changes; } catch { }
   try { out.stranger_requests = (await env.DB.prepare('DELETE FROM stranger_requests WHERE created_at < ?').bind(now - 90 * DAY).run()).meta.changes; } catch { }
-  try { out.tasks = (await env.DB.prepare('DELETE FROM tasks WHERE (state = \'open\' AND created_at < ?) OR (state != \'open\' AND COALESCE(answered_at, created_at) < ?)').bind(now - 30 * DAY, now - 180 * DAY).run()).meta.changes; } catch { }
+  // OWNER_router_13: an ask nobody answered lapses at 30 days (never a default answer); its webhook says so; the row stays 30 more days
+  try {
+    const due = (await env.DB.prepare('SELECT * FROM tasks WHERE state = \'open\' AND created_at < ? LIMIT 50').bind(now - 30 * DAY).all()).results || [];
+    for (const t of due) {
+      const r = await env.DB.prepare('UPDATE tasks SET state = \'lapsed\', lapsed_at = ? WHERE id = ? AND state = \'open\'').bind(now, t.id).run();
+      if (r.meta.changes === 1 && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'lapsed' }); } catch { } }
+    }
+    out.tasks_lapsed = due.length;
+    out.tasks = (await env.DB.prepare('DELETE FROM tasks WHERE (state = \'lapsed\' AND lapsed_at < ?) OR (state NOT IN (\'open\', \'lapsed\') AND COALESCE(answered_at, created_at) < ?)').bind(now - 30 * DAY, now - 180 * DAY).run()).meta.changes;
+  } catch { }
   // 10. held-call records: 13 months after the decision
   out.held_records = (await env.DB.prepare('DELETE FROM held_calls WHERE released_at IS NOT NULL AND released_at < ?').bind(now - 395 * DAY).run()).meta.changes;
   // 9. askers' media (uploaded or copied in): 30 days after the last call using it closes; never a seeded sample. The stored
   //    file goes only when no other row still points at it (the same file uploaded twice shares one object).
   if (!late()) {
     out.media = 0;
-    const old = (await env.DB.prepare('SELECT id, r2_key FROM media WHERE sample = 0 AND created_at < ? ORDER BY RANDOM() LIMIT 10').bind(now - 30 * DAY).all()).results || [];
+    // a brand's pictures stay while its brand does (OWNER_router_9); they go with the principal
+    const old = (await env.DB.prepare('SELECT id, r2_key FROM media WHERE sample = 0 AND created_at < ? AND r2_key NOT LIKE \'brand/%\' ORDER BY RANDOM() LIMIT 10').bind(now - 30 * DAY).all()).results || [];
     for (const m of old) {
       const inUse = await env.DB.prepare('SELECT 1 AS x FROM calls WHERE spec_json LIKE ? AND (closed_at IS NULL OR closed_at > ?) LIMIT 1').bind('%"' + m.id + '"%', now - 30 * DAY).first();
       if (inUse) continue;

@@ -8,8 +8,28 @@ const ok = (d) => ({ description: d, content: { 'application/json': { schema: { 
 
 import SPEC from './openapi_spec.json';
 
+// This service's own operations beside the standard's (REACH 2:39 PM CT 15 Nov: agents read the API here): a person's own AIs ask
+// them through connections (a conn_ key does only this), and the person's answers come back as the reply.
+const STEP = { type: 'object', required: ['type'], description: 'ONE thing to do or answer', properties: { type: { enum: ['question', 'approve', 'link', 'command'] }, text: { type: 'string', maxLength: 4000 },
+  choices: { type: 'array', items: { type: 'string', maxLength: 120 }, minItems: 2, maxItems: 4 }, url: { type: 'string' }, command: { type: 'string' }, where: { type: 'string' }, approve_label: { type: 'string' }, deny_label: { type: 'string' }, editable: { type: 'boolean' } } };
+const TASK_BODY = { type: 'object', required: ['title', 'step'], properties: { title: { type: 'string', minLength: 3, maxLength: 120 }, step: STEP, unlocks: { type: 'string', maxLength: 300 },
+  urgency: { enum: ['now', 'today', 'whenever'] }, media: { type: 'string', description: 'an id from POST /v1/tasks/media (a connection only)' }, webhook: { type: 'string', description: 'https address for the signed answer (a connection only)' },
+  card: { type: 'object', description: '{"blocks": [...]} headline, text, media, facts, price, when_where, choices, input' }, idempotency_key: { type: 'string' } } };
+const REPLY = { type: 'object', description: 'state "open" until answered (up to 30 days; no default answer); then "answered" or "done" with reply; "lapsed" after 30 days unanswered (kept 30 more days); "withdrawn" if withdrawn', properties: { task_id: { type: 'string' }, state: { enum: ['open', 'answered', 'done', 'not_now', 'lapsed', 'withdrawn'] },
+  reply: { type: 'object', properties: { action: { enum: ['answer', 'done', 'approve', 'deny', 'not_now'] }, choice: { type: 'string' }, text: { type: 'string' }, note: { type: 'string' }, approved_text: { type: 'string' } } },
+  notes: { type: 'array', items: { type: 'object', properties: { at: { type: 'string' }, note: { type: 'string' }, by: { enum: ['person', 'asker'] } } } } } };
+const id = { name: 'task_id', in: 'path', required: true, schema: { type: 'string' } };
+const json = (schema) => ({ content: { 'application/json': { schema } } });
+const OWN = {
+  '/v1/tasks': { post: { summary: 'Ask your person one thing (a connection key, conn_..., asks only the person who connected it)', 'x-service-extension': true, requestBody: json(TASK_BODY), responses: { 201: { description: 'the task', ...json(REPLY) }, 403: err, 422: err, 429: err } },
+    get: { summary: 'Your open asks', 'x-service-extension': true, responses: { 200: ok('{tasks}') } } },
+  '/v1/tasks/{task_id}': { get: { summary: 'Read the answer', 'x-service-extension': true, parameters: [id], responses: { 200: { description: 'the task', ...json(REPLY) }, 404: err } } },
+  '/v1/tasks/{task_id}/notes': { post: { summary: 'Answer a person\'s note in one line', 'x-service-extension': true, parameters: [id], requestBody: json({ type: 'object', required: ['note'], properties: { note: { type: 'string', maxLength: 500 } } }), responses: { 200: ok('{notes}') } } },
+  '/v1/tasks/{task_id}/withdraw': { post: { summary: 'Withdraw an ask', 'x-service-extension': true, parameters: [id], responses: { 200: ok('{task_id, state}') } } },
+  '/v1/tasks/media': { post: { summary: 'One photo (10 MB) or clip (60 s, 20 MB) for an ask, as the request body; a connection only', 'x-service-extension': true, requestBody: { content: { 'image/jpeg': {}, 'image/png': {}, 'video/mp4': {} } }, responses: { 201: ok('{media_id}') } } },
+};
 export function openapi(request) {
-  if (SPEC && SPEC.openapi) return { ...SPEC, servers: [{ url: apiBase(request) }] };   // the standard's own file (spec/openapi.yaml)
+  if (SPEC && SPEC.openapi) return { ...SPEC, servers: [{ url: apiBase(request) }], paths: { ...(SPEC.paths || {}), ...OWN } };   // the standard's own file (spec/openapi.yaml), plus this service's own
   return {
     openapi: '3.1.0',
     info: { title: `${BUILD.names.network} API (preview)`, version: '0.1-draft', description: 'Ask people for a human reaction and get each answer back with a record of what they did. ' + (CANON_STATUS.plain || 'Preview: simulated people for everyone; all money is test money.') },
