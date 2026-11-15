@@ -1,0 +1,20 @@
+{
+  "response_id": "r_play0000000000000001",
+  "simulated": false,
+  "person_ref": "pp_play000000000000001",
+  "kind": "play",
+  "status": "answered",
+  "partial": false,
+  "evidence": "attended",
+  "level_reason": "played for 4 minutes with 212 inputs",
+  "answers": {
+    "fun": 6
+  },
+  "answer_input": {
+    "fun": "tapped"
+  },
+  "minutes": 5.0,
+  "paid_usd": "3.50",
+  "receipt_id": "rc_play0000000000000001",
+  "received_at": "2026-11-14T06:21:13Z"
+}

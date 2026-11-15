@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "receipt_envelope.json",
+  "title": "GET /v1/receipts/{receipt_id}",
+  "type": "object",
+  "required": [
+    "receipt",
+    "jws"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "receipt": {
+      "$ref": "receipt_payload.json"
+    },
+    "jws": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+      "description": "A JWS in compact form (RFC 7515), alg EdDSA."
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "ask": "Listen once. Then tell me what you felt.",
+  "kind": "listen",
+  "content": "m_sample_melody30",
+  "people": 3,
+  "pool": "panel:p_family",
+  "script": [
+    {
+      "accept": true
+    }
+  ]
+}

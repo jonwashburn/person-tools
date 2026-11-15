@@ -1,0 +1,33 @@
+{
+  "ask": "Look, then say what this is.",
+  "kind": "view",
+  "content": "m_logo_3",
+  "people": 5,
+  "enough": 2,
+  "pool": "simulated",
+  "pay_per_person_usd": "1.00",
+  "minutes": 2,
+  "script": [
+    {
+      "answers": {
+        "answer": "A fox."
+      }
+    },
+    {
+      "accept": false
+    },
+    {
+      "accept": "miss"
+    },
+    {
+      "stop_at_fraction": 0.5
+    },
+    {
+      "revealed": false,
+      "visible_fraction": 0.5,
+      "answer_input": "pasted"
+    }
+  ],
+  "max_total_usd": "10.00",
+  "idempotency_key": "states-1"
+}

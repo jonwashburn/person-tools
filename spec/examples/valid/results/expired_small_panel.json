@@ -1,0 +1,33 @@
+{
+  "call_id": "call_exp000000000000001",
+  "status": "expired",
+  "complete": true,
+  "summary": {
+    "simulated": false,
+    "people": 4,
+    "enough": 3,
+    "answered": 2,
+    "stopped": 0,
+    "small_panel": true,
+    "evidence": {
+      "attended": 2,
+      "said": 0,
+      "voiced": 0
+    },
+    "tally": {
+      "clear": {
+        "true": 1,
+        "false": 1
+      }
+    }
+  },
+  "responses": [],
+  "money": {
+    "held_usd": "4.40",
+    "spent_usd": "2.20",
+    "returned_usd": "2.20",
+    "test_money": true
+  },
+  "cursor": "2",
+  "next_check_after_seconds": null
+}

@@ -1,0 +1,12 @@
+# Sources and licences
+
+Every library, sound, font and sample piece, before it goes live: what it is, where it came from, its licence. Add lines from the shell (`echo "..." >> LICENSES.md`).
+
+- samples/melody_30s.wav: made by us on 13 Nov 2026 from arithmetic (sine tones); no source material; ours.
+- code/runner/public/fonts/inter-var.woff2: Inter variable (opsz, wght), Latin subset, from npm @fontsource-variable/inter 5.3.0; The Inter Project Authors; SIL Open Font License 1.1.
+- code/runner/public/fonts/jbmono-400.woff2, jbmono-700.woff2: JetBrains Mono, Latin subset, from npm @fontsource/jetbrains-mono 5.3.0; JetBrains; SIL Open Font License 1.1.
+- samples/page_a.png, page_b.png, clip_8s.mp4, game_dots.html: made by us on 14 Nov 2026 from code (code/runner/samples_src/make_samples.py); lettering drawn with Lato (SIL Open Font License 1.1, system font folder); no source material; ours.
+- samples/melody_30s.m4a: the same melody (samples/melody_30s.wav, ours) encoded to AAC 64 kbit/s by ffmpeg, 14 Nov 2026, so a slow phone can start it in about a second; ours.
+- axe-core 4.14.0 (npm, MPL-2.0, Deque Systems): used only by code/runner/checks/axe_pages.py inside the check's own browser; never served; kept outside the repository (the check reads its path from AXE_JS).
+- spec/fonts/inter-var.woff2, jbmono-400.woff2, jbmono-700.woff2: copies of code/runner/public/fonts (Inter variable and JetBrains Mono, Latin subsets, SIL Open Font License 1.1, as listed above), served with the standard's pages so they load nothing from elsewhere (added 14 Nov 2026).
+- code/router/src/vendor/anthropic_sdk.mjs: the official Anthropic TypeScript SDK, @anthropic-ai/sdk 1.8.0 (npm), Anthropic, PBC; Apache-2.0 (contributions before 1.0.0 also MIT), bundled by esbuild with @opentelemetry/api 1.10.0 (Apache-2.0), fast-sha256 1.3.0 (Unlicense), @stablelib/base64 1.0.1 (MIT) and standardwebhooks 1.1.1 (MIT); each licence text beside it in code/router/src/vendor/*.LICENSE*; the router's model read for screening (code/router/src/model_cap.js).

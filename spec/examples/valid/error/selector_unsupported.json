@@ -1,0 +1,8 @@
+{
+  "code": "selector_unsupported",
+  "message": "This panel cannot select by region.",
+  "status": 400,
+  "fixable": true,
+  "field": "require.region",
+  "example": null
+}

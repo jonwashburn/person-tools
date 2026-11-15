@@ -1,0 +1,20 @@
+{
+  "response_id": "r_wtch0000000000000001",
+  "simulated": false,
+  "person_ref": "pp_wtch000000000000001",
+  "kind": "watch",
+  "status": "answered",
+  "partial": false,
+  "evidence": "said",
+  "level_reason": "page in front 62% of the time",
+  "answers": {
+    "lost_at_seconds": null
+  },
+  "answer_input": {
+    "lost_at_seconds": "typed"
+  },
+  "minutes": 1.2,
+  "paid_usd": "1.00",
+  "receipt_id": "rc_wtch0000000000000001",
+  "received_at": "2026-11-14T06:21:13Z"
+}

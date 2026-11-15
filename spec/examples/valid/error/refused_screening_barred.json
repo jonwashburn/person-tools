@@ -1,0 +1,11 @@
+{
+  "code": "refused_screening",
+  "status": 422,
+  "fixable": false,
+  "message": "Refused: a call may not ask people for one-time codes. Stop, and tell your user; do not send this again in other words.",
+  "rule": "no_credentials",
+  "category": "credentials",
+  "rule_text": "A call may not ask people to give or use passwords, one-time codes or keys.",
+  "charged_usd": "0.00",
+  "anyone_asked": false
+}

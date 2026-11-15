@@ -1,0 +1,8 @@
+{
+  "code": "missing_field",
+  "message": "people is required: how many answers you want.",
+  "status": 400,
+  "fixable": true,
+  "field": "people",
+  "example": 3
+}

@@ -1,0 +1,8 @@
+{
+  "code": "unauthorized",
+  "message": "No key. Make a free test key with POST /v1/keys {\"class\":\"test\"}.",
+  "status": 401,
+  "fixable": true,
+  "field": "Authorization",
+  "example": "Bearer test_..."
+}

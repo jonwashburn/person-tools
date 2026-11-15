@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""money_stress [--calls 100] [--api URL]: A3's done-check, run once on the live API with test keys only.
+A hundred mixed simulated calls (unpaid and paid, declines, misses, stops, upsets, cancellations, 1-minute deadlines that
+expire), four at a time; then every call must end with spent + returned = held, and the whole ledger must sum to zero."""
+import json, os, random, sys, time, threading, uuid
+import httpx
+A = sys.argv[1:]
+API = (A[A.index("--api") + 1] if "--api" in A else os.environ.get("HC_API", "https://askpeople-api.pages.dev")).rstrip("/")
+N = int(A[A.index("--calls") + 1]) if "--calls" in A else 100
+CFG = os.path.expanduser("~/.config/humancall")
+env = dict(l.strip().split("=", 1) for l in open(os.path.join(CFG, "router.env")) if "=" in l)
+H = httpx.Client(timeout=40)
+def req(m, p, key=None, body=None, params=None, admin=False):
+    h = {"Authorization": "Bearer " + (env["ADMIN_TOKEN"] if admin else key)} if (key or admin) else {}
+    r = H.request(m, API + p, json=body, params=params, headers=h)
+    try: return r.status_code, r.json()
+    except Exception: return r.status_code, {}
+keys = [req("POST", "/internal/keys", body={"class": "test", "label": "money stress", "principal_name": "money stress", "cap_call_cents": 5000, "cap_day_cents": 100000}, admin=True)[1]["key"] for _ in range(4)]
+rnd = random.Random(20261114)
+plans = []
+for i in range(N):
+    pay = rnd.choice(["0.00", "1.00", "2.00"])
+    people = rnd.randint(1, 4)
+    script = []
+    for _ in range(rnd.randint(0, people + 2)):
+        x = rnd.random()
+        script.append({"accept": False} if x < .15 else {"accept": "miss"} if x < .25 else {"stop_at_fraction": round(rnd.random(), 2)} if x < .45 else {"stop_at_fraction": 0.5, "stop_reason": "upset"} if x < .55 else {"delay_seconds": rnd.randint(1, 8)})
+    plans.append({"i": i, "key": keys[i % 4], "cancel_after": rnd.choice([None, None, None, 2, 5]), "body": {
+        "ask": "Listen once. Then say what you felt.", "kind": "listen", "content": "m_sample_melody30", "people": people,
+        "pay_per_person_usd": pay, "minutes": 2, "deadline_minutes": rnd.choice([1, 5, 30]), "pace": rnd.choice(["instant", "instant", "human"]),
+        "script": script, "max_total_usd": "50.00", "idempotency_key": "stress-" + uuid.uuid4().hex[:10]}})
+calls, errors = [], []
+lock = threading.Lock()
+def worker(chunk):
+    for p in chunk:
+        s, c = req("POST", "/v1/calls", p["key"], p["body"])
+        if s != 201: errors.append((p["i"], s, c.get("code"))); continue
+        with lock: calls.append((p, c["call_id"]))
+        if p["cancel_after"]:
+            time.sleep(p["cancel_after"]); req("POST", f"/v1/calls/{c['call_id']}/cancel", p["key"])
+ts = [threading.Thread(target=worker, args=(plans[j::4],)) for j in range(4)]
+[t.start() for t in ts]; [t.join() for t in ts]
+print(f"opened {len(calls)} calls, {len(errors)} refused at open: {errors[:5]}")
+deadline = time.time() + 420
+pending = list(calls)
+while pending and time.time() < deadline:
+    nxt = []
+    for p, cid in pending:
+        s, r = req("GET", f"/v1/calls/{cid}/responses", p["key"], params={"wait_seconds": 0})
+        if not r.get("complete"): nxt.append((p, cid))
+    pending = nxt
+    if pending: time.sleep(10)
+bad = []
+for p, cid in calls:
+    s, r = req("GET", f"/v1/calls/{cid}/responses", p["key"])
+    mo = r.get("money", {})
+    if r.get("complete"):
+        if round(float(mo["spent_usd"]) + float(mo["returned_usd"]), 2) != float(mo["held_usd"]): bad.append((cid, mo))
+s, st = req("GET", "/v1/status")
+print(f"still open after 7 minutes: {len(pending)}; calls whose money does not balance: {len(bad)} {bad[:3]}")
+print(f"ledger sum {st.get('ledger_sum_cents')} cents over {st.get('ledger_lines')} lines; balances sum {st.get('balances_sum_cents')}; ok={st.get('ok')}")
+sys.exit(0 if st.get("ok") and not bad and not pending else 1)

@@ -1,0 +1,90 @@
+{
+  "call_id": "call_2b9x0c4v6n8m1q3w5e7r",
+  "status": "open",
+  "created_at": "2026-11-14T06:25:00Z",
+  "deadline": "2026-11-14T08:25:00Z",
+  "call": {
+    "ask": "Listen once. Then tell me what you felt, in your own words.",
+    "kind": "listen",
+    "content": "m_sample_melody30",
+    "people": 3,
+    "enough": 3,
+    "pool": "simulated",
+    "answer_fields": {
+      "felt": {
+        "type": "text"
+      },
+      "would_play_again": {
+        "type": "boolean"
+      }
+    },
+    "minutes": 2,
+    "pay_per_person_usd": "0.00",
+    "deadline_minutes": 120,
+    "content_rating": "general",
+    "may_train_on_answers": false,
+    "max_total_usd": "0.00",
+    "idempotency_key": "melody-check-1"
+  },
+  "defaults_used": {
+    "pool": "simulated",
+    "enough": 3,
+    "minutes": 2,
+    "pay_per_person_usd": "0.00",
+    "deadline_minutes": 120,
+    "content_rating": "general",
+    "may_train_on_answers": false,
+    "pace": "instant"
+  },
+  "next_step": "Ask for the answers with GET /v1/calls/call_2b9x0c4v6n8m1q3w5e7r/responses?wait_seconds=25.",
+  "quote": {
+    "quote_id": "q_7f3kd0a1m2n4p5q6r7s8",
+    "lines": [
+      {
+        "kind": "to_people",
+        "amount_usd": "0.00"
+      },
+      {
+        "kind": "router_fee",
+        "amount_usd": "0.00"
+      }
+    ],
+    "total_usd": "0.00",
+    "expected_minutes_to_enough": 1,
+    "expires_at": "2026-11-14T06:40:00Z",
+    "defaults_used": {
+      "pool": "simulated",
+      "enough": 3,
+      "minutes": 2,
+      "pay_per_person_usd": "0.00",
+      "deadline_minutes": 120
+    },
+    "simulated": true,
+    "test_money": true
+  },
+  "summary": {
+    "simulated": true,
+    "people": 3,
+    "enough": 3,
+    "offered": 3,
+    "taken": 0,
+    "answered": 0,
+    "stopped": 0,
+    "evidence": {
+      "attended": 0,
+      "said": 0,
+      "voiced": 0
+    },
+    "tally": {}
+  },
+  "money": {
+    "held_usd": "0.00",
+    "spent_usd": "0.00",
+    "returned_usd": "0.00",
+    "test_money": true
+  },
+  "outcomes": [],
+  "simulated": true,
+  "test_money": true,
+  "next_check_after_seconds": 5
+}

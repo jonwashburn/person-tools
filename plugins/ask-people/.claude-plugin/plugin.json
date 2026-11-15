@@ -1,0 +1,10 @@
+{
+  "name": "ask-people",
+  "version": "0.1.0",
+  "description": "Human feedback, user testing and surveys: your own people in two minutes; strangers on request.",
+  "author": {
+    "name": "person.tools"
+  },
+  "homepage": "https://person.tools",
+  "license": "Apache-2.0"
+}

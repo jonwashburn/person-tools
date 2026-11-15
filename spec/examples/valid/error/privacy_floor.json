@@ -1,0 +1,12 @@
+{
+  "code": "privacy_floor",
+  "message": "These selectors match fewer than 20 people.",
+  "status": 400,
+  "fixable": true,
+  "field": "require",
+  "example": {
+    "country": [
+      "US"
+    ]
+  }
+}

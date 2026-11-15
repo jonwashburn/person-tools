@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "outcome_response.json",
+  "title": "POST /v1/calls/{call_id}/outcome answer",
+  "type": "object",
+  "required": [
+    "status",
+    "people"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "delivered",
+        "held"
+      ]
+    },
+    "people": {
+      "$ref": "common.json#/$defs/count"
+    }
+  }
+}

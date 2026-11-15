@@ -1,0 +1,11 @@
+{
+  "ask": "Is this sentence polite?",
+  "kind": "answer",
+  "content": {
+    "text": "Per my last email, please advise."
+  },
+  "people": 3,
+  "answer_fields": {
+    "polite": "boolean"
+  }
+}

@@ -1,0 +1,89 @@
+/* The standard's text: the design stack's screen tokens, set for long reading. */
+/* Fonts are served from this site (SIL Open Font License 1.1; LICENSES.md). */
+@font-face { font-family: "InterVariable"; src: url("fonts/inter-var.woff2") format("woff2-variations"), url("fonts/inter-var.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jbmono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jbmono-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+:root {
+  --paper: #faf8f3; --ink: #1d1d1b; --ink-body: #2a2926; --ink-soft: #3c3a36; --hair: #8a8a8a; --rule: #d9d5cc;
+  --c: #009fe3; --m: #e6007e; --code-bg: #f1eee6;
+  --display: "Inter Display", "InterVariable", "Inter", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --text: "InterVariable", "Inter", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #141413; --ink: #faf8f3; --ink-body: #e9e6df; --ink-soft: #c9c5bc; --rule: #3a3936;
+          --c: #2bb3f0; --m: #ff3d9e; --code-bg: #1f1e1c; }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink-body); font-family: var(--text); font-weight: 420;
+       font-size: 17px; line-height: 1.55; font-optical-sizing: auto; }
+a { color: inherit; text-decoration-color: var(--c); text-underline-offset: 2px; }
+a:hover { color: var(--c); }
+.label { font-family: var(--mono); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; font-size: 11px; }
+.draftbar { background: var(--ink); color: var(--paper); padding: 8px 20px; text-align: center; line-height: 1.4; }
+.wrap { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 56px; max-width: 1180px; margin: 0 auto;
+        padding: 40px 24px 120px; }
+.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; font-size: 14px;
+       line-height: 1.35; padding-right: 8px; }
+.toc ol, .toc ul { list-style: none; margin: 8px 0 24px; padding: 0; }
+.toc li { margin: 0 0 7px; }
+.toc a { text-decoration: none; color: var(--ink-soft); }
+.toc a:hover { color: var(--c); }
+.toc .files { margin-top: 28px; }
+.toc summary { cursor: pointer; list-style: none; padding: 4px 0; }
+.toc summary::-webkit-details-marker { display: none; }
+@media (min-width: 861px) { .toc summary { pointer-events: none; } }
+@media (max-width: 860px) { .toc summary::after { content: " +"; } .toc details[open] summary::after { content: " −"; } .toc .files, .toc p.files { display: none; } }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-family: var(--display); font-weight: 820; letter-spacing: -.038em; line-height: .98; color: var(--ink);
+          font-size: clamp(40px, 6vw, 68px); margin: 8px 0 28px;
+          text-shadow: 0 0 .5px color-mix(in srgb, var(--ink) 55%, transparent); }
+main h2 { font-family: var(--display); font-weight: 780; letter-spacing: -.02em; line-height: 1.08; color: var(--ink);
+          font-size: 30px; margin: 72px 0 18px; padding-top: 18px; border-top: 2px solid var(--ink); }
+main h3 { font-family: var(--display); font-weight: 740; letter-spacing: -.012em; color: var(--ink); font-size: 21px;
+          margin: 40px 0 12px; }
+main p, main li { max-width: 72ch; }
+main strong { color: var(--ink); font-weight: 650; }
+code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); padding: 1px 4px; }
+pre { background: var(--code-bg); border-left: 3px solid var(--ink); padding: 16px 18px; overflow-x: auto;
+      font-size: 13.5px; line-height: 1.5; margin: 18px 0 24px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin: 18px 0 28px; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+     color: var(--ink); border-bottom: 2px solid var(--ink); }
+td code { white-space: nowrap; }
+a.req { font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: .08em; text-decoration: none;
+        color: var(--paper); background: var(--ink); padding: 2px 6px; margin-right: 2px; white-space: nowrap;
+        scroll-margin-top: 24px; }
+a.req:target { background: var(--m); }
+h2, h3 { scroll-margin-top: 16px; }
+main.list { margin: 40px auto; padding: 0 24px; }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: 1fr; gap: 8px; padding-top: 24px; }
+  .toc { position: static; max-height: none; border-bottom: 2px solid var(--ink); padding-bottom: 8px; }
+  .toc ol { columns: 2; column-gap: 20px; }
+  body { font-size: 16px; }
+  main h2 { font-size: 25px; margin-top: 56px; }
+}
+@media print {
+  :root { --paper: #fff; --ink: #000; --ink-body: #000; --code-bg: #f4f4f4; }
+  .toc, .draftbar { display: none; } .wrap { display: block; padding: 0; } main { max-width: none; }
+  body { font-family: "Libertinus Serif", Georgia, serif; font-size: 11.5pt; }
+}
+.live { border: 2px solid var(--ink); padding: 16px 18px 6px; margin: 20px 0 32px; }
+.live p { margin: 0 0 10px; }
+.live button { font: 700 14px var(--mono); letter-spacing: .08em; text-transform: uppercase; background: var(--ink);
+               color: var(--paper); border: 0; padding: 12px 18px; cursor: pointer; min-height: 44px; }
+.live button:disabled { opacity: .5; cursor: progress; }
+.live-status { font-family: var(--mono); font-size: 13px; margin-left: 8px; }
+.live-out { margin-top: 12px; }
+.live-out pre { max-height: 360px; overflow: auto; }
+.live-out pre.req { border-left-color: var(--c); max-height: 120px; }
+.rs { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      padding: 2px 5px; margin: 0 4px 0 2px; white-space: nowrap; border: 1px solid currentColor; cursor: help; }
+.rs-pass { color: #0b7a3e; } .rs-fail { color: #c8401f; } .rs-none { color: var(--hair); }
+.refline { border-left: 3px solid var(--ink); padding: 8px 12px; margin: 48px 0 0; line-height: 1.6; letter-spacing: .06em; text-transform: none; font-weight: 400; font-size: 12px; }
+@media (prefers-color-scheme: dark) { .rs-pass { color: #4cc38a; } .rs-fail { color: #ff6a3d; } }

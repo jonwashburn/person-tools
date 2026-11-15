@@ -1,0 +1,21 @@
+{
+  "response_id": "r_stop0000000000000001",
+  "simulated": false,
+  "person_ref": "pp_stop000000000000001",
+  "kind": "listen",
+  "status": "stopped",
+  "partial": true,
+  "evidence": "said",
+  "level_reason": "played 41% of the audio",
+  "answers": {
+    "felt": "Too slow to start."
+  },
+  "answer_input": {
+    "felt": "typed"
+  },
+  "voice": null,
+  "minutes": 0.5,
+  "paid_usd": "0.52",
+  "receipt_id": "rc_stop0000000000000001",
+  "received_at": "2026-11-14T06:22:40Z"
+}

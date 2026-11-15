@@ -1,0 +1,8 @@
+{
+  "code": "forbidden_for_key_class",
+  "message": "A test key reaches only the simulated pool.",
+  "status": 403,
+  "fixable": true,
+  "field": "pool",
+  "example": "simulated"
+}

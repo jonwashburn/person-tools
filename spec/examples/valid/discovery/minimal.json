@@ -1,0 +1,29 @@
+{
+  "protocol": "{{wire_prefix}}",
+  "versions": [
+    {
+      "version": "0.1",
+      "status": "draft"
+    }
+  ],
+  "api_base": "https://api.example.com",
+  "mcp": "https://api.example.com/mcp",
+  "mcp_protocol_versions": [
+    "2025-06-18"
+  ],
+  "jwks_uri": "https://api.example.com/.well-known/jwks.json",
+  "kinds": [
+    "listen",
+    "view",
+    "answer"
+  ],
+  "pools": [
+    "simulated"
+  ],
+  "screening_policy": "https://example.com/policy",
+  "retention": {
+    "recordings_days": 90,
+    "responses_days": 365,
+    "records_days": 365
+  }
+}

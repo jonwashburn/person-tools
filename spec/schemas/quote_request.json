@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quote_request.json",
+  "title": "POST /v1/quotes body",
+  "description": "A call (section 9). Cross-field rules the schema cannot express and the server checks: enough <= people; script entries <= people + 20; scale max - min <= 10; deadline_minutes <= limits.max_deadline_minutes; people <= limits.max_people; numbers given for money have at most two decimal places. A quote accepts and ignores max_total_usd and idempotency_key.",
+  "type": "object",
+  "required": [
+    "ask",
+    "kind",
+    "people"
+  ],
+  "properties": {
+    "ask": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "kind": {
+      "$ref": "common.json#/$defs/kind"
+    },
+    "content": {
+      "$ref": "common.json#/$defs/content"
+    },
+    "people": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "max_total_usd": {
+      "$ref": "common.json#/$defs/money_input"
+    },
+    "idempotency_key": {
+      "$ref": "common.json#/$defs/idempotency_key"
+    },
+    "enough": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pool": {
+      "$ref": "common.json#/$defs/pool"
+    },
+    "answer_fields": {
+      "$ref": "common.json#/$defs/answer_fields"
+    },
+    "minutes": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 120
+    },
+    "pay_per_person_usd": {
+      "$ref": "common.json#/$defs/money_input"
+    },
+    "deadline_minutes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "require": {
+      "$ref": "common.json#/$defs/selectors"
+    },
+    "voice": {
+      "$ref": "common.json#/$defs/voice_request"
+    },
+    "content_rating": {
+      "$ref": "common.json#/$defs/content_rating"
+    },
+    "may_train_on_answers": {
+      "type": "boolean"
+    },
+    "pace": {
+      "enum": [
+        "instant",
+        "human"
+      ]
+    },
+    "script": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.json#/$defs/script_entry"
+      },
+      "description": "At most people + 20 entries (section 18); the server checks the bound."
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "compare"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "listen",
+              "watch",
+              "view",
+              "play",
+              "answer"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "not": {
+              "type": "array"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "listen",
+              "watch",
+              "play"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "$ref": "common.json#/$defs/media_ref"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "answer"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "content": {
+            "$ref": "common.json#/$defs/text_content"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "pool"
+        ],
+        "properties": {
+          "pool": {
+            "not": {
+              "const": "simulated"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pace": false,
+          "script": false
+        }
+      }
+    }
+  ]
+}

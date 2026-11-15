@@ -1,0 +1,8 @@
+{
+  "code": "unknown_pool",
+  "status": 400,
+  "fixable": true,
+  "message": "No pool named panel:nope.",
+  "field": "pool",
+  "example": "simulated"
+}

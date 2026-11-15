@@ -1,0 +1,24 @@
+{
+  "ask": "Which?",
+  "kind": "compare",
+  "content": [
+    {
+      "text": "a"
+    },
+    {
+      "text": "b"
+    }
+  ],
+  "people": 1,
+  "script": [
+    {
+      "items": [
+        {
+          "visible_seconds": 3,
+          "accept": false
+        },
+        {}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,642 @@
+// The router's HTTP surface (askpeople-api), to the standard's HTTP binding (spec section 19).
+// Every request first settles whatever is overdue (no background loop anywhere).
+import CANON_STATUS from './canon_status.json';   // the canon's status line, written into the build by bin/golive
+import { rid, nowMs, iso, fmt, sha256hex, apiBase, siteBase, parseUsd, teamCheck } from './util.js';
+import { CallError, notFixable, fixable, LIMITS, PAY_FLOOR_CENTS_PER_HOUR, SAMPLE_ID } from './spec.js';
+import { quote, openCall, results, cancelCall, settle, getCallFor, callObject, outcome, ANON } from './calls.js';
+import { getSeat, takeSeat, postEvents, postResponse, postStop, seatMedia, seatReceipt, serveMedia, memberOffers, memberReceipts, memberLeave, memberSettings, memberPush, callSeatsForTeam } from './seats.js';
+import { listPanels, createPanel, getPanel, joinPanel, joinInfo, setOn } from './panels.js';
+import { handleMcp } from './mcp.js';
+import { jwks, verifyJws } from './receipts.js';
+import { posting, acct, PRICE, balance, WHAT_YOU_PAY } from './money.js';
+import { BUILD } from './build_info.js';
+import { selftest } from './selftest.js';
+import * as SCREENING from './screening/index.js';
+
+const VERSION = '0.1';
+const VH = BUILD.wire_prefix + '-version';
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': `Authorization, Content-Type, Idempotency-Key, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Session-Id, ${VH}`, 'Access-Control-Expose-Headers': `Mcp-Session-Id, ${VH}` };
+
+// the private paths only (a reader that ignores Allow lines must still see /v1/status and the discovery file as open)
+const ROBOTS_TXT = 'User-agent: *\n' + ['/internal/', '/mcp', '/v1/members/', '/v1/seats/', '/v1/join/', '/v1/arrivals/', '/v1/approvals/', '/v1/calls/', '/v1/quotes',
+  '/v1/keys', '/v1/panels', '/v1/media', '/v1/receipts/', '/v1/pools/', '/v1/balance', '/v1/me'].map(x => 'Disallow: ' + x).join('\n') + '\n';
+function json(body, status = 200, extra = {}) {
+  return new Response(JSON.stringify(body, null, 1), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', [VH]: VERSION, ...CORS, ...extra } });
+}
+function withHeaders(r) { const h = new Headers(r.headers); for (const [k, v] of Object.entries(CORS)) h.set(k, v); h.set(VH, VERSION); return new Response(r.body, { status: r.status, headers: h }); }
+
+const UNAUTH_EXAMPLE = 'Bearer test_... (make one with POST /v1/keys {"class":"test"})';
+async function authKey(env, request) {
+  const h = (request.headers.get('authorization') || '').trim();
+  if (!h || /^Bearer$/i.test(h)) return { key: null };   // 'Bearer ' with nothing after it (a plugin whose key is not set) is no key (market, 8:49)
+  const m = /^Bearer\s+(\S+)$/i.exec(h);
+  const raw = m ? m[1] : '';
+  const bad = (msg) => ({ key: null, error: fixable('unauthorized', 'Authorization', msg, UNAUTH_EXAMPLE, {}, 401) });
+  return keyFromRaw(env, raw, new URL(request.url).pathname, bad);
+}
+async function keyFromRaw(env, raw, path, bad) {
+  if (!/^(test|real|conn)_[a-z0-9]{20,64}$/.test(raw)) return bad('That is not a key of this server. Keys start test_ or real_; make a free test key with POST /v1/keys.');
+  const k = await env.DB.prepare('SELECT k.*, p.name AS principal_name, p.class AS principal_class FROM keys k JOIN principals p ON p.id = k.principal_id WHERE k.key_hash = ?').bind(await sha256hex(raw)).first();
+  if (!k) return bad('Unknown key. Make a free test key with POST /v1/keys.');
+  if (raw.startsWith('conn_') || k.label === 'connection') {   // OWNER_all_10 B: a connection's key does exactly one thing
+    const { connectionForKey, CONNECTION_PATHS } = await import('./connections.js');
+    const c = raw.startsWith('conn_') && k.label === 'connection' ? await connectionForKey(env, k.id) : null;
+    if (!c || c.revoked_at || k.suspended_at) return bad('This AI was disconnected by its person. Only they can connect it again.');
+    if (!CONNECTION_PATHS.some((rx) => rx.test(path))) return { key: null, error: fixable('forbidden_for_key_class', 'Authorization', 'This key only asks the person who connected it: POST /v1/tasks, then GET /v1/tasks/{task_id} for the reply.', null, {}, 403) };
+    return { key: { ...k, connection: c } };
+  }
+  if (k.suspended_at) return bad('This key is suspended. Tell your user: only they, or the operator who suspended it, can restore it.');
+  if (k.class === 'real' && !(BUILD.real_key_labels || []).includes(k.label)) return bad('This live key is not listed by the operator, so it reaches nobody. Use a test key.');
+  return { key: k };
+}
+function needKey(a) { if (a.error) throw a.error; if (!a.key) throw fixable('unauthorized', 'Authorization', 'This needs a key: send "Authorization: Bearer <key>". Make a free test key with POST /v1/keys {"class":"test"}.', UNAUTH_EXAMPLE, {}, 401); return a.key; }
+function keyOrAnon(a) { if (a.error) throw a.error; return a.key || ANON; }
+
+async function body(request) {
+  const t = await request.text();
+  if (!t) return {};
+  if (t.length > 200000) throw notFixable(413, 'content_too_large', 'A request body is at most 200 KB.');
+  let j; try { j = JSON.parse(t); } catch { throw fixable('invalid_json', 'body', 'The body is not valid JSON.', null); }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) throw fixable('invalid_json', 'body', 'The body is a JSON object.', null);
+  return j;
+}
+
+async function ipHashOf(env, request) {
+  return (await sha256hex('ip:' + (request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.SEAT_SECRET || ''))).slice(0, 24);
+}
+
+async function mintTestKey(env, request, caps = { call: 5000, day: 20000 }) {
+  const ipHash = await ipHashOf(env, request);
+  const now = nowMs();
+  // a stranger's limit counts strangers' keys: keys our own checks made with the team header ('Team check principal') are
+  // lifted from the limit and never count toward it (14 Nov, 6:57 PM CT: 93 of them in an hour turned the baseline's
+  // stranger-road check from this server into a 429)
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals WHERE created_ip_hash = ? AND created_at > ? AND name NOT LIKE \'Team check principal %\'').bind(ipHash, now - 3600000).first();
+  if (n.n >= 100 && !teamCheck(env, request)) throw notFixable(429, 'rate_limited', 'At most 100 test keys an hour from one address. Reuse a key you made.', { retry_after_seconds: 600 });
+  const pr = rid('pr_'); const kid = rid('k_'); const key = rid('test_', 32);
+  await env.DB.batch([
+    // OWNER_router_5: ours when our own checks made it (the team header); the owner column decides counting only
+    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'test', (teamCheck(env, request) ? 'Team check principal ' : 'Test principal ') + pr, 0, ipHash, now, teamCheck(env, request) ? 'team' : 'outside'),
+    env.DB.prepare('INSERT INTO keys (id, principal_id, key_hash, class, label, cap_call_cents, cap_day_cents, team, created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(kid, pr, await sha256hex(key), 'test', 'self-made test key', caps.call, caps.day, 0, now),
+    ...posting(env.DB, 'grant:' + pr, [{ ...acct.testGrant(), cents: -PRICE.test_grant_cents }, { ...acct.avail(pr), cents: PRICE.test_grant_cents }], null, 'test money for a new test principal', now),
+  ]);
+  return { key, class: 'test', principal_id: pr, balance_usd: fmt(PRICE.test_grant_cents), test_money: true,
+    caps: { per_call_usd: fmt(caps.call), per_day_usd: fmt(caps.day) }, pools: ['simulated'], reaches: ['simulated'], mcp: apiBase(request) + '/mcp',
+    note: 'Keep this key; it is shown once. It reaches simulated people (every simulated answer is marked simulated) and the people who join a panel you make with it (POST /v1/panels gives the join link). Send it as "Authorization: Bearer <key>".',
+    first_call: { ask: 'Listen once. Then tell me what you felt, in your own words.', kind: 'listen', content: SAMPLE_ID, people: 3, max_total_usd: '0.00' } };
+}
+
+// team_ and live keys are made only with the admin token (the router's seed script; the owner's bin/make_real_key)
+async function adminKey(env, request, b) {
+  const pr = rid('pr_'); const kid = rid('k_');
+  const cls = b.class === 'real' ? 'real' : 'test';
+  const key = rid(cls + '_', 32); const now = nowMs();
+  const team = b.team ? 1 : 0;
+  const principalId = b.principal_id || pr;
+  const st = [];
+  // OWNER_router_5: the admin route's principals are ours, except the front page's demo for a visitor
+  if (!b.principal_id) st.push(env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(principalId, cls, String(b.principal_name || (team ? `the ${BUILD.names.network} team (test)` : 'principal')).slice(0, 80), team, b.ip_hash || null, now, b.owner === 'visitor' ? 'visitor' : 'team'));
+  st.push(env.DB.prepare('INSERT INTO keys (id, principal_id, key_hash, class, label, cap_call_cents, cap_day_cents, team, created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(kid, principalId, await sha256hex(key), cls, String(b.label || '').slice(0, 60), Number.isInteger(b.cap_call_cents) && b.cap_call_cents >= 0 ? b.cap_call_cents : 5000, Number.isInteger(b.cap_day_cents) && b.cap_day_cents >= 0 ? b.cap_day_cents : 20000, team, now));
+  if (!b.principal_id) st.push(...posting(env.DB, 'grant:' + principalId, [{ ...acct.testGrant(), cents: -PRICE.test_grant_cents }, { ...acct.avail(principalId), cents: PRICE.test_grant_cents }], null, 'test money', now));
+  await env.DB.batch(st);
+  return { key, key_id: kid, principal_id: principalId, class: cls, team: !!team, label: b.label || '', test_money: true };
+}
+
+function discovery(request) {
+  const base = apiBase(request);
+  return {
+    protocol: BUILD.wire_prefix,
+    versions: [{ version: VERSION, status: 'draft' }],
+    api_base: base, mcp: base + '/mcp', openapi: base + '/openapi.json', jwks_uri: base + '/.well-known/jwks.json',
+    mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'],
+    kinds: ['listen', 'watch', 'view', 'play', 'compare', 'answer'],
+    pools: ['simulated', 'panel'],   // 'self' (the front page's demo pool, fixed asks only) is accepted but not listed (chief 04:21)
+    features: ['keyless', 'url_content', 'outcome', 'panels'],
+    profiles: [BUILD.wire_prefix + '/fair-call/0.1'],   // DISC-3: its checks (F01-F04) pass and are held by the baseline
+    screening_policy: siteBase(request) + '/policy',
+    test_keys: base + '/v1/keys',
+    privacy_floor: 20,
+    pay_floor_usd_per_hour: fmt(PAY_FLOOR_CENTS_PER_HOUR),
+    limits: { max_people: LIMITS.max_people, max_deadline_minutes: LIMITS.max_deadline_minutes, max_wait_seconds: LIMITS.max_wait_seconds, stop_minimum_usd: LIMITS.stop_minimum_usd },
+    retention: { recordings_days: 90, responses_days: 395, records_days: 30 },
+    test_money: true,
+    ext: { [(BUILD.names && (BUILD.names.domain || BUILD.names.network)) || 'person.tools']: { status: CANON_STATUS.plain || 'preview: simulated people for everyone; real calls by invitation; all money is test money', names: BUILD.names,
+      wire_note: 'The wire name is a placeholder until the standard is final; it changes once, then never.', what_you_pay: WHAT_YOU_PAY,
+      mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'], no_key: 'quotes and simulated calls work without a key', build: BUILD.stamp } },
+  };
+}
+
+function route(path) { return path.replace(/\/+$/, '') || '/'; }
+// SPEC 8.1 (OWNER_router_7): a person client sends its member credential as "Authorization: Bearer mt_...", never in an address.
+// /v1/member/<op> is served by the same code as the older /v1/members/<credential>/<op>, which keeps working until the app and the
+// runner page have moved over. 8.1's names: devices (the older device).
+function memberPath(request, path) {
+  if (!path.startsWith('/v1/member/')) return path;
+  const t = /^Bearer\s+(mt_[a-z0-9]{4,80})$/i.exec((request.headers.get('authorization') || '').trim());
+  if (!t) return '/v1/member-credential-missing';
+  const rest = path.slice('/v1/member/'.length).replace(/^devices(?=$|\/)/, 'device');
+  return '/v1/members/' + t[1] + '/' + rest;
+}
+
+const TEAM_ADDRESSES_SEEN = new Set();   // per isolate: one write per address, not one per request
+async function rememberTeamAddress(env, request) {
+  if (request.headers.get('cf-worker')) return;   // a Cloudflare function's address is shared with everyone's functions: never mark it ours
+  const h = await ipHashOf(env, request);
+  if (TEAM_ADDRESSES_SEEN.has(h)) return;
+  TEAM_ADDRESSES_SEEN.add(h);
+  await env.DB.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').bind('team_ip:' + h, String(nowMs())).run();
+}
+
+// Deletion on time from ordinary traffic too (trust, 5:36 AM CT): at most once in 10 minutes, claimed by compare-and-swap
+// on meta 'last_retention', run after the answer is sent (ctx.waitUntil) within a 5-second budget. So rows are deleted on
+// time whenever anything calls the API, with or without the supervisor's tick.
+async function retentionFromTraffic(env) {
+  const now = nowMs();
+  const up = await env.DB.prepare('UPDATE meta SET v = ? WHERE k = \'last_retention\' AND CAST(v AS INTEGER) < ?').bind(String(now), now - 600000).run();
+  if (up.meta.changes !== 1) {
+    const ins = await env.DB.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (\'last_retention\', ?)').bind(String(now)).run();
+    if (ins.meta.changes !== 1) return;
+  }
+  const { retention } = await import('./retention.js');
+  await retention(env, now, Date.now() + 5000);
+}
+
+export async function handle(request, env, ctx) {
+  const url = new URL(request.url);
+  const path = memberPath(request, route(url.pathname));
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, [VH]: VERSION, 'Access-Control-Max-Age': '86400' } });
+  if (ctx && typeof ctx.waitUntil === 'function' && env.DB && teamCheck(env, request)) ctx.waitUntil(rememberTeamAddress(env, request).catch(() => {}));
+  if (ctx && typeof ctx.waitUntil === 'function' && env.DB && !path.startsWith('/internal/')) ctx.waitUntil(retentionFromTraffic(env).catch(e => console.log('retention from traffic', String(e && e.message || e))));
+  if ((path === '/_build.txt' || /^\/schemas\/[a-z_]+\.json$/.test(path)) && env.ASSETS) return env.ASSETS.fetch(request);   // the standard's schemas, which /openapi.json refers to
+  // TRUST 3:28 AM CT (trust/checks/indexable.py): the status and the discovery file are public; the rest is not
+  if (path === '/robots.txt') return new Response(ROBOTS_TXT, { headers: { 'Content-Type': 'text/plain' } });
+  const isCallsPost = path === '/v1/calls' && request.method === 'POST';
+  let m0;
+  try {
+    const want = request.headers.get(VH);
+    if (want && want.trim() !== VERSION) throw fixable('version_unsupported', VH, `Version ${want} is not served here; this server serves ${VERSION}.`, VERSION, { versions: [VERSION] });
+    if (!path.startsWith('/internal/')) { try { await settle(env, request, { limit: 8 }); } catch (e) { console.log('settle', String(e && e.stack || e)); } }
+
+    if (path === '/mcp') return withHeaders(await handleMcp(env, request, await authKey(env, request), await ipHashOf(env, request)));
+    if (path === '/' && request.method === 'GET') return json({ service: `${BUILD.names.network} API (preview)`, discovery: apiBase(request) + '/.well-known/' + BUILD.wire_prefix, mcp: apiBase(request) + '/mcp', openapi: apiBase(request) + '/openapi.json', test_keys: 'POST ' + apiBase(request) + '/v1/keys', status: CANON_STATUS.plain || 'preview: simulated people for everyone; all money is test money' });
+    if (path === '/.well-known/' + BUILD.wire_prefix || path === '/.well-known/' + BUILD.wire_prefix + '.json') return json(discovery(request), 200, { 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'all' });
+    if (path === '/.well-known/jwks.json') return json(jwks(), 200, { 'Cache-Control': 'public, max-age=300' });
+    if (path === '/openapi.yaml' || path === '/openapi.json') { const { openapi } = await import('./openapi.js'); return json(openapi(request), 200, { 'Cache-Control': 'public, max-age=300' }); }
+    if (path === '/v1/status' && request.method === 'GET') {
+      const l = await env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s, COUNT(*) AS n FROM ledger').first();
+      const b = await env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s FROM balances').first();
+      const held = await env.DB.prepare('SELECT COUNT(*) AS n FROM held_calls WHERE released_at IS NULL').first();
+      const lt = await env.DB.prepare('SELECT v FROM meta WHERE k = \'last_tick\'').first();
+      const oe = await env.DB.prepare('SELECT MIN(received_at) AS t FROM events').first();
+      const oi = await env.DB.prepare('SELECT MIN(created_at) AS t FROM idempotency').first();
+      const { modelReadStatus } = await import('./model_cap.js');
+      const model_read = await modelReadStatus(env).catch(() => ({ on: !!env.ANTHROPIC_API_KEY, error: 'the day\'s spend could not be read' }));
+      const media = await env.DB.prepare(`SELECT
+          SUM(CASE WHEN h.released_at IS NULL THEN 1 ELSE 0 END) AS waiting,
+          SUM(CASE WHEN c.created_at >= ? THEN 1 ELSE 0 END) AS day
+        FROM held_calls h JOIN calls c ON c.id = h.call_id WHERE c.screening_json LIKE '%"uninspected_material"%'`).bind(nowMs() - 86400000).first().catch(() => null);
+      return json({ ok: l.s === 0 && b.s === 0, ledger_sum_cents: l.s, ledger_lines: l.n, balances_sum_cents: b.s, held_calls_waiting: held.n, build: BUILD.stamp,
+        last_tick: lt ? lt.v : null, oldest_event_at: oe && oe.t ? iso(oe.t) : null, oldest_idempotency_at: oi && oi.t ? iso(oi.t) : null,
+        screening: SCREENING.MISSING ? 'missing (every call from a live key is held)' : 'installed ' + (SCREENING.SCREENING_VERSION || SCREENING.VERSION || ''), time: iso(nowMs()),
+        model_read,
+        outsider_media_review: await (async () => { const { reviewStatus } = await import('./tasks.js'); return reviewStatus(env); })(),
+        connected_ais: await (async () => { const { ownCounts } = await import('./own.js'); return ownCounts(env); })(),   // counts only
+        apple_push: await (async () => { const { apnsConfigured } = await import('./apns.js'); const d = await env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE apns_token IS NOT NULL AND left_at IS NULL').first().catch(() => null);
+          return { configured: apnsConfigured(env), devices: (d && d.n) || 0, note: apnsConfigured(env) ? 'offers alert the app' : 'not switched on: needs APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC; device tokens are kept, nothing is sent' }; })(),
+        held_for_uninspected_material: { waiting_now: (media && media.waiting) || 0, held_last_24_hours: (media && media.day) || 0,
+          note: 'Calls held because nothing has heard or seen their outside material; the model reads text only, so these wait for a person.' },
+        ...(teamCheck(env, request) ? { team_check: true } : {}) }, 200, { 'X-Robots-Tag': 'all' });   // public: indexable (TRUST 3:28)
+    }
+
+    // ---- security reports (ops/SECURITY.md) and the waiting list (switched off during the build: stores nothing)
+    if (path === '/.well-known/security.txt') {
+      const site = siteBase(request);
+      const exp = new Date(Date.now() + 365 * 86400000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      return new Response(`Contact: ${site}/security\nExpires: ${exp}\nPreferred-Languages: en\nCanonical: ${apiBase(request)}/.well-known/security.txt\nPolicy: ${site}/security\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', ...CORS } });
+    }
+    if (path === '/v1/security-reports' && request.method === 'POST') {
+      const b = await body(request);
+      for (const k of Object.keys(b)) if (!['what', 'how_to_reproduce', 'reply_to'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send what, how_to_reproduce and, if you like, reply_to.`, null);
+      if (typeof b.what !== 'string' || b.what.trim().length < 5 || b.what.length > 5000) throw fixable(b.what === undefined ? 'missing_field' : 'invalid_field', 'what', 'what is 5 to 5,000 characters: what the hole is.', 'A seat link still opens after the call closed.');
+      const ipHash = await ipHashOf(env, request); const now = nowMs();
+      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM security_reports WHERE ip_hash = ? AND created_at > ?').bind(ipHash, now - 3600000).first();
+      if (n.n >= 10) throw notFixable(429, 'rate_limited', 'At most 10 reports an hour from one address.', { retry_after_seconds: 600 });
+      await env.DB.prepare('INSERT INTO security_reports (id, what, how_to_reproduce, reply_to, ip_hash, created_at) VALUES (?,?,?,?,?,?)')
+        .bind(rid('sr_'), b.what.slice(0, 5000), typeof b.how_to_reproduce === 'string' ? b.how_to_reproduce.slice(0, 10000) : null, typeof b.reply_to === 'string' ? b.reply_to.slice(0, 200) : null, ipHash, now).run();
+      return json({ received: true, answer_within_hours: 72, note: 'It reaches our own database and nowhere else. Thank you.' }, 201);
+    }
+    if ((path === '/v1/waitlist' || path === '/v1/waitlist/remove') && request.method === 'POST') {
+      await body(request);
+      return json({ ok: false, open: false, stored: false, message: 'The waiting list is not open yet, so nothing was stored. It opens when real calls open to people outside the team.' });
+    }
+
+    // ---- over-cap approvals (A3): the human's side of approve_url (the site's /approve page calls these)
+    if ((m0 = /^\/v1\/approvals\/(ap_[A-Za-z0-9_\-.%]+)$/.exec(path))) {
+      const { getApproval, approve } = await import('./approvals.js');
+      const t = decodeURIComponent(m0[1]);
+      if (request.method === 'GET') return json((await getApproval(env, t)).out);
+      if (request.method === 'POST') return json(await approve(env, t, await body(request)));
+    }
+
+    // ---- a principal's own account with an outside pool (N2's second mode, pools/accounts.js): connect, read, disconnect
+    if ((m0 = /^\/v1\/pools\/([a-z0-9_-]{2,40})\/account$/.exec(path))) {
+      const acc = await import('./pools/accounts.js');
+      const k = needKey(await authKey(env, request));
+      if (request.method === 'GET') return json(await acc.getAccount(env, k, m0[1]));
+      if (request.method === 'PUT' || request.method === 'POST') return json(await acc.connectAccount(env, k, m0[1], await body(request)));
+      if (request.method === 'DELETE') return json(await acc.disconnectAccount(env, k, m0[1]));
+      throw notFixable(404, 'not_found', `No route ${request.method} ${path}: it takes GET, PUT or DELETE.`);
+    }
+
+    // ---- a person an outside pool sent (ADAPTERS.md step 3): the runner's /p/<token> page posts the pool's identifiers
+    if ((m0 = /^\/v1\/arrivals\/(ar_[A-Za-z0-9_\-.]+)$/.exec(path)) && request.method === 'POST') {
+      const { arrive } = await import('./calls.js');
+      return json(await arrive(env, request, m0[1], await body(request)), 201);
+    }
+
+    // ---- the proof (CEO.md's two numbers; REACH's /proof page): counts only, and our own real calls with their outcome line
+    if (path === '/v1/proof' && request.method === 'GET') {
+      const { proof } = await import('./proof.js');
+      return json(await proof(env), 200, { 'Cache-Control': 'public, max-age=60' });
+    }
+
+    // ---- a quote by its id, for the human who approves (D35): lines and total only, no key needed
+    if ((m0 = /^\/v1\/quotes\/(q_[a-z0-9]{8,40})$/.exec(path)) && request.method === 'GET') {
+      const q = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(m0[1]).first();
+      if (!q) throw notFixable(404, 'not_found', 'No such quote (quotes are kept for one day).');
+      return json({ quote_id: q.id, lines: JSON.parse(q.lines_json), total_usd: fmt(q.total_cents), expires_at: iso(q.expires_at), test_money: true });
+    }
+
+    // ---- top-ups (B6) against the stand-in processor
+    if (path === '/v1/topups' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { startTopup } = await import('./topups.js'); return json(await startTopup(env, request, k, await body(request)), 201); }
+    if (path === '/v1/topups/webhook' && request.method === 'POST') {
+      const raw = await request.text();
+      if (raw.length > 100000) throw notFixable(413, 'content_too_large', 'Too large.');
+      const { applyEvent } = await import('./topups.js');
+      const r = await applyEvent(env, raw, request.headers.get('stripe-signature'), { nowSec: Math.floor(Date.now() / 1000), secret: env.WEBHOOK_SECRET });
+      return json(r.body, r.status);
+    }
+
+    // ---- keys and balance
+    if (path === '/v1/keys' && request.method === 'POST') {
+      const b = await body(request);
+      for (const k of Object.keys(b)) if (!['class', 'caps'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send {"class":"test"} and, if you like, caps.`, null);
+      if (b.class !== undefined && b.class !== 'test') throw fixable('invalid_field', 'class', 'Only test keys are made here. Keys that reach real people come from the operator.', 'test');
+      let caps = { call: 5000, day: 20000 };
+      if (b.caps !== undefined) {
+        if (!b.caps || typeof b.caps !== 'object' || Array.isArray(b.caps)) throw fixable('invalid_field', 'caps', 'caps is {"per_call_usd": "5.00", "per_day_usd": "20.00"}.', { per_call_usd: '5.00', per_day_usd: '20.00' });
+        for (const k of Object.keys(b.caps)) if (!['per_call_usd', 'per_day_usd'].includes(k)) throw fixable('unknown_field', 'caps.' + k, `"${k}" is not a cap; caps are per_call_usd and per_day_usd.`, null);
+        const pc = b.caps.per_call_usd === undefined ? 5000 : parseUsd(b.caps.per_call_usd), pd = b.caps.per_day_usd === undefined ? 20000 : parseUsd(b.caps.per_day_usd);
+        if (Number.isNaN(pc) || pc > 5000) throw fixable('invalid_field', 'caps.per_call_usd', 'per_call_usd is dollars, at most 50.00 for a test key.', '5.00');
+        if (Number.isNaN(pd) || pd > 20000) throw fixable('invalid_field', 'caps.per_day_usd', 'per_day_usd is dollars, at most 200.00 for a test key.', '20.00');
+        caps = { call: pc, day: pd };
+      }
+      return json(await mintTestKey(env, request, caps), 201);
+    }
+    if ((path === '/v1/balance' || path === '/v1/me') && request.method === 'GET') {
+      const k = needKey(await authKey(env, request));
+      const held = await env.DB.prepare('SELECT COALESCE(SUM(b.cents),0) AS c FROM balances b JOIN calls c ON b.account = \'hold:\' || c.id WHERE c.principal_id = ?').bind(k.principal_id).first();
+      const today = await env.DB.prepare('SELECT COALESCE(SUM(hold_cents),0) AS c FROM calls WHERE key_id = ? AND created_at > ?').bind(k.id, nowMs() - 86400000).first();
+      return json({ balance_usd: fmt(await balance(env.DB, 'avail:' + k.principal_id)), held_usd: fmt(held.c), caps: { per_call_usd: fmt(k.cap_call_cents), per_day_usd: fmt(k.cap_day_cents) },
+        spent_today_usd: fmt(today.c), test_money: true, class: k.class === 'real' ? 'live' : 'test', principal_id: k.principal_id });
+    }
+
+    // ---- calls
+    if (path === '/v1/quotes' && request.method === 'POST') { const a = await authKey(env, request); if (a.error) throw a.error; return json(await quote(env, request, a.key, await body(request))); }
+    if (isCallsPost) {
+      const k = keyOrAnon(await authKey(env, request));
+      const b = await body(request);
+      const hk = request.headers.get('idempotency-key'); if (hk && b.idempotency_key === undefined) b.idempotency_key = hk;
+      const r = await openCall(env, request, k, b, await ipHashOf(env, request));
+      return json(r.body, r.status);
+    }
+    let m;
+    if ((m = /^\/v1\/calls\/([A-Za-z0-9_-]{1,64})(\/[a-z]+)?$/.exec(path))) {
+      const op = m[2] || '';
+      const a = await authKey(env, request);
+      const k = keyOrAnon(a);
+      if (op === '' && request.method === 'GET') { await getCallFor(env, k, m[1]); await settle(env, request, { callId: m[1] }); return json(await callObject(env, request, await getCallFor(env, k, m[1]))); }
+      if (op === '/responses' && request.method === 'GET') {
+        const ws = url.searchParams.get('wait_seconds');   // above the limit is held to the limit (RES-1)
+        if (ws !== null && !/^\d+$/.test(ws)) throw fixable('invalid_field', 'wait_seconds', `wait_seconds is a whole number from 0 to ${LIMITS.max_wait_seconds}.`, 20);
+        return json(await results(env, request, k, m[1], { after: url.searchParams.get('after') || 0, wait: ws || 0, detail: url.searchParams.get('detail') || 'summary', person: url.searchParams.get('person') }));
+      }
+      if (op === '/cancel' && request.method === 'POST') return json(await cancelCall(env, request, k, m[1]));
+      if (op === '/outcome' && request.method === 'POST') return json(await outcome(env, request, k, m[1], await body(request), await ipHashOf(env, request), SCREENING.screenOutcome));
+      if (op === '/seats' && request.method === 'GET') return json(await callSeatsForTeam(env, request, needKey(a), m[1]));
+    }
+
+    // ---- material
+    if (path === '/v1/media/samples' && request.method === 'GET') {
+      const rows = (await env.DB.prepare('SELECT id, kind, content_type, bytes, seconds, source FROM media WHERE sample = 1 ORDER BY id').all()).results || [];
+      const callKind = { audio: 'listen', video: 'watch', image: 'view', page: 'view', build: 'play' };   // the call kind the material is for (Q12)
+      return json({ samples: rows.map(r => ({ media_id: r.id, kind: callKind[r.kind] || 'view', seconds: r.seconds, title: r.source, licence: 'made by the operator; free to use in any call', bytes: r.bytes, content_type: r.content_type })) });
+    }
+    if (path === '/v1/media' && request.method === 'POST') {
+      const a = await authKey(env, request); if (a.error) throw a.error;
+      const pr = a.key ? await env.DB.prepare('SELECT team FROM principals WHERE id = ?').bind(a.key.principal_id).first() : null;
+      const { upload } = await import('./media.js');
+      return json(await upload(env, request, a.key, pr), 201);
+    }
+    if ((m = /^\/v1\/media\/(m_[A-Za-z0-9_-]+)$/.exec(path)) && request.method === 'GET') {
+      const md = await env.DB.prepare('SELECT sample FROM media WHERE id = ?').bind(m[1]).first();
+      if (!md || !md.sample) throw notFixable(404, 'not_found', 'Only samples are served here.');
+      return withHeaders(await serveMedia(env, request, m[1]));
+    }
+
+    // ---- seats (the runner, server to server; runner/SEAT_CONTRACT.md)
+    if ((m = /^\/v1\/seats\/(st_[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)(\/[a-z]+)?(\/m_[A-Za-z0-9_-]+)?$/.exec(path))) {
+      const tok = m[1], op = m[2] || '';
+      if (op === '' && request.method === 'GET') return json(await getSeat(env, request, tok));
+      if (op === '/take' && request.method === 'POST') { const r = await takeSeat(env, request, tok); return json(r.body, r.status); }
+      if (op === '/events' && request.method === 'POST') return json(await postEvents(env, request, tok, await body(request)));
+      if (op === '/response' && request.method === 'POST') return json(await postResponse(env, request, tok, await body(request)));
+      if (op === '/stop' && request.method === 'POST') return json(await postStop(env, request, tok, await body(request)));
+      if (op === '/media' && request.method === 'GET') return withHeaders(await seatMedia(env, request, tok, m[3] ? m[3].slice(1) : null));
+      if (op === '/receipt' && request.method === 'GET') return json(await seatReceipt(env, request, tok));
+    }
+    if (path === '/v1/member-credential-missing') throw fixable('unauthorized', 'Authorization', 'Send the member credential you got on joining as "Authorization: Bearer mt_...".', 'Bearer mt_...', {}, 401);
+    // OWNER_all_10 B: the person's own AIs: connect one (its key and link shown once), list, change (name, icon, quiet, blocked), revoke
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/connections(?:\/(cn_[a-z0-9]+))?$/.exec(path))) {
+      const C = await import('./connections.js'); const { memberByToken } = await import('./seats.js');
+      if (!m[2] && request.method === 'POST') return json(await C.createConnection(env, request, memberByToken, m[1], await body(request)), 201);
+      if (!m[2] && request.method === 'GET') return json(await C.listConnections(env, request, memberByToken, m[1]));
+      if (m[2] && request.method === 'PATCH') return json(await C.changeConnection(env, request, memberByToken, m[1], m[2], await body(request)));
+      if (m[2] && request.method === 'DELETE') return json(await C.revokeConnection(env, request, memberByToken, m[1], m[2]));
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/connections\/(cn_[a-z0-9]+)\/(quiet|block)$/.exec(path)) && request.method === 'POST') {   // the app's shape
+      const C = await import('./connections.js'); const { memberByToken } = await import('./seats.js');
+      return json(await C.quietOrBlock(env, request, memberByToken, m[1], m[2], m[3], await body(request)));
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/connections\/(cn_[a-z0-9]+)\/icon$/.exec(path)) && request.method === 'GET') {   // the AI's picture, our copy
+      const C = await import('./connections.js'); const { memberByToken } = await import('./seats.js');
+      return withHeaders(await C.serveIcon(env, memberByToken, m[1], m[2]));
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/connections\/(cn_[a-z0-9]+)\/secret$/.exec(path)) && request.method === 'POST') {   // a new webhook secret, shown once
+      const C = await import('./connections.js'); const { memberByToken } = await import('./seats.js');
+      return json(await C.rotateSecret(env, request, memberByToken, m[1], m[2]));
+    }
+    // the connection's link, for an AI that can only call an address: POST asks, GET <link>/<task_id> reads the reply
+    if ((m = /^\/hook\/(conn_[a-z0-9]{20,64})(?:\/(tk_[a-z0-9]+))?$/.exec(path))) {
+      const bad = (msg) => ({ key: null, error: fixable('unauthorized', 'link', msg, null, {}, 401) });
+      const a = await keyFromRaw(env, m[1], m[2] ? '/v1/tasks/' + m[2] : '/v1/tasks', bad); if (a.error) throw a.error;
+      const T = await import('./tasks.js');
+      if (!m[2] && request.method === 'POST') { const r = await T.createTask(env, request, a.key, await body(request)); return json(r.body, r.status); }
+      if (m[2] && request.method === 'GET') return json(await T.getTask(env, request, a.key, m[2]));
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/(offers|receipts|on|leave|settings|push|device|apns|feedback)$/.exec(path))) {
+      if (m[2] === 'feedback' && request.method === 'POST') { const { memberFeedback } = await import('./seats.js'); return json(await memberFeedback(env, request, m[1], await body(request)), 201); }
+      if (m[2] === 'push' && request.method === 'POST') return json(await memberPush(env, request, m[1], await body(request)));
+      if ((m[2] === 'device' || m[2] === 'apns') && request.method === 'POST') { const { memberDevice } = await import('./seats.js'); return json(await memberDevice(env, request, m[1], await body(request))); }
+      if (m[2] === 'leave' && request.method === 'POST') return json(await memberLeave(env, request, m[1], await body(request)));
+      if (m[2] === 'settings' && (request.method === 'POST' || request.method === 'PATCH')) return json(await memberSettings(env, request, m[1], await body(request)));
+      if (m[2] === 'settings' && request.method === 'GET') { const { memberSettingsRead } = await import('./seats.js'); return json(await memberSettingsRead(env, request, m[1])); }
+      if (m[2] === 'offers' && request.method === 'GET') return json(await memberOffers(env, request, m[1]));
+      if (m[2] === 'receipts' && request.method === 'GET') return json(await memberReceipts(env, request, m[1]));
+      if (m[2] === 'on' && request.method === 'POST') return json(await setOn(env, request, m[1], await body(request)));
+    }
+    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') return json(await joinPanel(env, request, m[1], await body(request)), 201);
+    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'GET') return json(await joinInfo(env, request, m[1]));
+
+    // ---- panels
+    if (path === '/v1/panels' && request.method === 'GET') { const k = needKey(await authKey(env, request)); return json(await listPanels(env, request, k)); }
+    if (path === '/v1/panels' && request.method === 'POST') { const k = needKey(await authKey(env, request)); return json(await createPanel(env, request, k, await body(request)), 201); }
+    // TASKS (OWNER_all_7, the CEO 8:28 AM CT 15 Nov): our programs ask one named person on the key's own panel
+    if (path === '/v1/tasks/media' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { uploadOwn } = await import('./own.js'); return json(await uploadOwn(env, request, k), 201); }   // OWNER_all_10 C
+    if (path === '/v1/tasks' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { createTask } = await import('./tasks.js'); const r = await createTask(env, request, k, await body(request)); return json(r.body, r.status); }
+    if (path === '/v1/tasks' && request.method === 'GET') { const k = needKey(await authKey(env, request)); const { listTasks } = await import('./tasks.js'); return json(await listTasks(env, request, k, url.searchParams.get('state') || 'open')); }
+    if ((m0 = /^\/v1\/tasks\/(tk_[a-z0-9]+)\/withdraw$/.exec(path)) && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { withdrawTask } = await import('./tasks.js'); return json(await withdrawTask(env, request, k, m0[1], await body(request))); }
+    if ((m0 = /^\/v1\/tasks\/(tk_[a-z0-9]+)$/.exec(path)) && request.method === 'GET') { const k = needKey(await authKey(env, request)); const { getTask } = await import('./tasks.js'); return json(await getTask(env, request, k, m0[1])); }
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/tasks$/.exec(path)) && request.method === 'GET') { const { memberTaskList } = await import('./seats.js'); return json(await memberTaskList(env, request, m0[1], url.searchParams.get('q'))); }
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/tasks\/(tk_[a-z0-9]+)\/media$/.exec(path)) && request.method === 'GET') { const { memberTaskMedia } = await import('./seats.js'); return withHeaders(await memberTaskMedia(env, request, m0[1], m0[2])); }
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/tasks\/(tk_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') { const { memberTaskReply } = await import('./seats.js'); const r = await memberTaskReply(env, request, m0[1], m0[2], await body(request)); if (r && r._delivery) { const id = r._delivery; delete r._delivery; const { deliver } = await import('./own.js'); if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(deliver(env, id).catch(() => {})); } return json(r); }
+    if ((m0 = /^\/v1\/panels\/(p_[a-z0-9]+)\/join_links$/.exec(path)) && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { newPersonLink } = await import('./panels.js'); return json(await newPersonLink(env, request, k, m0[1], await body(request)), 201); }
+    if ((m0 = /^\/v1\/panels\/(p_[a-z0-9]+)\/join_link$/.exec(path)) && request.method === 'DELETE') { const k = needKey(await authKey(env, request)); const { revokeJoinLink } = await import('./panels.js'); return json(await revokeJoinLink(env, request, k, m0[1])); }
+    if ((m0 = /^\/v1\/panels\/(p_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { setAskerName } = await import('./panels.js'); return json(await setAskerName(env, request, k, m0[1], await body(request))); }
+    if ((m0 = /^\/v1\/panels\/(p_[a-z0-9]+)\/join_link$/.exec(path)) && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { newJoinLink } = await import('./panels.js'); return json(await newJoinLink(env, request, k, m0[1]), 201); }
+    if ((m = /^\/v1\/panels\/([A-Za-z0-9_-]{1,64})$/.exec(path)) && request.method === 'GET') { const k = needKey(await authKey(env, request)); return json(await getPanel(env, request, k, m[1])); }
+
+    // ---- receipts
+    if ((m = /^\/v1\/receipts\/([A-Za-z0-9_-]{1,64})$/.exec(path)) && request.method === 'GET') {
+      const r = await env.DB.prepare('SELECT r.*, c.principal_id FROM receipts r JOIN calls c ON c.id = r.call_id WHERE r.id = ?').bind(m[1]).first();
+      const a = await authKey(env, request);
+      const k = a.key || ANON;
+      if (!r || (r.principal_id !== k.principal_id && r.principal_id !== 'pr_anonymous')) throw notFixable(404, 'not_found', 'No such receipt for this key.');
+      return json({ receipt: JSON.parse(r.body_json), jws: r.signature, verify: apiBase(request) + '/v1/receipts/verify' });
+    }
+    if (path === '/v1/receipts/verify' && request.method === 'POST') {
+      let b = {}; try { b = await body(request); } catch { b = {}; }
+      const v = await verifyJws(typeof b.jws === 'string' ? b.jws : '');   // anything that is not a receipt is simply not valid (RCPT-3)   // RCPT-4: whether this server holds the receipt
+      const rid_ = v.receipt && v.receipt.receipt_id;
+      const held = rid_ ? await env.DB.prepare('SELECT signature FROM receipts WHERE id = ?').bind(String(rid_)).first() : null;
+      v.on_record = !!(held && v.valid); if (held && v.valid) v.latest_revision = held.signature === b.jws;   // a tampered receipt is never on record
+      return json(v);
+    }
+
+    // ---- internal (the supervisor's timer, the team's scripts)
+    if (path.startsWith('/internal/')) {
+      const tok = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (path === '/internal/tick' && request.method === 'POST') {
+        if (!env.TICK_TOKEN || tok !== env.TICK_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        // bounded: about 7 seconds of settling, then the deletions if time is left; it always answers 200 with what it did
+        const t0 = Date.now(); const total = { seats: 0, calls: 0 }; let deleted = null; const problems = [];
+        try { while (Date.now() - t0 < 4000) { const r = await settle(env, request, { limit: 20 }); total.seats += r.seats; total.calls += r.calls; if (r.seats < 20) break; } } catch (e) { problems.push('settle: ' + String(e.message || e).slice(0, 120)); }
+        if (Date.now() - t0 < 4500) { try { const { retention } = await import('./retention.js'); deleted = await retention(env, nowMs(), t0 + 7000); } catch (e) { problems.push('retention: ' + String(e.message || e).slice(0, 120)); } }
+        try { const { keepQuietBotQuiet } = await import('./rings.js'); await keepQuietBotQuiet(env, nowMs()); } catch (e) { problems.push('quiet bot: ' + String(e.message || e).slice(0, 120)); }
+        try { const { deliverDue } = await import('./own.js'); total.answers_delivered = await deliverDue(env, t0 + 9000); } catch (e) { problems.push('webhooks: ' + String(e.message || e).slice(0, 120)); }   // OWNER_all_10 C
+        try { await env.DB.prepare('INSERT OR REPLACE INTO meta (k, v) VALUES (\'last_tick\', ?)').bind(iso(nowMs())).run(); } catch { }
+        return json({ settled: total, deleted, problems, ms: Date.now() - t0, at: iso(nowMs()) });
+      }
+      if (path === '/internal/selftest' && request.method === 'POST') {
+        if (!env.TICK_TOKEN || tok !== env.TICK_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        return json(await selftest(env, request));
+      }
+      if (path === '/internal/members' && request.method === 'POST') {   // a throwaway headless member on a team panel (the baseline's leave check)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        const p = await env.DB.prepare('SELECT * FROM panels WHERE (id = ? OR name = ?) AND kind IN (\'team-test\',\'attack\')').bind(String(b.panel || ''), String(b.panel || '')).first();
+        if (!p) throw notFixable(404, 'not_found', 'Only team and attack panels.');
+        const token = rid('mt_', 32); const id = rid('mb_'); const now = nowMs();
+        await env.DB.prepare('INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+          .bind(id, p.id, await sha256hex(token), b.rules === 'real' ? 'team-test real-rules bot' : 'throwaway bot', 0, 'America/Chicago', 0, 0, b.on ? 'on' : 'off', now, now).run();
+        return json({ member_id: id, member_token: token }, 201);
+      }
+      if (path.startsWith('/internal/calls/') && request.method === 'GET') {   // the operator's read of one call (bin/call_record)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const id = path.slice('/internal/calls/'.length);
+        const call = await env.DB.prepare('SELECT * FROM calls WHERE id = ?').bind(id).first();
+        if (!call) throw notFixable(404, 'not_found', 'No such call.');
+        const { buildResult: br } = await import('./calls.js');
+        const rings = ((await env.DB.prepare('SELECT s.n, e.received_at, e.body_json FROM events e JOIN seats s ON s.id = e.seat_id WHERE s.call_id = ? AND e.body_json LIKE \'{"ring"%\' ORDER BY e.id').bind(id).all()).results || [])
+          .map(r => ({ seat: r.n, at: iso(r.received_at), ...JSON.parse(r.body_json).ring }));
+        return json({ call: await callObject(env, request, call), results: await br(env, request, call, { detail: 'full' }), rings });
+      }
+      if (path === '/internal/card_fixtures' && request.method === 'POST') {   // trust's nine processor events, in a scope of their own
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { runFixtures } = await import('./topups.js'); const FX = (await import('./card_fixtures.json')).default;
+        return json(await runFixtures(env, FX));
+      }
+      if (path === '/internal/keys/demo' && request.method === 'POST') {   // the front page's own mint (server side, its own token): a test key that may also use pool self
+        if (!env.DEMO_MINT_TOKEN || tok !== env.DEMO_MINT_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        // per visitor: the site passes the visitor's address (x-forwarded-for), trusted only with this token; kept as a hash
+        const visitor = (request.headers.get('x-hc-visitor-ip') || '').trim() || (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || request.headers.get('cf-connecting-ip') || 'local';
+        const ipHash = (await sha256hex('ip:' + visitor + ':' + (env.SEAT_SECRET || ''))).slice(0, 24);
+        const since = nowMs() - 3600000;
+        const mine = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals WHERE created_ip_hash = ? AND created_at > ?').bind(ipHash, since).first();
+        if (mine.n >= 60 && !teamCheck(env, request)) throw notFixable(429, 'rate_limited', 'At most 60 demo keys an hour from one visitor. Keep the one you have.', { retry_after_seconds: 600 });
+        const all = await env.DB.prepare('SELECT COUNT(*) AS n FROM keys WHERE label = ? AND created_at > ?').bind('front-page demo', since).first();
+        if (all.n >= 3000) throw notFixable(429, 'rate_limited', 'The front page has made many demo keys this hour; try again in ten minutes.', { retry_after_seconds: 600 });
+        const r = await adminKey(env, request, { class: 'test', label: 'front-page demo', principal_name: 'a visitor trying the front page', cap_call_cents: 0, cap_day_cents: 0, ip_hash: ipHash, owner: 'visitor' });
+        return json({ key: r.key, class: 'test', pools: ['simulated', 'self'], reaches: ['simulated', 'self'], test_money: true }, 201);
+      }
+      if (path === '/internal/screened' && request.method === 'GET') {   // trust 6:36 PM CT: what screening and the model read did in 24 hours (bin/screened, terminal only)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { screenedList } = await import('./calls.js'); return json(await screenedList(env));
+      }
+      if ((m = /^\/internal\/members\/(mb_[a-z0-9]+)\/bot$/.exec(path)) && request.method === 'POST') {   // TRUST 4:13: mark a team headless member, so a closed gate may still ring it
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const r = await env.DB.prepare('UPDATE members SET is_real = 0, alias = \'team bot\' WHERE id = ? AND left_at IS NULL').bind(m[1]).run();
+        return json({ member_id: m[1], marked_bot: r.meta.changes === 1 });
+      }
+      if ((m = /^\/internal\/principals\/(pr_[a-z0-9]+)\/close_panels$/.exec(path)) && request.method === 'POST') {   // TRUST 5:55: OWN_PANELS.md rule 10, on demand (B7)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        const why = typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim().slice(0, 120) : 'closed it';
+        const { closePrincipalPanels } = await import('./panels.js');
+        const still = await closePrincipalPanels(env, m[1], why);
+        return json({ principal_id: m[1], closed: true, members_still_to_remove: still, reason: why });
+      }
+      if ((m = /^\/internal\/members\/(mb_[a-z0-9]+)\/name$/.exec(path)) && request.method === 'POST') {   // OWNER_all_7: the operator names a member, so a task reaches one person
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request); const n = b.name === null ? null : String(b.name || '').trim().toLowerCase();
+        if (n !== null && !/^[a-z][a-z0-9 _-]{0,39}$/.test(n)) throw fixable('invalid_field', 'name', 'name is 1 to 40 letters, digits, spaces, hyphens (null clears it).', 'sam');
+        const r = await env.DB.prepare('UPDATE members SET person_name = ? WHERE id = ? AND left_at IS NULL').bind(n, m[1]).run();
+        if (n) { const { inheritSounds } = await import('./seats.js'); await inheritSounds(env, m[1]); }   // OWNER_router_6
+        return json({ member_id: m[1], person_name: n, named: r.meta.changes === 1 });
+      }
+      if ((m = /^\/internal\/tasks\/(tk_[a-z0-9]+)\/withdraw$/.exec(path)) && request.method === 'POST') {   // OWNER_router_3: the operator withdraws any task
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { withdrawTask } = await import('./tasks.js'); return json(await withdrawTask(env, request, null, m[1], await body(request), true));
+      }
+      if (path === '/internal/task_refusals' && request.method === 'GET') {   // OWNER_router_1 item 4
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { taskRefusals } = await import('./tasks.js'); return json(await taskRefusals(env, url.searchParams.get('hours')));
+      }
+      if ((m = /^\/internal\/members\/(mb_[a-z0-9]+)\/connections$/.exec(path)) && request.method === 'POST') {   // OWNER_all_10 B: the operator connects a lab program to a person
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { adminConnection } = await import('./connections.js'); return json(await adminConnection(env, request, m[1], await body(request)), 201);
+      }
+      if ((m = /^\/internal\/members\/(mb_[a-z0-9]+)\/push_preview$/.exec(path)) && request.method === 'GET') {   // OWNER_router_6 item 4: what this member's phone would get
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const mm = await env.DB.prepare('SELECT id, sounds FROM members WHERE id = ?').bind(m[1]).first();
+        if (!mm) throw notFixable(404, 'not_found', 'No such member.');
+        const { offerAlert, taskAlert } = await import('./apns.js'); const sound = mm.sounds !== 0, at = nowMs() + 60000;
+        return json({ member_id: mm.id, sounds: sound, apns_offer: offerAlert({ askerName: 'Preview', privatePanel: true, kind: 'listen', minutes: 2, payCents: 0, callId: 'call_preview', seatId: 'st_preview', expiresAt: at, sound }),
+          apns_task: taskAlert({ program: 'preview', taskId: 'tk_preview', sound }), web: { silent: !sound } });
+      }
+      if ((m = /^\/internal\/principals\/(pr_[a-z0-9]+)\/owner$/.exec(path)) && request.method === 'POST') {   // OWNER_router_5: the operator corrects who owns a principal, with why
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        if (!['team', 'outside'].includes(b.owner)) throw fixable('invalid_field', 'owner', 'owner is "team" or "outside".', 'team');
+        const why = typeof b.why === 'string' && b.why.trim() ? b.why.trim().slice(0, 200) : null;
+        if (!why) throw fixable('missing_field', 'why', 'why is one line: how this principal came to be.', 'the app builder\'s simulator check from the laptop');
+        const r = await env.DB.prepare('UPDATE principals SET owner = ?, owner_note = ? WHERE id = ?').bind(b.owner, why, m[1]).run();
+        return json({ principal_id: m[1], owner: b.owner, why, changed: r.meta.changes === 1 });
+      }
+      if (path === '/internal/proof_audit' && request.method === 'GET') {   // OWNER_router_5 items 4 and 5: what /v1/proof counts as outside, and why
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { proofAudit } = await import('./proof.js'); return json(await proofAudit(env));
+      }
+      if (path === '/internal/private_terms' && (request.method === 'GET' || request.method === 'POST')) {   // OWNER_all_9 item 5: counts only, never the words
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const P = await import('./private_terms.js');
+        if (request.method === 'GET') return json({ counts: P.counts(await P.privateLists(env, true)) });
+        const r = await P.addPrivateTerm(env, await body(request));
+        if (r.error) throw fixable('invalid_field', r.error[0], r.error[1], null);
+        return json(r);
+      }
+      if (path === '/internal/review_config' && request.method === 'POST') {   // OWNER_all_8 item 3: who checks outsiders' audio and video (a panel of the operator's and a person's name on it)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        if (b.panel_id !== undefined) {
+          const pn = await env.DB.prepare('SELECT p.id FROM panels p JOIN principals pr ON pr.id = p.principal_id WHERE p.id = ? AND p.kind = \'private\' AND pr.class = \'real\'').bind(String(b.panel_id)).first();
+          if (!pn) throw fixable('invalid_field', 'panel_id', 'A private panel the operator made.', null);
+          const to = String(b.to || '').trim().toLowerCase();
+          if (!/^[a-z][a-z0-9 _-]{0,39}$/.test(to)) throw fixable('invalid_field', 'to', 'to is the reviewer\'s name on that panel.', 'sam');
+          await env.DB.batch([env.DB.prepare('INSERT INTO meta (k, v) VALUES (\'review_panel\', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(pn.id), env.DB.prepare('INSERT INTO meta (k, v) VALUES (\'review_to\', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(to)]);
+        }
+        const { reviewConfig } = await import('./tasks.js'); return json({ review: await reviewConfig(env) });
+      }
+      if (path === '/internal/strangers_state' && request.method === 'POST') {   // the operator moves the state every asker's replies carry
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        const { STRANGERS_LINES, strangersState } = await import('./strangers.js');
+        if (b.state !== undefined) {
+          if (!STRANGERS_LINES[b.state]) throw fixable('invalid_field', 'state', 'state is not_open, ours or open.', 'not_open');
+          await env.DB.prepare('INSERT INTO meta (k, v) VALUES (\'strangers_state\', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(b.state).run();
+        }
+        const st = await strangersState(env); return json({ state: st, line: STRANGERS_LINES[st] });
+      }
+      if (path === '/internal/strangers' && request.method === 'GET') {   // the owner's list of asks for real strangers (bin/strangers)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { strangersList } = await import('./strangers.js'); return json(await strangersList(env));
+      }
+      if (path === '/internal/own_panels_ring' && request.method === 'POST') {   // OWNER_all_6 gate: {open: true|false}; bin/own_panels_ring checks PERSON_READY first
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        if (typeof b.open === 'boolean') await env.DB.prepare('INSERT INTO meta (k, v) VALUES (\'own_panels_ring\', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind(b.open ? 'open' : 'closed').run();
+        const { ownPanelsRingOpen } = await import('./panels.js');
+        return json({ own_panels_ring: (await ownPanelsRingOpen(env)) ? 'open' : 'closed' });
+      }
+      if (path === '/internal/apns_probe' && request.method === 'POST') {   // the owner 11:13 PM CT: can a Worker reach Apple's push service (HTTP/2 only)?
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { probeApns } = await import('./apns.js'); return json(await probeApns());
+      }
+      if (path === '/internal/screen' && request.method === 'POST') {   // trust 6:49 PM CT: one ask screened as an outsider's real call, with the read; opens nothing
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        if (typeof b.ask !== 'string' || !b.ask.trim()) throw fixable(b.ask === undefined ? 'missing_field' : 'invalid_field', 'ask', 'ask is the words of the call, a string.', 'Which of these two logos is clearer? Say why.');
+        const { measureScreen } = await import('./measure.js'); return json(await measureScreen(env, b));
+      }
+      if (path === '/internal/held' && request.method === 'GET') {   // the owner's list of held calls (bin/release_held --list)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { heldList } = await import('./calls.js'); return json(await heldList(env));
+      }
+      if ((m = /^\/internal\/held\/(call_[a-z0-9]+)\/release$/.exec(path)) && request.method === 'POST') {   // bin/release_held, for ids in owner/RELEASE_HELD.md
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { releaseHeld } = await import('./calls.js'); return json(await releaseHeld(env, request, m[1]));
+      }
+      if (path === '/internal/test_money' && request.method === 'POST') {   // test money for a test principal (the team's key runs low)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        const p = await env.DB.prepare('SELECT id, class FROM principals WHERE id = ?').bind(String(b.principal_id || '')).first();
+        const cents = Math.round(parseFloat(b.usd) * 100);
+        if (!p || p.class !== 'test') throw fixable('invalid_field', 'principal_id', 'A test principal only.', null);
+        if (!(cents > 0 && cents <= 100000)) throw fixable('invalid_field', 'usd', '0.01 to 1000.00.', '100.00');
+        await env.DB.batch(posting(env.DB, 'grant:' + p.id + ':' + rid('', 10), [{ ...acct.testGrant(), cents: -cents }, { ...acct.avail(p.id), cents }], null, 'more test money for a test principal', nowMs()));
+        return json({ principal_id: p.id, granted_usd: fmt(cents), balance_usd: fmt(await balance(env.DB, 'avail:' + p.id)), test_money: true });
+      }
+      if (path === '/internal/keys/suspend' && request.method === 'POST') {
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const b = await body(request);
+        // {"all_live": true}: the deadline's rule (TEAM.md s4): ringing real people stops unless the handover names an operator
+        const r = b.all_live === true
+          ? await env.DB.prepare('UPDATE keys SET suspended_at = ? WHERE class = \'real\' AND suspended_at IS NULL').bind(nowMs()).run()
+          : await env.DB.prepare('UPDATE keys SET suspended_at = ? WHERE (id = ? OR label = ?) AND suspended_at IS NULL').bind(nowMs(), String(b.key_id || ''), String(b.label || '\u0000')).run();
+        const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM keys WHERE class = \'real\' AND suspended_at IS NULL').first();
+        return json({ suspended: r.meta.changes, live_keys_still_active: left.n });
+      }
+      if (path === '/internal/keys' && request.method === 'POST') {
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        return json(await adminKey(env, request, await body(request)), 201);
+      }
+    }
+    throw notFixable(404, 'not_found', `No route ${request.method} ${path}. Start at ${apiBase(request)}/.well-known/${BUILD.wire_prefix} or the MCP server at ${apiBase(request)}/mcp.`, { route: 'unknown' });   // a client never mistakes this for a member who left
+  } catch (e) {
+    let st, b;
+    if (e instanceof CallError) { st = e.status; b = { ...e.body }; }
+    else { console.log('unhandled', String(e && e.stack || e)); st = 500; b = { code: 'internal', status: 500, fixable: false, message: 'The server failed. Nothing was charged twice: if this was opening a call, send it again with the same idempotency_key to get the call if it opened.', rule: null }; }
+    if (isCallsPost) { b.charged_usd = '0.00'; b.anyone_asked = false; }
+    return json(b, st);
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "ask": "Listen, then say what you heard.",
+  "kind": "listen",
+  "content": "m_clip_9",
+  "people": 2,
+  "voice": {
+    "max_seconds": 60
+  },
+  "content_rating": "general",
+  "require": {
+    "language": [
+      "en-US"
+    ],
+    "device": [
+      "phone"
+    ],
+    "example.org/plays_instrument": [
+      "yes"
+    ]
+  },
+  "may_train_on_answers": true,
+  "answer_fields": {
+    "heard": {
+      "type": "choice",
+      "choices": [
+        "piano",
+        "guitar",
+        "voice"
+      ],
+      "multiple": true
+    }
+  },
+  "ext": {
+    "example.org": {
+      "campaign": "spring"
+    }
+  }
+}

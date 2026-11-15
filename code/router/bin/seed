@@ -1,0 +1,88 @@
+#!/bin/bash
+# seed: the shared sample (chief D4), the team principal and its team_ key (D3), the panel team-test and three members (D8).
+# Safe to run again: each step checks first. Tokens go to ~/.config/humancall/team_test.env, never the work folder.
+set -uo pipefail
+W="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)"; CF="$W/bin/cf"; PY="${PYTHON:-python3}"
+API="${1:-https://askpeople-api.pages.dev}"; E="$HOME/.config/humancall/team_test.env"
+q() { "$CF" d1 execute askpeople-db --remote --json --command "$1" 2>/dev/null | "$PY" -I -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(d[0]["results"]))'; }
+# 1. the samples anyone may use (chief D4; runner's list): media id | file | content type | kind | seconds | title
+SAMPLES="m_sample_melody30|melody_30s.wav|audio/wav|audio|30|Thirty seconds of sine tones on a five-note scale, made by the team
+m_sample_melody30_aac|melody_30s.m4a|audio/mp4|audio|30|The same thirty-second melody, compressed (AAC), starts faster on a phone
+m_sample_page_a|page_a.png|image/png|image||A web page, version A (made by the team)
+m_sample_page_b|page_b.png|image/png|image||A web page, version B (made by the team)
+m_sample_clip8|clip_8s.mp4|video/mp4|video|8|An eight-second video clip (made by the team)
+m_sample_game_dots|game_dots.html|text/html|build||A small game in one page: tap the dots (made by the team)"
+while IFS='|' read -r MID FILE CT KIND SECS TITLE; do
+  [ -n "$MID" ] || continue
+  if [ "$(q "SELECT id FROM media WHERE id='$MID'")" != "[]" ]; then echo "seed: $MID present"; continue; fi
+  F="$W/samples/$FILE"; [ -f "$F" ] || { echo "seed: no $FILE"; continue; }
+  BYTES=$(stat -c %s "$F"); SHA=$(sha256sum "$F" | cut -c1-64); EXT="${FILE##*.}"
+  "$CF" r2 object put "askpeople-media/samples/$MID.$EXT" --file "$F" --content-type "$CT" --remote >/dev/null 2>&1 || { echo "seed: R2 upload of $FILE failed"; continue; }
+  q "INSERT INTO media (id, principal_id, kind, r2_key, content_type, bytes, seconds, sha256, source, sample, created_at) VALUES ('$MID', NULL, '$KIND', 'samples/$MID.$EXT', '$CT', $BYTES, ${SECS:-NULL}, '$SHA', '$TITLE', 1, $(date +%s000))" >/dev/null
+  echo "seed: sample $MID ($BYTES bytes)"
+done <<< "$SAMPLES"
+# 2. the team principal and its team_ key (a test key that may also use panel:team-test)
+touch "$E"; chmod 600 "$E"
+if ! grep -q '^TEAM_KEY=' "$E"; then
+  set -a; . "$HOME/.config/humancall/router.env"; set +a
+  R=$(curl -fsS -X POST "$API/internal/keys" -H "Authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d '{"class":"test","team":true,"label":"team key","principal_name":"the person.tools team (test)","cap_call_cents":20000,"cap_day_cents":100000}') || { echo "seed: team key failed"; exit 1; }
+  echo "$R" | "$PY" -I -c 'import json,sys; d=json.load(sys.stdin); print("TEAM_KEY="+d["key"]); print("TEAM_PRINCIPAL="+d["principal_id"])' >> "$E"; echo "seed: team key made"
+fi
+. "$E"
+# 3. the panel team-test, owned by the team principal, and three members (the team's headless browsers; never a person)
+if [ "$(q "SELECT id FROM panels WHERE name='team-test'")" = "[]" ]; then
+  q "INSERT INTO panels (id, principal_id, name, kind, created_at) VALUES ('p_teamtest', '$TEAM_PRINCIPAL', 'team-test', 'team-test', $(date +%s000))" >/dev/null; echo "seed: panel team-test"; fi
+for i in 1 2 3; do
+  grep -q "^MEMBER_$i=" "$E" && continue
+  T="mt_$("$PY" -I -c 'import secrets,string; a="abcdefghijkmnpqrstuvwxyz23456789"; print("".join(secrets.choice(a) for _ in range(32)))')"
+  H=$(printf '%s' "$T" | sha256sum | cut -c1-64)
+  q "INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES ('mb_teamtest$i', 'p_teamtest', '$H', 'team-test bot $i', 0, 'America/Chicago', 0, 0, 'on', $(date +%s000), $(date +%s000))" >/dev/null
+  echo "MEMBER_$i=$T" >> "$E"; echo "seed: member $i"
+done
+# 4. trust's attack panel (TEAM.md s7: panels named attack-*, members only our own headless browsers) and a team key for trust
+A="$HOME/.config/humancall/trust_attack.env"; touch "$A"; chmod 600 "$A"
+if [ "$(q "SELECT id FROM panels WHERE name='attack-trust'")" = "[]" ]; then
+  q "INSERT INTO panels (id, principal_id, name, kind, created_at) VALUES ('p_attacktrust', '$TEAM_PRINCIPAL', 'attack-trust', 'attack', $(date +%s000))" >/dev/null; echo "seed: panel attack-trust"; fi
+if ! grep -q '^TRUST_KEY=' "$A"; then
+  set -a; . "$HOME/.config/humancall/router.env"; set +a
+  R=$(curl -fsS -X POST "$API/internal/keys" -H "Authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d "{\"class\":\"test\",\"team\":true,\"label\":\"trust attack key\",\"principal_id\":\"$TEAM_PRINCIPAL\",\"cap_call_cents\":5000,\"cap_day_cents\":20000}") || { echo "seed: trust key failed"; exit 1; }
+  echo "$R" | "$PY" -I -c 'import json,sys; d=json.load(sys.stdin); print("TRUST_KEY="+d["key"])' >> "$A"; echo "ATTACK_PANEL=p_attacktrust" >> "$A"; echo "seed: trust attack key made"
+fi
+for i in 1 2; do
+  grep -q "^MEMBER_$i=" "$A" && continue
+  T="mt_$("$PY" -I -c 'import secrets; a="abcdefghijkmnpqrstuvwxyz23456789"; print("".join(secrets.choice(a) for _ in range(32)))')"
+  H=$(printf '%s' "$T" | sha256sum | cut -c1-64)
+  q "INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES ('mb_attacktrust$i', 'p_attacktrust', '$H', 'attack bot $i', 0, 'America/Chicago', 0, 0, 'on', $(date +%s000), $(date +%s000))" >/dev/null
+  echo "MEMBER_$i=$T" >> "$A"; echo "seed: attack member $i"
+done
+# 5. the quiet bot (chief's orders r2 item 3): panel quiet-test with one headless member whose quiet hours always cover the
+#    present (23 hours from the current Chicago hour; the tick moves the window on), so every call to it waits and says when
+if [ "$(q "SELECT id FROM panels WHERE name='quiet-test'")" = "[]" ]; then
+  q "INSERT INTO panels (id, principal_id, name, kind, created_at) VALUES ('p_quiettest', '$TEAM_PRINCIPAL', 'quiet-test', 'team-test', $(date +%s000))" >/dev/null; echo "seed: panel quiet-test"; fi
+if ! grep -q "^MEMBER_QUIET=" "$E"; then
+  T="mt_$("$PY" -I -c 'import secrets; a="abcdefghijkmnpqrstuvwxyz23456789"; print("".join(secrets.choice(a) for _ in range(32)))')"
+  H=$(printf '%s' "$T" | sha256sum | cut -c1-64); HR=$(TZ=America/Chicago date +%-H); END=$(( (HR + 23) % 24 ))
+  q "INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES ('mb_quiettest1', 'p_quiettest', '$H', 'team-test quiet bot', 0, 'America/Chicago', $HR, $END, 'on', $(date +%s000), $(date +%s000))" >/dev/null
+  echo "MEMBER_QUIET=$T" >> "$E"; echo "QUIET_PANEL=quiet-test" >> "$E"; echo "seed: quiet member (quiet $HR:00 to $END:00 Chicago)"
+fi
+# 6. a panel of one (PEOPLE-8 / R12, like the operator's own panel): one headless member, On, no quiet hours, so the baseline can see
+#    that a person who declines a call is never offered it again even when nobody else can be rung
+if [ "$(q "SELECT id FROM panels WHERE name='single-test'")" = "[]" ]; then
+  q "INSERT INTO panels (id, principal_id, name, kind, created_at) VALUES ('p_singletest', '$TEAM_PRINCIPAL', 'single-test', 'team-test', $(date +%s000))" >/dev/null; echo "seed: panel single-test"; fi
+if ! grep -q "^MEMBER_SINGLE=" "$E"; then
+  T="mt_$("$PY" -I -c 'import secrets; a="abcdefghijkmnpqrstuvwxyz23456789"; print("".join(secrets.choice(a) for _ in range(32)))')"
+  H=$(printf '%s' "$T" | sha256sum | cut -c1-64)
+  q "INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES ('mb_singletest1', 'p_singletest', '$H', 'team-test single bot', 0, 'America/Chicago', 0, 0, 'on', $(date +%s000), $(date +%s000))" >/dev/null
+  echo "MEMBER_SINGLE=$T" >> "$E"; echo "seed: single member"
+fi
+# 7. the missed-rings bot (P2: two missed rings switch a person Off and tell them): alias 'team-test missed bot' follows that
+#    one rule as a real person would (calls.js); ring caps stay real-only. Its own panel, so nobody else's calls reach it.
+if [ "$(q "SELECT id FROM panels WHERE name='missed-test'")" = "[]" ]; then
+  q "INSERT INTO panels (id, principal_id, name, kind, created_at) VALUES ('p_missedtest', '$TEAM_PRINCIPAL', 'missed-test', 'team-test', $(date +%s000))" >/dev/null; echo "seed: panel missed-test"; fi
+if ! grep -q "^MEMBER_MISSED=" "$E"; then
+  T="mt_$("$PY" -I -c 'import secrets; a="abcdefghijkmnpqrstuvwxyz23456789"; print("".join(secrets.choice(a) for _ in range(32)))')"
+  H=$(printf '%s' "$T" | sha256sum | cut -c1-64)
+  q "INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, created_at) VALUES ('mb_missedtest1', 'p_missedtest', '$H', 'team-test missed bot', 0, 'America/Chicago', 0, 0, 'on', $(date +%s000), $(date +%s000))" >/dev/null
+  echo "MEMBER_MISSED=$T" >> "$E"; echo "seed: missed-rings member"
+fi
+echo "seed: done (tokens in ~/.config/humancall/team_test.env and trust_attack.env)"

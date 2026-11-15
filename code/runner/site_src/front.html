@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="{{csp}}">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faf8f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
+<title>{{network}}: when an AI needs a person, it calls one</title>
+<meta name="description" content="{{one_sentence}}">
+<meta property="og:title" content="{{network}}: when an AI needs a person, it calls one">
+<meta property="og:description" content="{{one_sentence}}">
+<link rel="preload" href="/h/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/h/front.css?v={{v}}">
+<script type="application/json" id="hc-hosts">{{hosts_json}}</script>
+<script type="application/json" id="hc-call">{{call_json}}</script>
+<script src="/h/front.js?v={{v}}" defer></script>
+</head>
+<body>
+<a class="skip" href="#ring">Skip to the live call</a>
+<header class="top">
+  <a class="mark" href="/">{{network}}</a>
+  <nav class="top-nav" aria-label="Pages"><a href="/start">Connect an agent</a><a href="{{spec_fallback}}">The standard</a><a href="/people/">For people</a><a href="/questions">Questions</a><a href="/proof">Proof</a></nav>
+</header>
+<p class="pre-band">{{status_plain}}</p>
+{{first_call_section}}
+
+<main id="main">
+  <div class="stage">
+  <section class="hero" aria-labelledby="h1">
+    <div class="hero-words">
+      <p class="label">A TOOL FOR AI AGENTS</p>
+      <h1 id="h1" class="h1"><span class="ln">When an AI</span> <span class="ln">needs a person,</span> <span class="ln">it calls one.</span></h1>
+      <p class="lede">{{one_sentence}}</p>
+      <div class="ring-me" id="ring">
+        <button class="go you" id="ring-btn" type="button"><span class="b1">Call me</span><span class="b2">it rings on this page &middot; 30 s of music, 2 questions</span></button>
+        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Thirty seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      </div>
+      <div class="agent-line"><p class="addr"><span class="label">OR CONNECT YOUR AGENT</span> <span class="mono" id="mcp-line">{{mcp_fallback}}</span> <button class="copy" type="button" data-copy="{{mcp_fallback}}" aria-label="Copy the MCP address">Copy</button></p><p class="note">An MCP tool server; a test key needs no account. <a href="/start">Your first call, step by step&nbsp;&rarr;</a></p></div>
+    </div>
+
+    <figure class="phone-col" aria-label="Your phone">
+      <figcaption class="label">THE PHONE ON THIS PAGE</figcaption>
+      <div class="phone" id="phone">
+        <div class="lock" id="lock">
+          <p class="lock-time" id="lock-time">&nbsp;</p>
+          <p class="lock-date" id="lock-date">&nbsp;</p>
+          <p class="lock-empty" id="lock-empty">No calls yet.</p>
+          <p class="lock-hint" id="lock-hint">Press <b>Call me</b> and a call rings here, on this page. Nothing rings your own phone.</p>
+          <button class="notif" id="notif" type="button" hidden>
+            <span class="notif-app label">{{network_upper}} &middot; NOW</span>
+            <span class="notif-text" id="notif-text">A call for you</span>
+            <span class="notif-sub">Tap to see what is asked, and by whom.</span>
+          </button>
+        </div>
+        <iframe id="seat" title="The call, as the person sees it" hidden allow="autoplay; microphone"></iframe>
+      </div>
+      <p class="note phone-note" id="phone-note">What a person sees when an AI calls them. The notification never shows the asker's words.</p>
+    </figure>
+  </section>
+
+  <section class="agent" id="agent" aria-labelledby="agent-h" aria-live="polite">
+    <div class="agent-head">
+      <p class="label">MEANWHILE, THE AGENT'S SIDE</p>
+      <h2 id="agent-h" class="h2">What the agent sends, and what it gets back.</h2>
+    </div>
+    <details class="agent-log" id="agent-log" open><summary>Show each step the agent takes (for developers)</summary>
+    <ol class="steps" id="steps">
+      <li class="step" id="step-hint"><p class="label">NOTHING SENT YET</p><p class="step-wait">Press <b>Call me</b>. Each request the agent makes, and each answer it gets, appears here as it happens.</p></li>
+    </ol>
+    </details>
+  </section>
+  </div>
+
+  <section class="for-agents" id="for-agents" aria-labelledby="fa-h">
+    <p class="label">FOR AN AGENT, AND THE HUMAN WHO SETS ITS BUDGET</p>
+    <h2 id="fa-h" class="h2">One tool call. A price before anything is spent.</h2>
+    <div class="fa-grid">
+      <div class="fa-cell"><p class="label">CONNECT</p><p class="mono" id="mcp-addr">{{mcp_fallback}}</p><p class="note">An MCP tool server ({{tool}}, {{tool}}_quote, {{tool}}_results and more). A test key needs no account and no money: <code>POST https://{{api_fallback}}/v1/keys {"class": "test"}</code>. It reaches simulated people (every simulated answer is marked simulated) and yourself.</p><p class="note"><a href="/start">Your first call, step by step&nbsp;&rarr;</a><br><a href="{{spec_fallback}}">Every field, error and limit (the standard)&nbsp;&rarr;</a></p><p class="note">How fast real people answer: not measured yet. Real calls are by invitation during the preview, so there are no numbers to show.</p></div>
+      <div class="fa-cell"><p class="label">PRICE</p><p class="num">{{router_fee_pct}}<small>%</small></p><p class="note">Router fee: {{router_fee_pct}}% of what the people are paid, at least ${{router_fee_min}} a call. Your own panel is free. People are paid at least ${{floor}} an hour on the median time taken, and at least ${{min_call}} a person on every call. {{price_status_short}}</p></div>
+      <div class="fa-cell budget" id="budget"><p class="label" id="budget-h">CAPS AND THE BUDGET</p>
+        <ul class="budget-list">
+          <li><b>Caps on each key.</b> {{term_over_cap}}</li>
+          <li><b>The most a call may cost.</b> {{term_max_total}}</li>
+          <li><b>What is charged.</b> {{term_what_you_pay}}</li>
+          <li><b>If people take longer.</b> {{term_overrun}}</li>
+          <li><b>What comes back.</b> {{term_hold}}</li>
+        </ul>
+        <button class="quiet cap-btn" id="cap-btn" type="button">Show me a call over my cap</button>
+      </div>
+    </div>
+    <div id="cap-out" class="cap-out" aria-live="polite"></div>
+  </section>
+
+  <section class="promise" aria-labelledby="promise-h">
+    <p class="label">WHAT THE PERSON IS PROMISED</p>
+    <h2 id="promise-h" class="h2">{{promise_h}}</h2>
+    <ol class="promise-list">{{promise_lines}}</ol>
+    <p class="more"><a href="/people/">For the people who are called: what a call looks like, and pay when paid calls open &rarr;</a></p>
+  </section>
+</main>
+
+<footer class="foot">
+  <p><span class="label">STATUS</span> {{status_plain}}</p>
+  <p class="note">{{status_names}}. The standard's text is a draft.</p>
+</footer>
+</body>
+</html>

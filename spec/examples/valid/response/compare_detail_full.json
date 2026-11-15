@@ -1,0 +1,78 @@
+{
+  "response_id": "r_cmp00000000000000001",
+  "simulated": true,
+  "person_ref": "pp_cmp00000000000000001",
+  "kind": "compare",
+  "status": "answered",
+  "partial": false,
+  "evidence": "attended",
+  "level_reason": "each item met its own rule",
+  "answers": {
+    "preferred": "second",
+    "why": "[simulated] Shorter and clearer."
+  },
+  "answer_input": {
+    "preferred": "tapped",
+    "why": "typed"
+  },
+  "minutes": 0.6,
+  "paid_usd": "0.00",
+  "receipt_id": "rc_cmp00000000000000001",
+  "received_at": "2026-11-14T06:21:13Z",
+  "record": {
+    "rule": "compare/1",
+    "observed": {
+      "seat_seconds": 33,
+      "device": "phone",
+      "order": [
+        1,
+        0
+      ],
+      "items": [
+        {
+          "kind": "view",
+          "revealed": true,
+          "visible_seconds": 8,
+          "scrolled_fraction": 0
+        },
+        {
+          "kind": "view",
+          "revealed": true,
+          "visible_seconds": 7,
+          "scrolled_fraction": 0
+        }
+      ]
+    },
+    "unobserved": [
+      "eyes_on_screen",
+      "unassisted_answer",
+      "same_person"
+    ]
+  },
+  "offer": {
+    "answered_for": "Example Studio",
+    "asker_is_ai": true,
+    "ask": "Which headline makes you want to read on?",
+    "kind": "compare",
+    "minutes": 2,
+    "pay_per_person_usd": "0.00",
+    "pay_per_hour_usd": "0.00",
+    "unpaid": true,
+    "content_rating": "general",
+    "recorded": [
+      "how long each item was on screen",
+      "how each answer was entered"
+    ],
+    "kept_days": 90,
+    "download_bytes": null,
+    "may_train_on_answers": false,
+    "panel_size": null
+  },
+  "claims": [
+    {
+      "key": "country",
+      "value": "US",
+      "basis": "observed"
+    }
+  ]
+}

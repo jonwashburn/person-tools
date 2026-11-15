@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "person-tools": {
+      "type": "http",
+      "url": "https://api.person.tools/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PERSON_TOOLS_KEY}"
+      }
+    }
+  }
+}

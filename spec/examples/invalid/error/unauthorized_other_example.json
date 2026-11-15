@@ -1,0 +1,8 @@
+{
+  "code": "unauthorized",
+  "status": 401,
+  "fixable": true,
+  "message": "No key.",
+  "field": "Authorization",
+  "example": "make a key at /v1/keys"
+}

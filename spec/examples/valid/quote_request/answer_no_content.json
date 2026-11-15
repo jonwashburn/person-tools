@@ -1,0 +1,17 @@
+{
+  "ask": "What do you call the meal you eat at noon?",
+  "kind": "answer",
+  "people": 20,
+  "answer_fields": {
+    "name": "text"
+  },
+  "require": {
+    "country": [
+      "US"
+    ],
+    "age_band": [
+      "25-34",
+      "35-44"
+    ]
+  }
+}

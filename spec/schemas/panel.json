@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "panel.json",
+  "title": "A panel (section 19)",
+  "type": "object",
+  "required": [
+    "panel_id",
+    "name",
+    "join_url",
+    "members",
+    "members_on_now"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "panel_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "join_url": {
+      "$ref": "common.json#/$defs/https_url"
+    },
+    "members": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "members_on_now": {
+      "$ref": "common.json#/$defs/count"
+    }
+  }
+}

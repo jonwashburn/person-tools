@@ -1,0 +1,44 @@
+{
+  "response_id": "r_wtch0000000000000001",
+  "simulated": false,
+  "person_ref": "pp_wtch000000000000001",
+  "kind": "watch",
+  "status": "answered",
+  "partial": false,
+  "evidence": "said",
+  "level_reason": "page in front 62% of the time",
+  "answers": {
+    "lost_at_seconds": null
+  },
+  "answer_input": {
+    "lost_at_seconds": "typed"
+  },
+  "minutes": 1.2,
+  "paid_usd": "1.00",
+  "receipt_id": "rc_wtch0000000000000001",
+  "received_at": "2026-11-14T06:21:13Z",
+  "record": {
+    "rule": "watch/1",
+    "observed": {
+      "seat_seconds": 74,
+      "device": "phone",
+      "media_seconds": 90,
+      "played_seconds": 90,
+      "realtime_seconds": 91,
+      "stalled_seconds": 0,
+      "visible_fraction": 0.62,
+      "pauses": 1,
+      "replays": 1,
+      "seeks_forward": 0,
+      "completed": true,
+      "revealed": true,
+      "muted_fraction": 0.05
+    },
+    "unobserved": [
+      "audible",
+      "eyes_on_screen",
+      "unassisted_answer",
+      "same_person"
+    ]
+  }
+}

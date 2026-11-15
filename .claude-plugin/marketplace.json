@@ -1,0 +1,13 @@
+{
+  "name": "person-tools",
+  "owner": {
+    "name": "person.tools"
+  },
+  "plugins": [
+    {
+      "name": "ask-people",
+      "source": "./plugins/ask-people",
+      "description": "Human feedback, user testing and surveys: your own people in two minutes; strangers on request."
+    }
+  ]
+}

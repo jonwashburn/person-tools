@@ -1,0 +1,10 @@
+{
+  "code": "over_max_total_usd",
+  "message": "This call would cost 12.40 and max_total_usd is 10.00.",
+  "status": 400,
+  "fixable": true,
+  "field": "max_total_usd",
+  "example": "12.40",
+  "rule": null,
+  "instance": "/v1/calls"
+}

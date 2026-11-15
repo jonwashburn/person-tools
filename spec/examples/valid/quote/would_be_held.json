@@ -1,0 +1,30 @@
+{
+  "quote_id": "q_7f3kd0a1m2n4p5q6r7s8",
+  "lines": [
+    {
+      "kind": "to_people",
+      "amount_usd": "0.00"
+    },
+    {
+      "kind": "router_fee",
+      "amount_usd": "0.00"
+    }
+  ],
+  "total_usd": "0.00",
+  "expected_minutes_to_enough": 1,
+  "expires_at": "2026-11-14T06:40:00Z",
+  "defaults_used": {
+    "pool": "simulated",
+    "enough": 3,
+    "minutes": 2,
+    "pay_per_person_usd": "0.00",
+    "deadline_minutes": 120,
+    "pace": "instant",
+    "content_rating": "general",
+    "may_train_on_answers": false
+  },
+  "simulated": true,
+  "test_money": true,
+  "would_be_held": true,
+  "held_reason": "calls that show a page from a new principal are read by a person first"
+}

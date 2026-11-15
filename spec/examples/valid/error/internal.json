@@ -1,0 +1,6 @@
+{
+  "code": "internal",
+  "message": "The server failed. Nothing was charged; try again in a minute.",
+  "status": 500,
+  "fixable": false
+}

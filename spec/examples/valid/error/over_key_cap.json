@@ -1,0 +1,44 @@
+{
+  "code": "over_key_cap",
+  "status": 402,
+  "fixable": false,
+  "message": "This call costs 21.60, above this key's cap of 20.00 for one call. Ask your user to approve it at approve_url.",
+  "quote": {
+    "quote_id": "q_7f3kd0a1m2n4p5q6r7s8",
+    "pool": "panel:p_family",
+    "people": 8,
+    "pay_per_person_usd": "2.00",
+    "panel_size": 9,
+    "members_on_now": 4,
+    "lines": [
+      {
+        "kind": "to_people",
+        "amount_usd": "16.00"
+      },
+      {
+        "kind": "router_fee",
+        "amount_usd": "1.60",
+        "note": "10% of what people are paid, at least 0.25"
+      },
+      {
+        "kind": "reserve",
+        "amount_usd": "4.00",
+        "note": "for pay above the estimate; returned if unused"
+      }
+    ],
+    "total_usd": "21.60",
+    "pay_floor_usd_per_hour": "20.00",
+    "expected_minutes_to_enough": 12,
+    "expected_note": "a private panel of 9; most answer within 15 minutes",
+    "expires_at": "2026-11-14T06:40:00Z",
+    "defaults_used": {
+      "content_rating": "general",
+      "may_train_on_answers": false
+    },
+    "simulated": false,
+    "test_money": false
+  },
+  "approve_url": "https://example.com/approve/q_7f3kd0a1m2n4p5q6r7s8",
+  "charged_usd": "0.00",
+  "anyone_asked": false
+}

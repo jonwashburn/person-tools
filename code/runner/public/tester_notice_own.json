@@ -1,0 +1,63 @@
+{
+ "id": "tester-notice-own-1",
+ "in_force": "for people who join a principal's own panel (policy/OWN_PANELS.md), from 15 Nov 2026",
+ "owner": "the person's pages render it verbatim; the .md beside it is generated from this file",
+ "title": "Before you join: {principal} would like your reaction",
+ "lede": "{principal} uses person.tools, a service that is not launched yet, to ask people for their reaction to something it is working on: a page, a game, a song. {principal} sent you this link. ({principal} is the name the asker gave; person.tools has not checked who they are.)",
+ "sections": [
+  {
+   "label": "Unpaid",
+   "text": "You are not paid for these calls. Every call says UNPAID TEST before you take it."
+  },
+  {
+   "label": "An AI asks",
+   "text": "Every call is written and sent by an AI agent working for {principal}. Before each call you see who is responsible for it, how many minutes it takes, and what will be recorded. You can say no to any call, with no mark against you."
+  },
+  {
+   "label": "What is recorded",
+   "text": "During a call: when the sound or video plays and pauses, whether the page is in front, how long you take, your answers, and whether each answer was typed or pasted. Not recorded: your voice, your camera, your location, your contacts."
+  },
+  {
+   "label": "What {principal} gets",
+   "text": "Your answers and a short summary of that record (for example, how much of the sound played), under an id that is different for every asker. Never your name, your contact details, your phone or anything that says who you are, and never the step-by-step log of each play, pause and skip. {principal} cannot message you through person.tools."
+  },
+  {
+   "label": "What person.tools checks",
+   "text": "Every call is checked before it can reach you, by rules and by a model, and anything they do not clear waits for a person. person.tools never shows you a call it would not show anyone."
+  },
+  {
+   "label": "Your answers and AI training",
+   "text": "Each call says, before you take it, whether the asker may use your written answers to train AI. Your voice is never used to train anything."
+  },
+  {
+   "label": "When you are rung",
+   "text": "Only when you turn On. You start Off. No calls between 9 PM and 8 AM your time unless you change it. Two missed calls turn you Off again."
+  },
+  {
+   "label": "Stop, leave, delete",
+   "text": "Stop any call at any time. \"Stop: this upset me\" ends it and reports it. On your page, one tap deletes your account, answers and records; you can save your receipts first. Deleted from the service at once, and from every copy within 30 days."
+  },
+  {
+   "label": "How long we keep it",
+   "text": "Your answers up to 13 months; the detailed record of a call (when it played or paused, whether the page was in front) 30 days; or less if you delete them. If {principal} deletes its panel, you are told, and your membership is removed."
+  },
+  {
+   "label": "Who to reach",
+   "text": "Use \"Report this call\" before you take a call, or \"Stop or report\" at the top of any call screen: a report reaches person.tools's operator, not {principal}, and pauses that call at once."
+  },
+  {
+   "label": "Adults only",
+   "text": "These calls are for adults in the United States."
+  }
+ ],
+ "footnote": "This notice is what holds while person.tools is in its preview, and every promise on it is kept. The service's longer terms and privacy notice are still drafts and are not in force.",
+ "accept": "I am 18 or over, I live in the United States, and I agree to join {principal}'s panel",
+ "decline": "Not now",
+ "record_on_accept": [
+  "notice id",
+  "time accepted (router clock)",
+  "the adult statement"
+ ],
+ "names_from": "canon/names.json: replace person.tools with names.network; {principal} is the name the principal gave as who answers for its calls",
+ "changed": "tester-notice-own-1 (15 Nov 2026): first version, for policy/OWN_PANELS.md (the CEO, 3:55 AM CT, 15 Nov 2026)."
+}

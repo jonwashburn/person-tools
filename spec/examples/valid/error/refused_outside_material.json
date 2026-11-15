@@ -1,0 +1,11 @@
+{
+  "code": "refused_screening",
+  "status": 422,
+  "fixable": true,
+  "message": "People are never sent to material outside this server. Send the material itself as content.",
+  "rule": "no_outside_links",
+  "category": "outside_material",
+  "rule_text": "A call may not send a person to a link or material outside the server.",
+  "field": "ask",
+  "example": "Look at the picture, then say what the page is for."
+}

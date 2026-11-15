@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tool_args.json",
+  "title": "Arguments of the tools of the Model Context Protocol binding (section 20)",
+  "description": "One $def per tool, permissive as MCP-2 requires: a tool's inputSchema never rejects what its operation would answer with its own error. The full shape of each body is in the request schemas.",
+  "$defs": {
+    "quote": {
+      "description": "{{tool}}_quote: the call (quote_request.json)",
+      "type": "object",
+      "required": [
+        "ask",
+        "kind",
+        "people"
+      ],
+      "properties": {
+        "ask": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "content": {},
+        "people": {
+          "type": "integer"
+        },
+        "max_total_usd": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "enough": {
+          "type": "integer"
+        },
+        "pool": {
+          "type": "string"
+        },
+        "answer_fields": {
+          "type": "object"
+        },
+        "minutes": {
+          "type": "number"
+        },
+        "pay_per_person_usd": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "deadline_minutes": {
+          "type": "integer"
+        },
+        "require": {
+          "type": "object"
+        },
+        "voice": {
+          "type": "object"
+        },
+        "content_rating": {
+          "type": "string"
+        },
+        "may_train_on_answers": {
+          "type": "boolean"
+        },
+        "pace": {
+          "type": "string"
+        },
+        "script": {
+          "type": "array"
+        },
+        "ext": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "call": {
+      "description": "{{tool}}: the call (call_request.json)",
+      "type": "object",
+      "required": [
+        "ask",
+        "kind",
+        "people",
+        "max_total_usd"
+      ],
+      "properties": {
+        "ask": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "content": {},
+        "people": {
+          "type": "integer"
+        },
+        "max_total_usd": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "enough": {
+          "type": "integer"
+        },
+        "pool": {
+          "type": "string"
+        },
+        "answer_fields": {
+          "type": "object"
+        },
+        "minutes": {
+          "type": "number"
+        },
+        "pay_per_person_usd": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "deadline_minutes": {
+          "type": "integer"
+        },
+        "require": {
+          "type": "object"
+        },
+        "voice": {
+          "type": "object"
+        },
+        "content_rating": {
+          "type": "string"
+        },
+        "may_train_on_answers": {
+          "type": "boolean"
+        },
+        "pace": {
+          "type": "string"
+        },
+        "script": {
+          "type": "array"
+        },
+        "ext": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "results": {
+      "description": "{{tool}}_results",
+      "type": "object",
+      "required": [
+        "call_id"
+      ],
+      "properties": {
+        "call_id": {
+          "type": "string"
+        },
+        "after": {
+          "type": "string"
+        },
+        "wait_seconds": {
+          "type": "integer"
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "cancel": {
+      "description": "{{tool}}_cancel",
+      "type": "object",
+      "required": [
+        "call_id"
+      ],
+      "properties": {
+        "call_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "send_outcome": {
+      "description": "{{tool}}_send_outcome",
+      "type": "object",
+      "required": [
+        "call_id",
+        "text"
+      ],
+      "properties": {
+        "call_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "panel": {
+      "description": "{{tool}}_panel: makes a panel and returns it with its join link",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

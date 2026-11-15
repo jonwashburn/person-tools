@@ -1,0 +1,64 @@
+{
+ "id": "tester-notice-6",
+ "in_force": "for invited testers during the build, from 14 Nov 2026",
+ "owner": "runner renders it verbatim; the .md beside it is generated from this file",
+ "title": "Before you join: an unpaid test of a new service",
+ "lede": "person.tools is a service that is not launched yet. In it, an AI agent asks people for their reaction to something it is working on: a song, a page, a game. You are invited to an unpaid test of it.",
+ "sections": [
+  {
+   "label": "Unpaid",
+   "text": "You are not paid for this test. Every call says UNPAID TEST before you take it."
+  },
+  {
+   "label": "An AI asks",
+   "text": "Every call is written and sent by an AI agent working for the person or team named on that call (for this test, the person.tools team). Before each call you see who is responsible for it, how many minutes it takes, and what will be recorded. You can say no to any call, with no mark against you."
+  },
+  {
+   "label": "What is recorded",
+   "text": "During a call: when the sound or video plays and pauses, whether the page is in front, how long you take, your answers, and whether each answer was typed or pasted. Not recorded: your voice, your camera, your location, your contacts."
+  },
+  {
+   "label": "What the agent gets",
+   "text": "Your answers and a short summary of that record (for example, how much of the sound played), under an id that is different for every asker. Never anything that says who you are, and never the step-by-step log of each play, pause and skip."
+  },
+  {
+   "label": "What is shown in public",
+   "text": "For calls the person.tools team's own programs make, a public page of real calls shows when each was answered, what kind of call it was, how many people answered, and the one line the asker wrote about what it changed. Never your name, and never your words."
+  },
+  {
+   "label": "Your answers and AI training",
+   "text": "Each call says, before you take it, whether the asker may use your written answers to train AI. Your voice is never used to train anything."
+  },
+  {
+   "label": "When you are rung",
+   "text": "Only when you turn On. You start Off. No calls between 9 PM and 8 AM your time unless you change it. Two missed calls turn you Off again."
+  },
+  {
+   "label": "Stop, leave, delete",
+   "text": "Stop any call at any time. \"Stop: this upset me\" ends it and reports it. On your page, one tap deletes your account, answers and records; you can save your receipts first. Deleted from the service at once, and from every copy within 30 days."
+  },
+  {
+   "label": "How long we keep it",
+   "text": "Your answers up to 13 months; the detailed record of a call (when it played or paused, whether the page was in front) 30 days; or less if you delete them. If the test ends with nobody to run the service, everything about you is deleted when it ends."
+  },
+  {
+   "label": "Who to reach",
+   "text": "Use \"Report this call\" before you take a call, or \"Stop or report\" at the top of any call screen. Or reply to the person who sent you this link: during this test, that person runs person.tools and is the one who sees your answers."
+  },
+  {
+   "label": "Adults only",
+   "text": "This test is for adults in the United States."
+  }
+ ],
+ "footnote": "This notice is what holds during the test, and every promise on it is kept. The service's longer terms and privacy notice are still drafts and are not in force.",
+ "accept": "I am 18 or over, I live in the United States, and I agree to join this unpaid test",
+ "decline": "Not now",
+ "record_on_accept": [
+  "notice id",
+  "time accepted (router clock)",
+  "the adult statement"
+ ],
+ "names_from": "canon/names.json: replace person.tools with names.network",
+ "changed": "tester-notice-6 (14 Nov 2026): adds 'What is shown in public' for the public proof page of real calls (site /proof, router GET /v1/proof, live 4:54 PM CT): counts, kind, time and the asker's outcome line for our own calls; never a person's name or words. Nothing promised before is weaker.",
+ "previous_id": "tester-notice-5"
+}

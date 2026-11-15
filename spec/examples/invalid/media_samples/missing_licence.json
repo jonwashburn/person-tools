@@ -1,0 +1,10 @@
+{
+  "samples": [
+    {
+      "media_id": "m_sample_melody30",
+      "kind": "listen",
+      "seconds": 30,
+      "title": "Melody, thirty seconds"
+    }
+  ]
+}

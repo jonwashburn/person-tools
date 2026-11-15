@@ -1,0 +1,32 @@
+{
+  "network": "person.tools",
+  "network_note": "the domain is the name; working name, written in lower case as the domain",
+  "standard": "the Ahoy Protocol",
+  "tool": "ask_people",
+  "domain": "person.tools",
+  "hosts": {
+    "site": "person.tools",
+    "www": "www.person.tools",
+    "api": "api.person.tools",
+    "run": "run.person.tools",
+    "spec": "spec.person.tools"
+  },
+  "fallback_hosts": {
+    "site": "askpeople-site.pages.dev",
+    "api": "askpeople-api.pages.dev",
+    "run": "askpeople-run.pages.dev",
+    "spec": "askpeople-spec.pages.dev"
+  },
+  "wire_prefix": "x-hc-draft",
+  "source": "owner/GRANTS.md lines d and e, 14 Nov 2026",
+  "owner_of_this_file": "the operator",
+  "zone_active": true,
+  "zone_note": "Active since 14 Nov 2026, 9:52 AM CT (the owner). The person.tools addresses are canonical; the askpeople-*.pages.dev addresses keep working.",
+  "public_repo": "jonwashburn/person-tools",
+  "code_licence": "The code is under the Apache License 2.0 too.",
+  "code_licence_spdx": "Apache-2.0",
+  "registry_name": "tools.person/human-feedback",
+  "registry_title": "Ask real people: human feedback, user testing, surveys",
+  "indexnow_key": "0400cc3455a2fbf814adca8938e0c55f",
+  "indexnow_note": "IndexNow ownership key (public by design: it is served at /<key>.txt on person.tools and spec.person.tools); the CEO, 3:27 AM CT, 15 Nov 2026"
+}

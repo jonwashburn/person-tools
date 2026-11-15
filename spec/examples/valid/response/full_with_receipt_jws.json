@@ -1,0 +1,47 @@
+{
+  "response_id": "r_5t6y7u8i9o0p1a2s3d4f",
+  "simulated": false,
+  "person_ref": "pp_k2j3h4g5f6d7s8a9q0w1",
+  "kind": "listen",
+  "status": "answered",
+  "partial": false,
+  "evidence": "attended",
+  "level_reason": "played all 30 seconds at normal speed, page in front throughout",
+  "answers": {
+    "felt": "It opened up at the key change, then I lost it.",
+    "would_play_again": true,
+    "drift_at_seconds": 97
+  },
+  "answer_input": {
+    "felt": "typed",
+    "would_play_again": "tapped",
+    "drift_at_seconds": "typed"
+  },
+  "voice": null,
+  "minutes": 1.2,
+  "paid_usd": "2.00",
+  "receipt_id": "rc_1q2w3e4r5t6y7u8i9o0p",
+  "received_at": "2026-11-14T06:21:13Z",
+  "record": {
+    "rule": "listen/1",
+    "observed": {
+      "seat_seconds": 74,
+      "device": "phone",
+      "media_seconds": 30,
+      "played_seconds": 30,
+      "realtime_seconds": 31.2,
+      "stalled_seconds": 0,
+      "visible_fraction": 1.0,
+      "pauses": 1,
+      "replays": 1,
+      "seeks_forward": 0,
+      "completed": true
+    },
+    "unobserved": [
+      "audible",
+      "unassisted_answer",
+      "same_person"
+    ]
+  },
+  "receipt_jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImsxIn0.eyJyZWNlaXB0X2lkIjoicmNfMSJ9.c2lnbmF0dXJlLWJ5dGVzLWdvLWhlcmU"
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="{{csp}}">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="light dark">
+<title>{{network}}: for the people an AI calls</title>
+<meta name="description" content="Before you say yes you see who is responsible for the call, that an AI is asking, how long it takes, what it pays and what is recorded. Twelve promises, and which of them are checked after every release.">
+<link rel="preload" href="/h/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/h/front.css?v={{v}}">
+<script type="application/json" id="hc-hosts">{{hosts_json}}</script>
+<script src="/h/people.js?v={{v}}" defer></script>
+</head>
+<body>
+<a class="skip" href="#promise">Skip to the promise</a>
+<header class="top">
+  <a class="mark" href="/">{{network}}</a>
+  <nav class="top-nav" aria-label="Pages"><a href="/start">Connect an agent</a><a href="{{spec_fallback}}">The standard</a><a href="/people/" aria-current="page">For people</a><a href="/questions">Questions</a><a href="/proof">Proof</a></nav>
+</header>
+<p class="pre-band">{{status_plain}}</p>
+<main id="main" class="people">
+  <div class="stage">
+  <section class="hero" aria-labelledby="h1">
+    <div class="hero-words">
+      <p class="label">FOR THE PEOPLE AN AI CALLS</p>
+      <h1 id="h1" class="h1"><span class="ph">An AI asks.</span> <span class="ph"><span class="ln">You see</span> <span class="ln">everything first.</span></span> <span class="ph">You decide.</span></h1>
+      <p class="lede">A call is a few minutes of your judgment: hear a song, look at a page, play a level, then answer in your own words. Before you say yes you see who is responsible for the call, that an AI is asking, how long it takes, what it pays and what is recorded. A call comes as a notification or a link and happens on a page; nobody phones you.</p>
+    </div>
+    <figure class="phone-col" aria-label="A call, as the person sees it">
+      <figcaption class="label">WHAT A CALL LOOKS LIKE</figcaption>
+      <div class="phone open"><iframe id="seat" title="A rehearsal call, as the person sees it" allow="autoplay"></iframe></div>
+      <p class="note phone-note">The real page a person opens, on a rehearsal call. Take it if you like: nothing you do leaves this page.</p>
+    </figure>
+  </section>
+  </div>
+
+  <section class="promise" id="promise" aria-labelledby="promise-h">
+    <p class="label">THE PROMISE</p>
+    <h2 id="promise-h" class="h2">{{promise_h}}</h2>
+    <ol class="promise-list">{{promise_lines}}</ol>
+    <p class="note also">{{promise_also}}</p>
+  </section>
+
+  <section class="for-agents" aria-labelledby="pay-h">
+    <p class="label">PAY, WHEN PAID CALLS OPEN</p>
+    <h2 id="pay-h" class="h2">At least ${{floor}} an hour on the time most people take, from the first second.</h2>
+    <div class="fa-grid">
+      <div class="fa-cell"><p class="label">THE FLOOR</p><p class="num">${{floor}}<small>/hour</small></p><p class="note">{{fp_pay_floor}}</p></div>
+      <div class="fa-cell"><p class="label">IF YOU STOP</p><p class="note">{{fp_stop_pay}} {{fp_in_the_seat_at_the_end}}</p></div>
+      <div class="fa-cell"><p class="label">NO REJECTION</p><p class="note">{{fp_acceptance}}</p></div>
+    </div>
+    <p class="note gap-top">{{fp_unpaid_calls}} {{fp_during_the_preview}} How pay will reach you is not set yet, because paid calls are not open.</p>
+  </section>
+  <section class="for-agents later-sec" aria-labelledby="later-h">
+    <p class="label">TO BE CALLED LATER</p>
+    <h2 id="later-h" class="h2">Not open yet.</h2>
+    <p class="lede">We do not keep anyone's address until this list opens; until then, there is nothing to sign up for. When it opens, it will ask for one email address and nothing else, and use it for one message: that real calls are open.</p>
+    <p class="note">Real calls are {{real_calls}}.</p>
+    <div id="later-form" aria-live="polite"></div>
+  </section>
+</main>
+<footer class="foot">
+  <p><span class="label">STATUS</span> {{status_plain}}</p>
+  <p class="note">{{status_names}}.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,4 @@
+{
+  "name": "Album listeners",
+  "idempotency_key": "panel-album-1"
+}

@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quote.json",
+  "title": "A quote (section 12.1)",
+  "type": "object",
+  "required": [
+    "quote_id",
+    "lines",
+    "total_usd",
+    "expected_minutes_to_enough",
+    "expires_at",
+    "defaults_used",
+    "simulated",
+    "test_money"
+  ],
+  "properties": {
+    "quote_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "pool": {
+      "$ref": "common.json#/$defs/pool"
+    },
+    "people": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pay_per_person_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.json#/$defs/quote_line"
+      }
+    },
+    "total_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "pay_floor_usd_per_hour": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "expected_minutes_to_enough": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "expected_note": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "expires_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "defaults_used": {
+      "$ref": "common.json#/$defs/defaults_used"
+    },
+    "would_be_held": {
+      "type": "boolean"
+    },
+    "held_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "panel_size": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "members_on_now": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "small_panel": {
+      "type": "boolean"
+    },
+    "earliest_ring_at": {
+      "$ref": "common.json#/$defs/time",
+      "description": "When nobody can be offered a seat now: the time the first seat can be (MONEY-11)."
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "test_money": {
+      "type": "boolean"
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    },
+    "for_your_user": {
+      "type": "string",
+      "maxLength": 600,
+      "description": "MONEY-13: plain sentences an agent can show its user to ask for approval."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "expected_minutes_to_enough": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "expected_note"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "would_be_held": {
+            "const": true
+          }
+        },
+        "required": [
+          "would_be_held"
+        ]
+      },
+      "then": {
+        "required": [
+          "held_reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pool": {
+            "pattern": "^panel:"
+          }
+        },
+        "required": [
+          "pool"
+        ]
+      },
+      "then": {
+        "required": [
+          "panel_size",
+          "members_on_now"
+        ]
+      }
+    }
+  ]
+}

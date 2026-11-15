@@ -1,0 +1,411 @@
+openapi: 3.1.0
+info:
+  title: "{{wire_prefix}} call server, version 0.1 (DRAFT)"
+  version: "0.1"
+  summary: An agent asks people to do a short thing and gets back each answer with a record of what was done.
+  description: |
+    The HTTP binding of the standard (section 19). This document is normative for shape; where it and the prose
+    disagree, the prose wins and this document is a bug. Every identifier on the wire uses the placeholder prefix
+    `{{wire_prefix}}`, which changes once, when 0.1 is published as final.
+    Bodies are JSON. Money is a string with two decimal places. Times are RFC 3339 in UTC.
+  license:
+    name: Apache-2.0 (intended; draft)
+    identifier: Apache-2.0
+servers:
+  - url: /
+    description: The host of the call server's API, which discovery gives as api_base; every path here is taken from it.
+security: []
+tags:
+  - name: calls
+  - name: panels
+  - name: media
+  - name: receipts
+  - name: keys
+  - name: discovery
+paths:
+  /v1/quotes:
+    post:
+      operationId: quote
+      tags: [calls]
+      summary: Price a call. Nothing is held, spent or sent (section 12.1).
+      description: Without a key, a server that follows AUTH-5 prices calls on the simulated pool.
+      security: [{bearer: []}, {}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/quote_request.json"}
+      responses:
+        "200":
+          description: The quote.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/quote.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/calls:
+    post:
+      operationId: openCall
+      tags: [calls]
+      summary: Open a call (section 9). Holds the quoted total; a repeat with the same idempotency_key returns the first answer.
+      description: Without a key, a server that follows AUTH-5 opens calls on the simulated pool only; the call_id is then the only authority over the call.
+      security: [{bearer: []}, {}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/call_request.json"}
+      responses:
+        "201":
+          description: The call, opened (or held by screening, status held).
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/call.json"}
+        "400": {$ref: "#/components/responses/ErrorOnCall"}
+        "401": {$ref: "#/components/responses/ErrorOnCall"}
+        "402": {$ref: "#/components/responses/ErrorOnCall"}
+        "403": {$ref: "#/components/responses/ErrorOnCall"}
+        "409": {$ref: "#/components/responses/ErrorOnCall"}
+        "422": {$ref: "#/components/responses/ErrorOnCall"}
+        "429": {$ref: "#/components/responses/ErrorOnCall"}
+        default: {$ref: "#/components/responses/ErrorOnCall"}
+  /v1/calls/{call_id}:
+    get:
+      operationId: getCall
+      tags: [calls]
+      summary: A call's state (section 19).
+      security: [{bearer: []}, {}]
+      parameters: [{$ref: "#/components/parameters/CallId"}, {$ref: "#/components/parameters/Version"}]
+      responses:
+        "200":
+          description: The call.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/call.json"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/calls/{call_id}/responses:
+    get:
+      operationId: getResults
+      tags: [calls]
+      summary: Answers so far, with a summary first (section 13). May wait up to wait_seconds for something new.
+      security: [{bearer: []}, {}]
+      parameters:
+        - {$ref: "#/components/parameters/CallId"}
+        - {$ref: "#/components/parameters/Version"}
+        - name: after
+          in: query
+          required: false
+          description: A cursor from an earlier answer; only responses after it are returned.
+          schema: {type: string, maxLength: 200}
+        - name: wait_seconds
+          in: query
+          required: false
+          description: 0 to limits.max_wait_seconds (at least 20). The server answers within wait_seconds plus 5 (RES-1).
+          schema: {type: integer, minimum: 0, default: 0}
+        - name: detail
+          in: query
+          required: false
+          description: summary (the default) or full (section 13.3).
+          schema: {enum: [summary, full], default: summary}
+      responses:
+        "200":
+          description: Results.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/results.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/calls/{call_id}/cancel:
+    post:
+      operationId: cancelCall
+      tags: [calls]
+      summary: Stop a call. Idempotent; a finished call is returned as it is (IDEM-4).
+      security: [{bearer: []}, {}]
+      parameters: [{$ref: "#/components/parameters/CallId"}, {$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {type: object, maxProperties: 0}
+      responses:
+        "200":
+          description: The call.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/call.json"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/calls/{call_id}/outcome:
+    post:
+      operationId: sendOutcome
+      tags: [calls]
+      summary: Tell the people who answered what their answers changed (section 15.2). At most three lines per call.
+      security: [{bearer: []}, {}]
+      parameters: [{$ref: "#/components/parameters/CallId"}, {$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/outcome_request.json"}
+      responses:
+        "200":
+          description: Delivered or held for review.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/outcome_response.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/balance:
+    get:
+      operationId: getBalance
+      tags: [keys]
+      summary: The key's balance, what is held, its caps and what it spent today (test money is marked).
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      responses:
+        "200":
+          description: The balance.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/balance.json"}
+        "401": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/panels:
+    post:
+      operationId: makePanel
+      tags: [panels]
+      summary: Make a panel and its join link (live keys, where the server offers panels).
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/panel_request.json"}
+      responses:
+        "201":
+          description: The panel.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/panel.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/panels/{panel_id}:
+    get:
+      operationId: getPanel
+      tags: [panels]
+      summary: A panel's state.
+      security: [{bearer: []}]
+      parameters:
+        - {$ref: "#/components/parameters/Version"}
+        - name: panel_id
+          in: path
+          required: true
+          schema: {$ref: "./schemas/common.json#/$defs/id"}
+      responses:
+        "200":
+          description: The panel.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/panel.json"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/media:
+    post:
+      operationId: addMedia
+      tags: [media]
+      summary: Add material; returns a media id (as the server allows, section 6).
+      description: The body is the material itself, at most 100 MB, sent with its own Content-Type (audio, video, an image, a page as HTML, or a build as a zip).
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema: {type: string, contentMediaType: application/octet-stream, maxLength: 104857600}
+      responses:
+        "201":
+          description: The media id.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/media.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/media/samples:
+    get:
+      operationId: listSamples
+      tags: [media]
+      summary: Samples anyone may use as content, each with its title and licence. No key is needed (AUTH-1).
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      responses:
+        "200":
+          description: The samples.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/media_samples.json"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/receipts/{receipt_id}:
+    get:
+      operationId: getReceipt
+      tags: [receipts]
+      summary: The receipt of a response the key's principal received (or, with no key, of a keyless call; s15.1).
+      security: [{bearer: []}, {}]
+      parameters:
+        - {$ref: "#/components/parameters/Version"}
+        - name: receipt_id
+          in: path
+          required: true
+          schema: {$ref: "./schemas/common.json#/$defs/id"}
+      responses:
+        "200":
+          description: The receipt, decoded and as a JWS.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/receipt_envelope.json"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/receipts/verify:
+    post:
+      operationId: verifyReceipt
+      tags: [receipts]
+      summary: Check a receipt's signature, for anyone, without a key (RCPT-3).
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/receipt_verify_request.json"}
+      responses:
+        "200":
+          description: Whether it verifies.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/receipt_verify_response.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /v1/keys:
+    post:
+      operationId: makeTestKey
+      tags: [keys]
+      summary: Make a test key, with no human step (SIM-6, a SHOULD).
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/Version"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "./schemas/test_key_request.json"}
+      responses:
+        "201":
+          description: The key. It is shown once.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/test_key.json"}
+        "400": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        default: {$ref: "#/components/responses/Error"}
+  /.well-known/{{wire_prefix}}:
+    get:
+      operationId: discovery
+      tags: [discovery]
+      summary: The discovery document (section 5), on the host of the API.
+      security: [{}]
+      responses:
+        "200":
+          description: Discovery.
+          headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+          content:
+            application/json:
+              schema: {$ref: "./schemas/discovery.json"}
+        default: {$ref: "#/components/responses/Error"}
+components:
+  schemas:
+    JWKS:
+      description: The document at discovery's jwks_uri (its address is the server's own, so it has no path here).
+      $ref: "./schemas/jwks.json"
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: "A key: test_... reaches the simulated pool, any test panels a server names, and the panels its own principal made where the server lets test keys make panels; a live key may reach real people (section 6)."
+  parameters:
+    Version:
+      name: "{{wire_prefix}}-version"
+      in: header
+      required: false
+      description: The version of the standard the client speaks (VER-1). Absent, the server answers as the newest version it lists in discovery, whatever its status.
+      schema: {type: string, pattern: "^[0-9]+\\.[0-9]+$", examples: ["0.1"]}
+    CallId:
+      name: call_id
+      in: path
+      required: true
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+  headers:
+    Version:
+      description: The version that answered (VER-2).
+      required: true
+      schema: {type: string, pattern: "^[0-9]+\\.[0-9]+$"}
+  responses:
+    Error:
+      description: An error (section 8; codes in section 24).
+      headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+      content:
+        application/json:
+          schema: {$ref: "./schemas/error.json"}
+        application/problem+json:
+          schema: {$ref: "./schemas/error.json"}
+    ErrorOnCall:
+      description: An error in answer to POST /v1/calls; it says nothing was charged and nobody was asked (ERR-3).
+      headers: {"{{wire_prefix}}-version": {$ref: "#/components/headers/Version"}}
+      content:
+        application/json:
+          schema: {$ref: "./schemas/error.json#/$defs/on_call"}
+        application/problem+json:
+          schema: {$ref: "./schemas/error.json#/$defs/on_call"}

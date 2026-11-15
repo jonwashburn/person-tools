@@ -1,0 +1,11 @@
+{
+  "ask": "Listen once. Then tell me what you felt.",
+  "kind": "listen",
+  "content": "m_sample_melody30",
+  "people": 3,
+  "require": {
+    "example.org/plays_instrument": [
+      1
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "receipt_verify_response.json",
+  "title": "POST /v1/receipts/verify answer",
+  "type": "object",
+  "required": [
+    "valid",
+    "receipt",
+    "kid",
+    "revoked",
+    "on_record"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "receipt": {
+      "oneOf": [
+        {
+          "$ref": "receipt_payload.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revoked": {
+      "type": "boolean"
+    },
+    "on_record": {
+      "type": "boolean",
+      "description": "RCPT-4: the server holds this receipt in its own records"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "valid": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "receipt": {
+            "$ref": "receipt_payload.json"
+          },
+          "kid": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ],
+  "description": "valid true with revoked true: the signature checks only against a revoked key, which proves nothing about when it was signed (RCPT-4); on_record says whether the server issued it."
+}

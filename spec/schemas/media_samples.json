@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "media_samples.json",
+  "title": "GET /v1/media/samples answer (section 19)",
+  "type": "object",
+  "required": [
+    "samples"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "media_id",
+          "kind",
+          "seconds",
+          "title",
+          "licence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "media_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "kind": {
+            "$ref": "common.json#/$defs/media_kind"
+          },
+          "seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "licence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      }
+    }
+  }
+}

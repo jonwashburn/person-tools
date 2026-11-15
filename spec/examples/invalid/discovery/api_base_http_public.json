@@ -1,0 +1,56 @@
+{
+  "protocol": "{{wire_prefix}}",
+  "versions": [
+    {
+      "version": "0.1",
+      "status": "draft"
+    }
+  ],
+  "api_base": "http://example.com",
+  "mcp": "https://api.example.com/mcp",
+  "openapi": "https://api.example.com/openapi.yaml",
+  "jwks_uri": "https://api.example.com/.well-known/jwks.json",
+  "mcp_protocol_versions": [
+    "2026-07-28",
+    "2025-06-18"
+  ],
+  "kinds": [
+    "listen",
+    "watch",
+    "view",
+    "play",
+    "compare",
+    "answer"
+  ],
+  "pools": [
+    "simulated",
+    "panel"
+  ],
+  "features": [
+    "keyless",
+    "url_content",
+    "media_upload",
+    "outcome",
+    "voice",
+    "panels"
+  ],
+  "profiles": [
+    "{{wire_prefix}}/fair-call/0.1"
+  ],
+  "screening_policy": "https://example.com/policy",
+  "test_keys": "https://api.example.com/v1/keys",
+  "privacy_floor": 20,
+  "pay_terms": null,
+  "pay_floor_usd_per_hour": "20.00",
+  "limits": {
+    "max_people": 50,
+    "max_deadline_minutes": 10080,
+    "max_wait_seconds": 25,
+    "stop_minimum_usd": "0.00"
+  },
+  "retention": {
+    "recordings_days": 90,
+    "responses_days": 365,
+    "records_days": 365
+  }
+}

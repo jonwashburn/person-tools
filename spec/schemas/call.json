@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "call.json",
+  "title": "The call as returned by POST /v1/calls, GET /v1/calls/{id} and cancel (section 19)",
+  "type": "object",
+  "required": [
+    "call_id",
+    "status",
+    "created_at",
+    "deadline",
+    "call",
+    "defaults_used",
+    "quote",
+    "summary",
+    "money",
+    "outcomes",
+    "simulated",
+    "test_money",
+    "next_check_after_seconds"
+  ],
+  "properties": {
+    "call_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "status": {
+      "$ref": "common.json#/$defs/call_status"
+    },
+    "created_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "deadline": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "call": {
+      "type": "object",
+      "required": [
+        "ask",
+        "kind",
+        "people",
+        "enough",
+        "pool",
+        "answer_fields",
+        "minutes",
+        "pay_per_person_usd",
+        "deadline_minutes",
+        "content_rating",
+        "may_train_on_answers",
+        "max_total_usd"
+      ],
+      "properties": {
+        "ask": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "kind": {
+          "$ref": "common.json#/$defs/kind"
+        },
+        "content": {
+          "$ref": "common.json#/$defs/content"
+        },
+        "people": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_total_usd": {
+          "$ref": "common.json#/$defs/money"
+        },
+        "idempotency_key": {
+          "$ref": "common.json#/$defs/idempotency_key"
+        },
+        "enough": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pool": {
+          "$ref": "common.json#/$defs/pool"
+        },
+        "answer_fields": {
+          "$ref": "common.json#/$defs/answer_fields_expanded"
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 120
+        },
+        "pay_per_person_usd": {
+          "$ref": "common.json#/$defs/money"
+        },
+        "deadline_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "require": {
+          "$ref": "common.json#/$defs/selectors"
+        },
+        "voice": {
+          "$ref": "common.json#/$defs/voice_request"
+        },
+        "content_rating": {
+          "$ref": "common.json#/$defs/content_rating"
+        },
+        "may_train_on_answers": {
+          "type": "boolean"
+        },
+        "pace": {
+          "enum": [
+            "instant",
+            "human"
+          ]
+        },
+        "script": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "common.json#/$defs/script_entry"
+          },
+          "description": "At most people + 20 entries (section 18); the server checks the bound."
+        },
+        "ext": {
+          "$ref": "common.json#/$defs/ext"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "not": {
+                  "const": "answer"
+                }
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "content"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "compare"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "type": "array"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "listen",
+                  "watch",
+                  "view",
+                  "play",
+                  "answer"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "not": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "listen",
+                  "watch",
+                  "play"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "common.json#/$defs/media_ref"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "answer"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "content": {
+                "$ref": "common.json#/$defs/text_content"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "pool"
+            ],
+            "properties": {
+              "pool": {
+                "not": {
+                  "const": "simulated"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pace": false,
+              "script": false
+            }
+          }
+        }
+      ]
+    },
+    "defaults_used": {
+      "$ref": "common.json#/$defs/defaults_used"
+    },
+    "quote": {
+      "$ref": "quote.json"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "simulated",
+        "people",
+        "enough",
+        "answered",
+        "stopped",
+        "evidence",
+        "tally"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "simulated": {
+          "type": "boolean"
+        },
+        "people": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "enough": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offered": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "taken": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "answered": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "stopped": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "declined": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "missed": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "withdrawn": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "attended",
+            "said",
+            "voiced"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "attended": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "said": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "voiced": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "said_because": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "common.json#/$defs/count"
+              }
+            }
+          }
+        },
+        "tally": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.json#/$defs/field_name"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "boolean: counts of \"true\"/\"false\"; choice: count per choice; number and scale: n, min, median, max; text: n only (section 13)."
+          }
+        },
+        "small_panel": {
+          "type": "boolean"
+        },
+        "would_be_held": {
+          "type": "boolean"
+        },
+        "held_reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "would_be_held": {
+                "const": true
+              }
+            },
+            "required": [
+              "would_be_held"
+            ]
+          },
+          "then": {
+            "required": [
+              "held_reason"
+            ]
+          }
+        }
+      ]
+    },
+    "money": {
+      "$ref": "common.json#/$defs/money_summary"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "test_money": {
+      "type": "boolean"
+    },
+    "next_check_after_seconds": {
+      "$ref": "common.json#/$defs/next_check"
+    },
+    "held_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "held_rule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "review_by": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "next_step": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "status": {
+            "enum": [
+              "delivered",
+              "held",
+              "refused"
+            ]
+          }
+        }
+      },
+      "description": "Every outcome line sent on the call, with what became of it (OUT-3)."
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "held"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "held_reason",
+          "held_rule",
+          "review_by"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "held",
+              "open",
+              "enough"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "next_check_after_seconds": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  ]
+}

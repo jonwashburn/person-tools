@@ -1,0 +1,33 @@
+{
+  "ask": "Listen once, to the end. Then tell me what you felt, and where your attention drifted.",
+  "kind": "listen",
+  "content": "https://example.com/track-07.mp3",
+  "people": 8,
+  "enough": 5,
+  "pool": "panel:p_family",
+  "answer_fields": {
+    "felt": {
+      "type": "text",
+      "label": "What did you feel?"
+    },
+    "would_play_again": {
+      "type": "boolean",
+      "label": "Would you play it again?"
+    },
+    "drift_at_seconds": {
+      "type": "number",
+      "label": "Where did your attention drift, in seconds?",
+      "optional": true
+    }
+  },
+  "minutes": 5,
+  "pay_per_person_usd": "2.00",
+  "deadline_minutes": 45,
+  "require": {
+    "country": [
+      "US"
+    ]
+  },
+  "max_total_usd": "25.00",
+  "idempotency_key": "album-track-7-v3"
+}

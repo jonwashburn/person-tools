@@ -1,0 +1,13 @@
+{
+  "code": "invalid_json",
+  "message": "The body is not a JSON object.",
+  "status": 400,
+  "fixable": true,
+  "field": "body",
+  "example": {
+    "ask": "Listen once. Then tell me what you felt.",
+    "kind": "listen",
+    "content": "m_sample_melody30",
+    "people": 3
+  }
+}

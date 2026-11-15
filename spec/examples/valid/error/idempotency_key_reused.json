@@ -1,0 +1,8 @@
+{
+  "code": "idempotency_key_reused",
+  "message": "That idempotency_key was used with a different body.",
+  "status": 409,
+  "fixable": true,
+  "field": "idempotency_key",
+  "example": "melody-check-2"
+}

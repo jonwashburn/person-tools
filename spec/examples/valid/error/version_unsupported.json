@@ -1,0 +1,11 @@
+{
+  "code": "version_unsupported",
+  "status": 400,
+  "fixable": true,
+  "message": "This server serves 0.1 only.",
+  "field": "{{wire_prefix}}-version",
+  "example": "0.1",
+  "versions": [
+    "0.1"
+  ]
+}

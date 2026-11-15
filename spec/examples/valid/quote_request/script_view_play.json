@@ -1,0 +1,12 @@
+{
+  "ask": "Play the first level.",
+  "kind": "play",
+  "content": "m_build_17",
+  "people": 1,
+  "script": [
+    {
+      "session_seconds": 20,
+      "input_count": 3
+    }
+  ]
+}

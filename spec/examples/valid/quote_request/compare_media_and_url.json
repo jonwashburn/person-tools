@@ -1,0 +1,10 @@
+{
+  "ask": "Which mix sounds warmer?",
+  "kind": "compare",
+  "content": [
+    "m_mix_a",
+    "https://example.com/mix-b.mp3",
+    "m_mix_c"
+  ],
+  "people": 6
+}

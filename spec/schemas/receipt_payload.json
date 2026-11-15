@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "receipt_payload.json",
+  "title": "The payload of a receipt JWS (section 15.1)",
+  "type": "object",
+  "required": [
+    "receipt_id",
+    "iss",
+    "rev",
+    "issued_at",
+    "call_ref",
+    "answered_for",
+    "kind",
+    "seat_status",
+    "evidence",
+    "minutes",
+    "paid_usd",
+    "unpaid",
+    "fees",
+    "simulated",
+    "test_money",
+    "outcomes"
+  ],
+  "properties": {
+    "receipt_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "iss": {
+      "$ref": "common.json#/$defs/abs_url"
+    },
+    "rev": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "issued_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "call_ref": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "answered_for": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "kind": {
+      "$ref": "common.json#/$defs/kind"
+    },
+    "seat_status": {
+      "enum": [
+        "answered",
+        "stopped"
+      ]
+    },
+    "evidence": {
+      "$ref": "common.json#/$defs/evidence_level"
+    },
+    "minutes": {
+      "type": "number",
+      "minimum": 0
+    },
+    "paid_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "unpaid": {
+      "type": "boolean"
+    },
+    "fees": {
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/fee_line"
+      }
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "test_money": {
+      "type": "boolean"
+    },
+    "top_up_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "outcomes": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 280
+      },
+      "description": "The outcome lines the person has been shown (OUT-2)."
+    }
+  },
+  "additionalProperties": false
+}

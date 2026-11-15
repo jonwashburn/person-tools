@@ -1,0 +1,11 @@
+#!/bin/bash
+# disposable_member: mint one throwaway headless member of team-test (On, no quiet hours, never a person) and write its
+# token to ~/.config/humancall/team_test.env as MEMBER_DISPOSABLE (replacing the last one). For the chief's and runner's
+# leave-and-delete check (P7), which deletes the member it presses. Run it again to get a new one.
+set -uo pipefail
+API="${1:-https://askpeople-api.pages.dev}"; E="$HOME/.config/humancall/team_test.env"
+set -a; . "$HOME/.config/humancall/router.env"; set +a
+R=$(curl -fsS -X POST "$API/internal/members" -H "Authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d '{"panel":"team-test","on":true}') || { echo "disposable_member: the API refused"; exit 1; }
+T=$(printf '%s' "$R" | "${PYTHON:-python3}" -I -c 'import json,sys; print(json.load(sys.stdin)["member_token"])')
+grep -v '^MEMBER_DISPOSABLE=' "$E" > "$E.new"; echo "MEMBER_DISPOSABLE=$T" >> "$E.new"; chmod 600 "$E.new"; mv "$E.new" "$E"
+echo "disposable_member: a new MEMBER_DISPOSABLE is in ~/.config/humancall/team_test.env"

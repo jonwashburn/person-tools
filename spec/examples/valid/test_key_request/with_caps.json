@@ -1,0 +1,7 @@
+{
+  "class": "test",
+  "caps": {
+    "per_call_usd": "5.00",
+    "per_day_usd": 20
+  }
+}

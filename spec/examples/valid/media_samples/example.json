@@ -1,0 +1,18 @@
+{
+  "samples": [
+    {
+      "media_id": "m_sample_melody30",
+      "kind": "listen",
+      "seconds": 30,
+      "title": "Melody, thirty seconds",
+      "licence": "made by the operator; free to use in any call"
+    },
+    {
+      "media_id": "m_sample_logo",
+      "kind": "view",
+      "seconds": null,
+      "title": "A logo",
+      "licence": "made by the operator; free to use in any call"
+    }
+  ]
+}

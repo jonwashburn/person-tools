@@ -1,0 +1,8 @@
+{
+  "code": "unsupported_feature",
+  "message": "This server does not take spoken answers; remove voice.",
+  "status": 400,
+  "fixable": true,
+  "field": "voice",
+  "example": null
+}

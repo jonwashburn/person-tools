@@ -1,0 +1,8 @@
+{
+  "code": "refused_screening",
+  "status": 422,
+  "fixable": false,
+  "message": "Refused.",
+  "rule": "no_credentials",
+  "rule_text": "No passwords."
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "media.json",
+  "title": "POST /v1/media answer (section 19)",
+  "type": "object",
+  "required": [
+    "media_id",
+    "kind",
+    "seconds",
+    "bytes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "media_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "kind": {
+      "$ref": "common.json#/$defs/media_kind"
+    },
+    "seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 104857600
+    }
+  }
+}

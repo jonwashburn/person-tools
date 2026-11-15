@@ -1,0 +1,23 @@
+{
+  "receipt_id": "rc_1q2w3e4r5t6y7u8i9o0p",
+  "iss": "https://api.example.com",
+  "rev": 1,
+  "issued_at": "2026-11-14T06:21:14Z",
+  "call_ref": "sha256:9b1c...e4",
+  "answered_for": "Example Studio",
+  "kind": "listen",
+  "seat_status": "answered",
+  "evidence": "attended",
+  "minutes": 1.2,
+  "paid_usd": "2.00",
+  "unpaid": false,
+  "fees": [
+    {
+      "kind": "router_fee",
+      "amount_usd": "0.20"
+    }
+  ],
+  "simulated": false,
+  "test_money": false,
+  "outcomes": []
+}

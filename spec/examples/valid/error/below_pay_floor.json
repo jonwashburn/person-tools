@@ -1,0 +1,8 @@
+{
+  "code": "below_pay_floor",
+  "message": "At 5 minutes the floor is 1.67.",
+  "status": 400,
+  "fixable": true,
+  "field": "pay_per_person_usd",
+  "example": "1.67"
+}

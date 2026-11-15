@@ -1,0 +1,1 @@
+{"version": 1, "include": ["/c/*", "/s/*", "/m/*", "/o/*", "/x/*", "/r/*", "/j/*", "/push-key", "/mf/*", "/mx/*", "/p/*", "/.well-known/apple-app-site-association"], "exclude": []}

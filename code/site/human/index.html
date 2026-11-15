@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.person.tools https://askpeople-api.pages.dev; frame-src https://run.person.tools https://askpeople-run.pages.dev; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#faf8f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
+<title>person.tools: when an AI needs a person, it calls one</title>
+<meta name="description" content="person.tools lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person&#x27;s answer with a record of what their page observed.">
+<meta property="og:title" content="person.tools: when an AI needs a person, it calls one">
+<meta property="og:description" content="person.tools lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person&#x27;s answer with a record of what their page observed.">
+<link rel="preload" href="/h/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/h/front.css?v=2f1d2f8588">
+<script type="application/json" id="hc-hosts">{"primary": {"site": ["person.tools", "www.person.tools"], "api": "api.person.tools", "run": "run.person.tools"}, "fallback": {"site": ["askpeople-site.pages.dev"], "api": "askpeople-api.pages.dev", "run": "askpeople-run.pages.dev"}}</script>
+<script type="application/json" id="hc-call">{"_tool": "ask_people", "ask": "Listen once, to the end. Then say what you felt, in your own words.", "kind": "listen", "content": "m_sample_melody30", "people": 1, "pool": "self", "answer_fields": {"felt": {"type": "text", "label": "What did you feel?"}, "would_play_again": {"type": "boolean", "label": "Would you play it again?"}}}</script>
+<script src="/h/front.js?v=2f1d2f8588" defer></script>
+</head>
+<body>
+<a class="skip" href="#ring">Skip to the live call</a>
+<header class="top">
+  <a class="mark" href="/">person.tools</a>
+  <nav class="top-nav" aria-label="Pages"><a href="/start">Connect an agent</a><a href="https://spec.person.tools/">The standard</a><a href="/people/">For people</a><a href="/questions">Questions</a><a href="/proof">Proof</a></nav>
+</header>
+<p class="pre-band">A preview. Simulated people for everyone, free. Your own people answer for real: they join your panel from a link on their phones, and your calls ring them. Strangers are not offered yet: ask for them in the call (wants_strangers), and your request and contact go to the operator. No money is charged: every amount is test money.</p>
+
+
+<main id="main">
+  <div class="stage">
+  <section class="hero" aria-labelledby="h1">
+    <div class="hero-words">
+      <p class="label">A TOOL FOR AI AGENTS</p>
+      <h1 id="h1" class="h1"><span class="ln">When an AI</span> <span class="ln">needs a person,</span> <span class="ln">it calls one.</span></h1>
+      <p class="lede">person.tools lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person&#x27;s answer with a record of what their page observed.</p>
+      <div class="ring-me" id="ring">
+        <button class="go you" id="ring-btn" type="button"><span class="b1">Call me</span><span class="b2">it rings on this page &middot; 30 s of music, 2 questions</span></button>
+        <p class="note" id="ring-note">Your own phone never rings, and we never ask for your number. Thirty seconds of music we made, then two short questions. <b>What is noted:</b> when you play or pause, whether this page is on your screen, and your answer; nothing from your microphone or camera. Your answer comes back to this page only and is deleted within 24 hours.</p>
+      </div>
+      <div class="agent-line"><p class="addr"><span class="label">OR CONNECT YOUR AGENT</span> <span class="mono" id="mcp-line">https://api.person.tools/mcp</span> <button class="copy" type="button" data-copy="https://api.person.tools/mcp" aria-label="Copy the MCP address">Copy</button></p><p class="note">An MCP tool server; a test key needs no account. <a href="/start">Your first call, step by step&nbsp;&rarr;</a></p></div>
+    </div>
+
+    <figure class="phone-col" aria-label="Your phone">
+      <figcaption class="label">THE PHONE ON THIS PAGE</figcaption>
+      <div class="phone" id="phone">
+        <div class="lock" id="lock">
+          <p class="lock-time" id="lock-time">&nbsp;</p>
+          <p class="lock-date" id="lock-date">&nbsp;</p>
+          <p class="lock-empty" id="lock-empty">No calls yet.</p>
+          <p class="lock-hint" id="lock-hint">Press <b>Call me</b> and a call rings here, on this page. Nothing rings your own phone.</p>
+          <button class="notif" id="notif" type="button" hidden>
+            <span class="notif-app label">PERSON.TOOLS &middot; NOW</span>
+            <span class="notif-text" id="notif-text">A call for you</span>
+            <span class="notif-sub">Tap to see what is asked, and by whom.</span>
+          </button>
+        </div>
+        <iframe id="seat" title="The call, as the person sees it" hidden allow="autoplay; microphone"></iframe>
+      </div>
+      <p class="note phone-note" id="phone-note">What a person sees when an AI calls them. The notification never shows the asker's words.</p>
+    </figure>
+  </section>
+
+  <section class="agent" id="agent" aria-labelledby="agent-h" aria-live="polite">
+    <div class="agent-head">
+      <p class="label">MEANWHILE, THE AGENT'S SIDE</p>
+      <h2 id="agent-h" class="h2">What the agent sends, and what it gets back.</h2>
+    </div>
+    <details class="agent-log" id="agent-log" open><summary>Show each step the agent takes (for developers)</summary>
+    <ol class="steps" id="steps">
+      <li class="step" id="step-hint"><p class="label">NOTHING SENT YET</p><p class="step-wait">Press <b>Call me</b>. Each request the agent makes, and each answer it gets, appears here as it happens.</p></li>
+    </ol>
+    </details>
+  </section>
+  </div>
+
+  <section class="for-agents" id="for-agents" aria-labelledby="fa-h">
+    <p class="label">FOR AN AGENT, AND THE HUMAN WHO SETS ITS BUDGET</p>
+    <h2 id="fa-h" class="h2">One tool call. A price before anything is spent.</h2>
+    <div class="fa-grid">
+      <div class="fa-cell"><p class="label">CONNECT</p><p class="mono" id="mcp-addr">https://api.person.tools/mcp</p><p class="note">An MCP tool server (ask_people, ask_people_quote, ask_people_results and more). A test key needs no account and no money: <code>POST https://api.person.tools/v1/keys {"class": "test"}</code>. It reaches simulated people (every simulated answer is marked simulated) and yourself.</p><p class="note"><a href="/start">Your first call, step by step&nbsp;&rarr;</a><br><a href="https://spec.person.tools/">Every field, error and limit (the standard)&nbsp;&rarr;</a></p><p class="note">How fast real people answer: not measured yet. Real calls are by invitation during the preview, so there are no numbers to show.</p></div>
+      <div class="fa-cell"><p class="label">PRICE</p><p class="num">10<small>%</small></p><p class="note">Router fee: 10% of what the people are paid, at least $0.25 a call. Your own panel is free. People are paid at least $18 an hour on the median time taken, and at least $1 a person on every call. Published price, not yet charged.</p></div>
+      <div class="fa-cell budget" id="budget"><p class="label" id="budget-h">CAPS AND THE BUDGET</p>
+        <ul class="budget-list">
+          <li><b>Caps on each key.</b> A call over a key&#x27;s cap opens nothing and returns the price and a link where the human can approve it.</li>
+          <li><b>The most a call may cost.</b> Every call states max_total_usd, the most it may cost. It must cover the quote&#x27;s total: the people&#x27;s pay, every fee and the reserve held for anyone who takes longer (the unused reserve comes back). The call opens only if that total is at or under max_total_usd and under the key&#x27;s caps. Otherwise nothing opens and the quote comes back.</li>
+          <li><b>What is charged.</b> Always within max_total_usd: people who finished, at the quoted pay; people who stopped, for their time; each fee on those amounts; nothing for people never rung.</li>
+          <li><b>If people take longer.</b> A person who takes longer than estimated is topped up to the floor from the reserve; past the reserve the operator bears it; never above max_total_usd.</li>
+          <li><b>What comes back.</b> The unused hold returns to the balance when the call closes, and the result says how much.</li>
+        </ul>
+        <button class="quiet cap-btn" id="cap-btn" type="button">Show me a call over my cap</button>
+      </div>
+    </div>
+    <div id="cap-out" class="cap-out" aria-live="polite"></div>
+  </section>
+
+  <section class="promise" aria-labelledby="promise-h">
+    <p class="label">WHAT THE PERSON IS PROMISED</p>
+    <h2 id="promise-h" class="h2">Twelve lines. Each is checked after every release.</h2>
+    <ol class="promise-list"><li>Before you take a call you see who answers for it, that an AI is asking, how long it takes, what it pays, how it is rated, and what will be recorded.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You can decline, or stop partway, with no mark against you. You are paid from the first second.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>An offer is held for you. You never open a call that is already full.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>No asker can reject your work. Pay is withheld only for proven fraud, shown to you, with an appeal.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You are never made to do an unpaid screener.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You see what the asker paid and what each fee was.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>Your receipts are yours. Your identity is never passed to an asker, and nothing an asker sends can see you.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>Your voice is yours: the asker gets your words, and the recording only if you say yes for that call.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You choose when you can be rung, and never at night unless you say so.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You can leave and take your data with you, or have it deleted, in one tap.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>You can report any call, and it stops.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li><li>Where the asker tells us, you see what your answer changed.<span class="chk">CHECKED AFTER EVERY RELEASE</span></li></ol>
+    <p class="more"><a href="/people/">For the people who are called: what a call looks like, and pay when paid calls open &rarr;</a></p>
+  </section>
+</main>
+
+<footer class="foot">
+  <p><span class="label">STATUS</span> A preview. Simulated people for everyone, free. Your own people answer for real: they join your panel from a link on their phones, and your calls ring them. Strangers are not offered yet: ask for them in the call (wants_strangers), and your request and contact go to the operator. No money is charged: every amount is test money.</p>
+  <p class="note">Working names: person.tools for the service, the Ahoy Protocol for the standard, ask_people for the tool. The standard's text is a draft.</p>
+</footer>
+</body>
+</html>

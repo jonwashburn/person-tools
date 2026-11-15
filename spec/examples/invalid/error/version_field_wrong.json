@@ -1,0 +1,11 @@
+{
+  "code": "version_unsupported",
+  "message": "This server serves 0.1 only.",
+  "status": 400,
+  "fixable": true,
+  "field": "version",
+  "example": "0.1",
+  "versions": [
+    "0.1"
+  ]
+}

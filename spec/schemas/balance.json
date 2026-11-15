@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "balance.json",
+  "title": "GET /v1/balance (section 19)",
+  "type": "object",
+  "required": [
+    "balance_usd",
+    "held_usd",
+    "caps",
+    "spent_today_usd",
+    "test_money"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "balance_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "held_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "caps": {
+      "type": "object",
+      "required": [
+        "per_call_usd",
+        "per_day_usd"
+      ],
+      "additionalProperties": false,
+      "description": "The key's caps; null where the principal set none.",
+      "properties": {
+        "per_call_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "per_day_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "spent_today_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "test_money": {
+      "type": "boolean"
+    }
+  }
+}

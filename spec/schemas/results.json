@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "results.json",
+  "title": "Results: GET /v1/calls/{call_id}/responses (section 13)",
+  "type": "object",
+  "required": [
+    "call_id",
+    "status",
+    "complete",
+    "summary",
+    "responses",
+    "money",
+    "cursor",
+    "next_check_after_seconds"
+  ],
+  "properties": {
+    "call_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "status": {
+      "$ref": "common.json#/$defs/call_status"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "deadline": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "simulated",
+        "people",
+        "enough",
+        "answered",
+        "stopped",
+        "evidence",
+        "tally"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "simulated": {
+          "type": "boolean"
+        },
+        "people": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "enough": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offered": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "taken": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "answered": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "stopped": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "declined": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "missed": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "withdrawn": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "attended",
+            "said",
+            "voiced"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "attended": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "said": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "voiced": {
+              "$ref": "common.json#/$defs/count"
+            },
+            "said_because": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "common.json#/$defs/count"
+              }
+            }
+          }
+        },
+        "tally": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.json#/$defs/field_name"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "boolean: counts of \"true\"/\"false\"; choice: count per choice; number and scale: n, min, median, max; text: n only (section 13)."
+          }
+        },
+        "small_panel": {
+          "type": "boolean"
+        },
+        "would_be_held": {
+          "type": "boolean"
+        },
+        "held_reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "would_be_held": {
+                "const": true
+              }
+            },
+            "required": [
+              "would_be_held"
+            ]
+          },
+          "then": {
+            "required": [
+              "held_reason"
+            ]
+          }
+        }
+      ]
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "$ref": "response.json"
+      }
+    },
+    "money": {
+      "$ref": "common.json#/$defs/money_summary"
+    },
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "next_check_after_seconds": {
+      "$ref": "common.json#/$defs/next_check"
+    },
+    "next_step": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "next_check_after_seconds": {
+            "type": "null"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "expired",
+              "cancelled",
+              "refused"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "complete": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "next_check_after_seconds": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  ]
+}

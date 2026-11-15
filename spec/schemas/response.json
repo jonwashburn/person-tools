@@ -1,0 +1,1159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "response.json",
+  "title": "A response (section 13.1)",
+  "type": "object",
+  "required": [
+    "response_id",
+    "simulated",
+    "person_ref",
+    "kind",
+    "status",
+    "partial",
+    "evidence",
+    "level_reason",
+    "answers",
+    "answer_input",
+    "minutes",
+    "paid_usd",
+    "receipt_id",
+    "received_at"
+  ],
+  "properties": {
+    "response_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "person_ref": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "kind": {
+      "$ref": "common.json#/$defs/kind"
+    },
+    "status": {
+      "enum": [
+        "answered",
+        "stopped"
+      ]
+    },
+    "partial": {
+      "type": "boolean"
+    },
+    "stop_reason": {
+      "enum": [
+        "stopped",
+        "upset"
+      ]
+    },
+    "evidence": {
+      "$ref": "common.json#/$defs/evidence_level"
+    },
+    "answers": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "common.json#/$defs/field_name"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "answer_input": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "common.json#/$defs/field_name"
+      },
+      "additionalProperties": {
+        "$ref": "common.json#/$defs/answer_input_value"
+      }
+    },
+    "level_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "top_up_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "receipt_jws": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+      "description": "The signed receipt, under detail=full (section 13.3)."
+    },
+    "minutes": {
+      "type": "number",
+      "minimum": 0,
+      "description": "seat_seconds / 60, to one decimal place."
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "rule",
+        "observed",
+        "unobserved"
+      ],
+      "additionalProperties": false,
+      "description": "The record a level was decided from; present only under detail=full (D27).",
+      "properties": {
+        "rule": {
+          "enum": [
+            "listen/1",
+            "watch/1",
+            "view/1",
+            "play/1",
+            "compare/1",
+            "answer/1"
+          ]
+        },
+        "observed": {
+          "type": "object"
+        },
+        "unobserved": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.json#/$defs/unobserved_item"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "unassisted_answer"
+              }
+            },
+            {
+              "contains": {
+                "const": "same_person"
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "listen/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device",
+                  "media_seconds",
+                  "played_seconds",
+                  "realtime_seconds",
+                  "stalled_seconds",
+                  "visible_fraction",
+                  "pauses",
+                  "replays",
+                  "seeks_forward",
+                  "completed"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "media_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "played_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "realtime_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "stalled_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "visible_fraction": {
+                    "$ref": "common.json#/$defs/fraction"
+                  },
+                  "pauses": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "replays": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "seeks_forward": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "unobserved": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "audible"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "watch/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device",
+                  "media_seconds",
+                  "played_seconds",
+                  "realtime_seconds",
+                  "stalled_seconds",
+                  "visible_fraction",
+                  "pauses",
+                  "replays",
+                  "seeks_forward",
+                  "completed",
+                  "revealed",
+                  "muted_fraction"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "media_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "played_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "realtime_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "stalled_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "visible_fraction": {
+                    "$ref": "common.json#/$defs/fraction"
+                  },
+                  "pauses": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "replays": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "seeks_forward": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  },
+                  "revealed": {
+                    "type": "boolean"
+                  },
+                  "muted_fraction": {
+                    "$ref": "common.json#/$defs/fraction"
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "unobserved": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "audible"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "eyes_on_screen"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "view/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device",
+                  "revealed",
+                  "visible_seconds",
+                  "scrolled_fraction"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "revealed": {
+                    "type": "boolean"
+                  },
+                  "visible_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "scrolled_fraction": {
+                    "$ref": "common.json#/$defs/fraction"
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "unobserved": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "eyes_on_screen"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "play/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device",
+                  "session_seconds",
+                  "input_count",
+                  "ended"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "session_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "input_count": {
+                    "$ref": "common.json#/$defs/count"
+                  },
+                  "ended": {
+                    "enum": [
+                      "finished",
+                      "stopped",
+                      "left"
+                    ]
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "unobserved": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "eyes_on_screen"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "compare/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device",
+                  "order",
+                  "items"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "order": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 6,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 5
+                    }
+                  },
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 6,
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "media_seconds",
+                            "played_seconds",
+                            "realtime_seconds",
+                            "stalled_seconds",
+                            "visible_fraction",
+                            "pauses",
+                            "replays",
+                            "seeks_forward",
+                            "completed"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "listen"
+                            },
+                            "media_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "played_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "realtime_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "stalled_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "visible_fraction": {
+                              "$ref": "common.json#/$defs/fraction"
+                            },
+                            "pauses": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "replays": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "seeks_forward": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "completed": {
+                              "type": "boolean"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "media_seconds",
+                            "played_seconds",
+                            "realtime_seconds",
+                            "stalled_seconds",
+                            "visible_fraction",
+                            "pauses",
+                            "replays",
+                            "seeks_forward",
+                            "completed",
+                            "revealed",
+                            "muted_fraction"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "watch"
+                            },
+                            "media_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "played_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "realtime_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "stalled_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "visible_fraction": {
+                              "$ref": "common.json#/$defs/fraction"
+                            },
+                            "pauses": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "replays": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "seeks_forward": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "completed": {
+                              "type": "boolean"
+                            },
+                            "revealed": {
+                              "type": "boolean"
+                            },
+                            "muted_fraction": {
+                              "$ref": "common.json#/$defs/fraction"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "revealed",
+                            "visible_seconds",
+                            "scrolled_fraction"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "view"
+                            },
+                            "revealed": {
+                              "type": "boolean"
+                            },
+                            "visible_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "scrolled_fraction": {
+                              "$ref": "common.json#/$defs/fraction"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "session_seconds",
+                            "input_count",
+                            "ended"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "play"
+                            },
+                            "session_seconds": {
+                              "$ref": "common.json#/$defs/seconds"
+                            },
+                            "input_count": {
+                              "$ref": "common.json#/$defs/count"
+                            },
+                            "ended": {
+                              "enum": [
+                                "finished",
+                                "stopped",
+                                "left"
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rule": {
+                "const": "answer/1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed": {
+                "type": "object",
+                "required": [
+                  "seat_seconds",
+                  "device"
+                ],
+                "properties": {
+                  "seat_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  },
+                  "device": {
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop",
+                      "unknown"
+                    ]
+                  },
+                  "voice_seconds": {
+                    "$ref": "common.json#/$defs/seconds"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "voice": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "seconds",
+            "transcript_status",
+            "recording_url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "seconds": {
+              "$ref": "common.json#/$defs/seconds"
+            },
+            "transcript_status": {
+              "enum": [
+                "ready",
+                "pending",
+                "none"
+              ]
+            },
+            "transcript": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "recording_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "transcript_status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "transcript": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "transcript_status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "transcript"
+                ],
+                "properties": {
+                  "transcript": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "paid_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "receipt_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "received_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "offer": {
+      "type": "object",
+      "description": "What the person was shown before taking the seat (section 13.3, FAIR-6). A key the server cannot state is null.",
+      "required": [
+        "answered_for",
+        "asker_is_ai",
+        "ask",
+        "kind",
+        "minutes",
+        "pay_per_person_usd",
+        "pay_per_hour_usd",
+        "unpaid",
+        "content_rating",
+        "recorded",
+        "kept_days",
+        "download_bytes",
+        "may_train_on_answers",
+        "panel_size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "answered_for": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asker_is_ai": {
+          "const": true
+        },
+        "ask": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/kind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minutes": {
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pay_per_person_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pay_per_hour_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unpaid": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_rating": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/content_rating"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recorded": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kept_days": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "download_bytes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "may_train_on_answers": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "panel_size": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value",
+          "basis"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "basis": {
+            "$ref": "common.json#/$defs/claim_basis"
+          }
+        }
+      }
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "stopped"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "stop_reason"
+        ],
+        "properties": {
+          "partial": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "answered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "partial": {
+            "const": false
+          },
+          "stop_reason": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "listen"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^listen/"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "watch"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^watch/"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "view"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^view/"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "play"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^play/"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "compare"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^compare/"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "answer"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "properties": {
+              "rule": {
+                "pattern": "^answer/"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

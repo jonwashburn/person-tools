@@ -1,0 +1,11 @@
+{
+  "ask": "Listen once. Then tell me what you felt, in your own words.",
+  "kind": "listen",
+  "content": "m_sample_melody30",
+  "people": 3,
+  "answer_fields": {
+    "felt": "text",
+    "would_play_again": "boolean"
+  },
+  "max_total_usd": "0.00"
+}

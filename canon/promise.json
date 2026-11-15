@@ -1,0 +1,116 @@
+{
+  "about_this_file": "The promise to the people who are called. The text of each line is PLAN.md section 5, word for word. Each line has an id (P1..P12) and a slug the baseline checks after every release (TEAM.md item P6). A line that names a human is published only when ops/HUMAN_JOBS.md names that human; until then it says 'reviewed by the operator'. The checks run in the release checks after every deploy.",
+  "version": 1,
+  "source": "PLAN.md section 5 'The promise'; TEAM.md section 5 item P6",
+  "read": "2026-11-14",
+  "lines": [
+    {
+      "id": "P1",
+      "slug": "see_before_taking",
+      "n": 1,
+      "text": "Before you take a call you see who answers for it, that an AI is asking, how long it takes, what it pays, how it is rated, and what will be recorded.",
+      "check": "GET /v1/seats/{token} returns, before the seat is taken: who answers for the call, asker_is_ai true, minutes, pay or 'UNPAID TEST', content rating, what will be recorded.",
+      "baseline_lines": [
+        "the ring card has every field before the seat is taken"
+      ]
+    },
+    {
+      "id": "P2",
+      "slug": "decline_or_stop_paid",
+      "n": 2,
+      "text": "You can decline, or stop partway, with no mark against you. You are paid from the first second.",
+      "check": "A seat stopped at 40 seconds is paid for 40 seconds; declining leaves no field on the person that a later call reads.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P3",
+      "slug": "offer_held_never_full",
+      "n": 3,
+      "text": "An offer is held for you. You never open a call that is already full.",
+      "check": "A seat offered is held for one person for a minute; a full call never shows its link (take returns 409 and the page says so before any work).",
+      "baseline_lines": [
+        "a full call is never offered to another member"
+      ]
+    },
+    {
+      "id": "P4",
+      "slug": "no_rejection",
+      "n": 4,
+      "text": "No asker can reject your work. Pay is withheld only for proven fraud, shown to you, with an appeal.",
+      "check": "Marking a response 'not counted' leaves its pay and its receipt unchanged; no asker operation withholds pay.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P5",
+      "slug": "no_unpaid_screener",
+      "n": 5,
+      "text": "You are never made to do an unpaid screener.",
+      "check": "Every question a person answers before or during a call is inside a paid (or declared UNPAID TEST) seat; no question is asked before the seat is taken.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P6",
+      "slug": "see_fees",
+      "n": 6,
+      "text": "You see what the asker paid and what each fee was.",
+      "check": "The person's receipt lists what the asker paid and each fee line, matching the ledger.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P7",
+      "slug": "receipts_yours_identity_private",
+      "n": 7,
+      "text": "Your receipts are yours. Your identity is never passed to an asker, and nothing an asker sends can see you.",
+      "check": "The asker's result holds no name, contact or device identity; the asker's server gets no request from the runner; material is served from our own storage.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P8",
+      "slug": "voice_yours",
+      "n": 8,
+      "text": "Your voice is yours: the asker gets your words, and the recording only if you say yes for that call.",
+      "check": "The asker's result holds no recording unless that person said yes for that call.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P9",
+      "slug": "choose_when_rung",
+      "n": 9,
+      "text": "You choose when you can be rung, and never at night unless you say so.",
+      "check": "No ring inside a person's quiet hours (9 PM to 8 AM where they are by default) or while they are Off; a call opened at 3 AM rings nobody and its quote says when it will.",
+      "baseline_lines": [
+        "fence: no ring in quiet hours (3 AM local)",
+        "fence: no ring when Off"
+      ]
+    },
+    {
+      "id": "P10",
+      "slug": "leave_or_delete",
+      "n": 10,
+      "text": "You can leave and take your data with you, or have it deleted, in one tap.",
+      "check": "One tap, after an offer to save receipts, deletes the account, recordings, answers and record; a lookup afterwards finds nothing.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P11",
+      "slug": "report_stops",
+      "n": 11,
+      "text": "You can report any call, and it stops.",
+      "check": "'Stop: this upset me' and 'report this call' stop the call for everyone and create a report a human reads.",
+      "baseline_lines": []
+    },
+    {
+      "id": "P12",
+      "slug": "see_what_changed",
+      "n": 12,
+      "text": "Where the asker tells us, you see what your answer changed.",
+      "check": "A line the asker sends back about what it did with the answers is screened and appears on each person's receipt.",
+      "baseline_lines": []
+    }
+  ],
+  "also": [
+    "On a panel of fewer than five, both sides are told that answers cannot be anonymous.",
+    "A line that names a human ('a person decides your appeal') is published only when ops/HUMAN_JOBS.md names that human; until then the words are 'reviewed by the operator'."
+  ],
+  "baseline_rule": "A line counts as 'checked after every release' only when every baseline line listed for it passed in the newest bin/baseline run that ran to its end, whichever project's deploy ran it. The lists are exact baseline line names; [P<n>] tags in line names win where a line carries one. P7 has three clauses: identity (a [P7] line: the asker's result holds no identity), 'nothing an asker sends can see you' ([P7 part] lines: the call page reaches only our own address, a whole call makes no outside request) and 'your receipts are yours' (a [P10 part] line: the person saves every receipt); all three pass in the 09:13Z baseline, so the count of 12 holds only while all of them pass. The result is written to canon/out/promise_status.json, which every page reads. Tags: '[Pn]' on a passing line checks the whole of Pn; '[Pn part]' checks only part and never counts the promise; any failing '[Pn]' or '[Pn part]' line uncounts it (a broken part breaks the promise). Lines may be printed as 'PROMISE PASS ...'."
+}

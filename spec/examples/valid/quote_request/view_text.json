@@ -1,0 +1,11 @@
+{
+  "ask": "Read this. Is it clear?",
+  "kind": "view",
+  "content": {
+    "text": "Book a table in two taps."
+  },
+  "people": 5,
+  "answer_fields": {
+    "clear": "boolean"
+  }
+}

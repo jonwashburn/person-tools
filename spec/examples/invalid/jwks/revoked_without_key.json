@@ -1,0 +1,16 @@
+{
+  "keys": [
+    {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "kid": "k2"
+    }
+  ],
+  "revoked": [
+    {
+      "kid": "k1",
+      "revoked_at": "2026-11-14T05:00:00Z"
+    }
+  ]
+}

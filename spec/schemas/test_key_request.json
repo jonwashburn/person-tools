@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test_key_request.json",
+  "title": "POST /v1/keys body",
+  "type": "object",
+  "required": [
+    "class"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "class": {
+      "const": "test"
+    },
+    "caps": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "per_call_usd": {
+          "$ref": "common.json#/$defs/money_input"
+        },
+        "per_day_usd": {
+          "$ref": "common.json#/$defs/money_input"
+        }
+      }
+    }
+  }
+}

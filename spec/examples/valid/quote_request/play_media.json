@@ -1,0 +1,21 @@
+{
+  "ask": "Play the first level. Was it fun?",
+  "kind": "play",
+  "content": "m_build_17",
+  "people": 5,
+  "minutes": 10,
+  "answer_fields": {
+    "fun": {
+      "type": "scale",
+      "min": 1,
+      "max": 7,
+      "min_label": "dull",
+      "max_label": "great"
+    },
+    "stuck": {
+      "type": "text",
+      "optional": true,
+      "max_length": 500
+    }
+  }
+}

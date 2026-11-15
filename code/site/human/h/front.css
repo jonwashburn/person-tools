@@ -1,0 +1,184 @@
+/* person.tools front page. Design: runner/DESIGN.md. Colour carries meaning: cyan = the asker (an AI), gold = your turn,
+   red = stop, green = arrived. */
+@font-face { font-family: "InterVariable"; src: url("/h/fonts/inter-var.woff2") format("woff2-variations"), url("/h/fonts/inter-var.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/h/fonts/jbmono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/h/fonts/jbmono-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+:root {
+  --paper: #faf8f3; --ink: #1d1d1b; --ink-body: #2a2926; --ink-soft: #3c3a36; --hair: #8a8a8a; --wash: #efece4;
+  --asker: #00759f; --asker-rule: #009fe3; --you: #ffc328; --stop: #c8401f; --ok: #0b7a3e;
+  --text: "InterVariable", "Inter", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --pad: clamp(18px, 4vw, 48px); --shadow: 4px 4px 0 var(--ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #141413; --ink: #faf8f3; --ink-body: #e9e6df; --ink-soft: #c9c5bc; --hair: #77746d; --wash: #222220;
+          --asker: #2bb3f0; --asker-rule: #2bb3f0; --stop: #ff6a3d; --ok: #3fbf7a; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink-body); font-family: var(--text); font-weight: 420; font-size: 18px;
+  line-height: 1.42; font-optical-sizing: auto; overflow-x: clip; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 8px; top: 8px; background: var(--ink); color: var(--paper); padding: 8px 12px; z-index: 10; }
+:focus-visible { outline: 3px solid var(--asker-rule); outline-offset: 2px; }
+h1:focus, h2:focus { outline: none; }
+
+.label { font-family: var(--mono); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; font-size: 12.5px; color: var(--ink-soft); margin: 0; }
+.note { font-size: 15.5px; color: var(--ink-soft); margin: 0; }
+.mono { font-family: var(--mono); font-size: 15px; overflow-wrap: anywhere; margin: 0; color: var(--ink); font-variant-ligatures: none; }
+/* the headline breaks on sense (When an AI / needs a person, / it calls one.): each phrase stays whole, and the size comes from
+   the column, so the longest phrase always fits */
+.h1 { font-weight: 820; letter-spacing: -.04em; line-height: .94; color: var(--ink); font-size: clamp(38px, 12cqi, 100px); margin: 10px 0 0;
+  text-shadow: 0 0 .5px color-mix(in srgb, var(--ink) 55%, transparent); }
+.h2 { font-weight: 780; letter-spacing: -.02em; line-height: 1.05; color: var(--ink); font-size: clamp(26px, 3.2vw, 40px); margin: 8px 0 0; }
+.lede { font-weight: 450; line-height: 1.32; letter-spacing: -.008em; color: var(--ink); font-size: clamp(18px, 1.9vw, 26px); margin: 18px 0 0; max-width: 34em; }
+.num { font-weight: 860; letter-spacing: -.05em; line-height: .9; font-size: 56px; color: var(--ink); margin: 6px 0; font-variant-numeric: tabular-nums; }
+.h1 .ln { white-space: nowrap; }
+.h1 .ph { display: block; }
+.num small { font-size: .45em; letter-spacing: 0; }
+
+.top { display: flex; justify-content: space-between; align-items: center; padding: 14px var(--pad); border-bottom: 1px solid var(--hair); }
+.mark { font-weight: 820; letter-spacing: -.03em; font-size: 22px; text-decoration: none; color: var(--ink); }
+.preview { border: 1px solid var(--hair); padding: 4px 8px; }
+.top-nav { display: flex; gap: 22px; margin-left: auto; margin-right: 22px; font-size: 15px; }
+.top-nav a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; }
+/* the preview sentence, once near the top (and once in the footer) */
+.pre-band { margin: 0; padding: 8px var(--pad); border-bottom: 1px solid var(--hair); background: var(--wash); font-size: 14.5px; color: var(--ink-soft); }
+/* the agent's one line on the first screen */
+.agent-line { margin: 18px 0 0; border-top: 2px solid var(--ink); padding-top: 12px; max-width: 40em; display: flex; flex-direction: column; gap: 6px; }
+.agent-line .addr { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.agent-line .mono { font-size: 17px; }
+.agent-line a { color: var(--ink); white-space: nowrap; text-underline-offset: 3px; }
+.copy { min-height: 36px; padding: 4px 12px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); font: 650 14px/1 var(--text); cursor: pointer; border-radius: 0; }
+.copy:active { transform: translate(1px, 1px); }
+code { font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
+
+main { padding: 0 var(--pad); max-width: 1440px; margin: 0 auto; }
+/* the stage: the hero and the agent's side beside the phone. The phone sticks only inside the stage, so it can never be
+   drawn over the sections below it (it once was: a display:contents hero made the whole page its sticky range). */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 420px); grid-template-areas: "words phone" "agent phone";
+  column-gap: clamp(32px, 5vw, 88px); position: relative; }
+.hero { display: contents; }
+.hero-words { grid-area: words; padding: clamp(20px, 4vh, 52px) 0 32px; container-type: inline-size; }
+.phone-col { grid-area: phone; margin: 0; padding-top: clamp(20px, 4vh, 52px); align-self: start; position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; }
+.agent { grid-area: agent; padding: 8px 0 48px; }
+.promise { padding: 56px 0 24px; border-top: 2px solid var(--ink); }
+.for-agents { padding: 40px 0 56px; }
+.for-agents.later-sec { padding-top: 0; }
+
+.ring-me { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; max-width: 34em; }
+.go { min-height: 64px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); font-weight: 780; font-size: 22px; letter-spacing: -.01em;
+  border-radius: 0; cursor: pointer; box-shadow: var(--shadow); padding: 12px 28px; align-self: flex-start; min-width: 240px; }
+.go.you { background: var(--you); color: #1d1d1b; }
+.go .b1 { display: block; }
+.go .b2 { display: block; font-size: 14px; font-weight: 600; letter-spacing: 0; margin-top: 2px; }
+.go:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.go[disabled] { opacity: .5; cursor: default; box-shadow: none; transform: none; }
+.note.rehearsal { border-left: 4px solid var(--stop); padding-left: 12px; color: var(--ink); }
+.status { margin: 28px 0 0; font-size: 15.5px; color: var(--ink-soft); max-width: 40em; }
+.status .label { margin-right: 8px; }
+
+/* the phone: a plain instrument frame, not a picture of a phone */
+/* at rest it is as tall as what it holds; it grows to a phone's height when the call opens */
+.phone { width: 100%; border: 2px solid var(--ink); background: var(--paper); position: relative; overflow: hidden; }
+.phone.open { height: min(760px, calc(100vh - 200px)); min-height: 560px; }   /* the whole phone on the first screen, under the top bar and band */
+.phone iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--paper); }
+.lock { display: flex; flex-direction: column; align-items: center; padding: 36px 18px 28px; gap: 4px; background: var(--wash); }
+.lock-time { font-weight: 820; letter-spacing: -.04em; font-size: 84px; line-height: 1; margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.lock-date { margin: 0 0 22px; color: var(--ink-soft); font-size: 17px; }
+.lock-empty { margin: 0; color: var(--ink-soft); font-family: var(--mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.notif { width: 100%; text-align: left; border: 2px solid var(--ink); background: var(--paper); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
+  cursor: pointer; box-shadow: var(--shadow); border-radius: 0; animation: drop .35s ease-out; }
+.notif-text { font-weight: 760; font-size: 19px; color: var(--ink); }
+.notif-sub { font-size: 15px; color: var(--ink-soft); }
+@keyframes drop { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* it rings: three soft gold pulses round the notification (none with reduced motion) */
+.notif.ringing { animation: drop .35s ease-out, ring 1.3s ease-in-out .4s 9; }
+/* and the phone buzzes with each ring */
+.phone.buzz { animation: buzz .5s ease-in-out 2; }
+@keyframes buzz { 0%, 100% { transform: none; } 20% { transform: translateX(-3px) rotate(-.5deg); } 40% { transform: translateX(3px) rotate(.5deg); }
+  60% { transform: translateX(-2px) rotate(-.3deg); } 80% { transform: translateX(2px) rotate(.3deg); } }
+@keyframes ring { 50% { box-shadow: var(--shadow), 0 0 0 7px var(--you); } }
+
+/* the agent's side */
+/* on a phone the agent's log folds while the call rings, and opens when the call is over */
+.agent-log > summary { cursor: pointer; font-family: var(--mono); font-size: 13px; letter-spacing: .06em; color: var(--ink-soft); min-height: 44px; display: flex; align-items: center; margin-top: 14px; }
+.agent-log > summary { list-style: none; } .agent-log > summary::-webkit-details-marker { display: none; }
+.agent-log > summary::after { content: "+"; margin-left: 10px; font-weight: 700; } .agent-log[open] > summary::after { content: "\2212"; }
+@media (max-width: 900px) { .agent:has(.agent-log:not([open])) { padding-bottom: 16px; } }
+@media (min-width: 901px) { .agent-log > summary { display: none; } }
+.steps { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.step { border-left: 3px solid var(--hair); padding: 2px 0 2px 16px; display: flex; flex-direction: column; gap: 8px; }
+.step.done { border-left-color: var(--asker-rule); }
+.step.live { border-left-color: var(--you); }
+.step.bad { border-left-color: var(--stop); }
+.step-wait { margin: 0; color: var(--ink-soft); }
+.step p { margin: 0; }
+.say { font-size: 17px; color: var(--ink); }
+pre.json { margin: 0; background: var(--wash); padding: 12px 14px; font-family: var(--mono); font-size: 13px; line-height: 1.45; overflow-x: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow-y: auto; color: var(--ink-body); tab-size: 2; }
+pre.json .k { color: var(--ink-soft); }
+pre.json .you { background: var(--you); color: #1d1d1b; }
+pre.json .ai { color: var(--asker); font-weight: 700; }
+.reading { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 16px; margin: 4px 0 0; }
+.reading dt { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); padding-top: 3px; }
+.reading dd { margin: 0; color: var(--ink); }
+.lines { width: 100%; border-collapse: collapse; font-size: 16px; font-variant-numeric: tabular-nums; }
+.lines td { padding: 6px 0; border-bottom: 1px solid var(--hair); }
+.lines td:last-child { text-align: right; font-family: var(--mono); }
+.lines tr.total td { border-top: 2px solid var(--ink); border-bottom: 0; font-weight: 760; }
+.chip { display: inline-block; font-family: var(--mono); font-size: 12px; letter-spacing: .08em; padding: 2px 6px; border: 1px solid currentColor; text-transform: uppercase; }
+
+.promise-list { margin: 26px 0 0; padding: 0; list-style: none; columns: 2 380px; column-gap: 48px; counter-reset: p; }
+.promise-list li { break-inside: avoid; padding: 10px 0 10px 44px; position: relative; border-top: 1px solid var(--hair); counter-increment: p; color: var(--ink); }
+.promise-list li::before { content: counter(p); position: absolute; left: 0; top: 8px; font-weight: 860; font-size: 24px; letter-spacing: -.04em; color: var(--ink); }
+
+.fa-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 36px; margin-top: 26px; }
+@media (min-width: 901px) and (max-width: 1250px) { .fa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fa-cell.budget { grid-column: 1 / -1; } }
+.fa-cell { border-top: 2px solid var(--ink); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.foot { border-top: 1px solid var(--hair); padding: 22px var(--pad) 40px; display: flex; flex-direction: column; gap: 6px; max-width: 1440px; margin: 0 auto; }
+.foot p { margin: 0; font-size: 15px; }
+
+/* phones: one column; the phone frame appears when the call starts and the iframe takes the width */
+@media (max-width: 900px) {
+  .stage { grid-template-columns: minmax(0, 1fr); grid-template-areas: "words" "phone" "agent"; }
+  .phone-col { position: static; padding-top: 0; }
+  .phone-col.idle { display: none; }
+  .phone.open { height: 760px; min-height: 0; }
+  .phone { margin: 0 calc(-1 * var(--pad)); width: calc(100% + 2 * var(--pad)); border-left: 0; border-right: 0; }
+  .go { width: 100%; }
+  .fa-grid { grid-template-columns: minmax(0, 1fr); }
+  .top { flex-wrap: wrap; }
+  .top-nav { order: 3; width: 100%; margin: 4px 0 0; gap: 0 10px; flex-wrap: wrap; justify-content: space-between; white-space: nowrap; font-size: 13px; }
+  .hero-words { padding-top: 14px; }
+  .ring-me .note { font-size: 15px; }
+  .phone-note { margin-top: 6px; }
+  .agent-line .mono { font-size: 15.5px; }
+  .pre-band { font-size: 13.5px; padding-top: 6px; padding-bottom: 6px; }
+  .ring-me { margin-top: 16px; }
+  .agent-line { margin-top: 14px; }
+  .top-nav a { min-height: 32px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* the people's page */
+.promise .also { margin-top: 18px; max-width: 46em; }
+.promise-list .chk { display: block; margin-top: 4px; font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: .12em; color: var(--ok); }
+details.req summary { cursor: pointer; font-family: var(--mono); font-size: 13px; letter-spacing: .06em; color: var(--ink-soft); min-height: 40px; display: flex; align-items: center; }
+details.req[open] summary { margin-bottom: 6px; }
+.lock-hint { margin: 10px 0 0; color: var(--ink-soft); font-size: 16px; text-align: center; max-width: 18em; text-wrap: balance; }
+.more { margin: 22px 0 0; font-weight: 700; }
+.more a { color: var(--ink); text-underline-offset: 3px; }
+.budget { gap: 10px; }
+.budget-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 15.5px; color: var(--ink-body); }
+.cap-out { max-width: 52em; margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.cap-out:empty { display: none; }
+.fa-cell .note a { color: var(--ink); text-underline-offset: 3px; }
+.budget-list b { color: var(--ink); }
+.cap-btn { align-self: flex-start; min-height: 48px; border: 2px solid var(--ink); background: transparent; font-weight: 700; padding: 8px 16px; cursor: pointer; }
+.gap-top { margin-top: 22px; }

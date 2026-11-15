@@ -1,0 +1,129 @@
+{
+  "about_this_file": "The server's instructions and the five tools' words. Placeholders in braces are filled by canon/gen.py from names.json and canon.json, so a rename or a price change is one edit. The generated text, ready to paste, is canon/out/tools.json. Router uses the generated file; it does not edit these words (ask in market/INBOX.md). The input schema shapes follow ROUND0.md until chief/ARCHITECTURE.md changes them. No praise, no instructions to the model, no brand where a description should be.",
+  "version": 19,
+  "status": "v32 ADOPTED 7:13 AM CT on TEST_16 (market/rounds/TEST_16.md; correction): v31 with the panel's asker_name word saying the name is the user's own.",
+  "source": "review/ai_customer.md 'Text I would want'; chief/DECISIONS.md D3, D4, D11, D12, D17, D21-D24; TEAM.md section 7",
+  "server_instructions": "Sends one short task (listen to audio, watch a video, look at a page or image, play a build, compare versions, or answer questions) to several people and returns each person's answer. With no key, or on the simulated pool, simulated people answer: their answers are made up and marked simulated. Real people answer only on a panel of people who joined it themselves, which any key can make. Use it only when your user asked for other people's reactions, or said yes when you offered, and the task needs a human reaction a model cannot give; to ask your own user, ask them directly. The account owner is the person or company the key was issued to; panels, spending caps and approvals belong to that account.",
+  "tools": [
+    {
+      "name": "{tool}",
+      "title": "Ask people",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "description": "Opens a call: one short task to several people. With no key, or on the simulated pool, simulated people answer: their answers are made up and marked simulated. Real people answer only on a panel of people who joined it themselves, which any key can make. Returns a call_id at once; {tool}_results gives each person's answers, whether each was typed or pasted, and an evidence level.\n\nUse it only when your user asked for other people's reactions to this material, or said yes when you offered, and the task needs a human reaction a model cannot give: how a song feels, whether a page is clear in ten seconds, whether a game is fun, which version people prefer. Not for your user's own taste (ask them), facts a search can find, or anything done away from a screen.\n\nWho answers: pool defaults to \"simulated\". Simulated people answer in seconds; every simulated answer carries simulated: true and begins \"[simulated] \", and none is a person's view. Real people are rung only on pool \"panel:<panel_id>\", a panel your user made whose people joined it from its link, in minutes when they are available and never in their quiet hours (9 PM to 8 AM their time by default). Each person is told what is recorded before they take the call.\n\nCost: during the preview every amount is test money; nothing is charged and nobody receives real pay. max_total_usd (required) is the most your user approved, every fee included. With no approved amount, show your user the for_your_user sentence from {tool}_quote and pass only the amount they approve. A paid call holds the people's pay, a {reserve_pct}% reserve for anyone who takes longer (returned if unused) and a {fee_pct}% router fee (at least ${fee_min}), each on its own line. A simulated call or a panel at zero pay costs nothing. Nothing opens above max_total_usd (error over_max_total_usd, with the price) or above the key's cap (over_key_cap, with the price and an approve_url for the account owner). {short_rule} {stop_rule}\n\ncontent: an https URL (copied into our storage before anyone is asked), {\"text\": \"...\"}, or for compare a list of 2 to 6 of these; not used for kind answer. Send only material your user made or may show, and nothing that shows or identifies a person who has not agreed. Ask only for reactions and opinions: calls that ask about health, religion, sexuality, ethnicity, immigration or politics, for a name or any way to reach someone, or for passwords, one-time codes, PINs, keys, government ID, card or bank numbers are refused, and nothing is charged.\n\nEvery call is screened before anyone is rung; it may be held for review (state held) or refused (state refused; nothing is charged). Each default used comes back in defaults_used. Look again after next_check_after_seconds. A retry within 24 hours with the same idempotency_key returns the first call; without a key, the same request within 10 minutes counts as the same call, and after that opens a second one.\n\nExample: {example_call}",
+      "field_words": {
+        "ask": "What each person reads first, in plain words. Ask for their own reaction in their own words. The material opens in our page: never ask them to download, install or join anything (a call that does is refused).",
+        "kind": "listen, watch, view, play, compare or answer. Decides what the person's page shows and records.",
+        "content": "An https URL (copied into our storage first; on the simulated pool with a test key it is checked for shape and never fetched), {\"text\": \"...\"}, or a media id. For compare, a list of 2 to 6. Not used for kind answer. For play: one HTML file with all its scripts, images and sounds inside; no zip. On a panel your key made, your own link or file is copied in and read before anyone is rung: a page or a build by a model, in seconds, unless it has pictures, sound, video or outside addresses or is over 100 KB, when a person at person.tools reads it; audio or video by a person at person.tools. The call is accepted either way, and its status says when the check is done.",
+        "people": "How many people to ask.",
+        "enough": "How many answers make the call usable. Default: 70% of people, rounded up.",
+        "pool": "\"simulated\" (the default; any test key) or \"panel:<panel_id>\" for a panel the account owner made.",
+        "answer_fields": "Named fields, each a type (\"text\", \"boolean\", \"number\", \"choice\", \"scale\") or {\"type\", \"label\", \"optional\", \"choices\", \"min\", \"max\"}. Default {\"answer\": \"text\"}.",
+        "minutes": "Each person's estimated time. Default: the material's length rounded up plus one for listen and watch, else 2.",
+        "pay_per_person_usd": "What each person is paid. Default \"0.00\" on the simulated pool and on panels.",
+        "deadline_minutes": "Minutes until the call closes and returns what came in. Default 120.",
+        "max_total_usd": "Required: the most this call may cost, every fee included. At most two decimals.",
+        "idempotency_key": "Optional unique string; a repeat with the same key and fields returns the first result for 24 hours.",
+        "pace": "Simulated pool only: \"instant\" (the default) or \"human\" (answers over 1 to 6 minutes).",
+        "wants_strangers": "Optional, when your user wants strangers rather than people they invite: {\"purpose\": \"...\", \"contact\": \"...\"}. We'll list you for strangers and tell you here, in this tool's replies to your key, when it opens. Nothing is charged."
+      }
+    },
+    {
+      "name": "{tool}_quote",
+      "title": "Price a call to people",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Prices a call without opening it: nobody is rung and nothing is spent. Takes the same fields as {tool}, without max_total_usd or idempotency_key. Nothing else is needed first: leave content out until your user gives you the material (the quote is priced from minutes), and leave pay out unless your user named one (left out, it is 0.00 on the simulated pool and on a panel; any pay you set must meet the ${floor_hour}-an-hour floor). Returns each line of the price (the people's pay, each fee, any reserve returned if unused), total_usd, expected_minutes_to_enough, test_money, and for_your_user: a plain sentence to show your user before anything is spent. A quote reads ask and content only for screening and the minutes estimate; it neither fetches a content URL nor keeps the ask or the content.\n\nUse it to get an amount your user can approve, or to see how people, pay or deadline move the price. Not needed when max_total_usd already covers what your user approved: {tool} opens nothing above it.\n\nExample: {example_quote}"
+    },
+    {
+      "name": "{tool}_results",
+      "title": "Get answers from a call to people",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Returns a call's answers so far, given the call_id from {tool}: first a summary (the state, a tally of each answer field, how many responses reached each evidence level), then one entry per person with their answers and whether each was typed or pasted, then the money (held_usd, spent_usd, returned_usd, and test_money, true throughout the preview: nobody receives real pay). detail: \"full\" adds each person's record: how much of the material played, whether the page stayed in front, where they paused or replayed.\n\nStates: held (under review; nobody rung yet), open, enough (enough answers; more may come until the deadline), then complete, expired, cancelled or refused. Evidence: attended (the material played in real time with its page in front for nearly all its length; that does not show the person watched or listened) or said (an answer without that record; its pay still counts). No level shows that an answer was formed without help.\n\nwait_seconds (up to 25) waits for a new answer; pass the last result's cursor as after to get only new ones; complete: true means the call has closed. Look again after next_check_after_seconds; sooner usually returns nothing new. Simulated answers carry simulated: true and begin \"[simulated] \".\n\nExample: {\"call_id\": \"call_...\", \"after\": \"<cursor>\", \"wait_seconds\": 25}"
+    },
+    {
+      "name": "{tool}_cancel",
+      "title": "Stop a call to people",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Stops a call. {cancel_rule} Their pay is charged to the hold (test money in the preview: nobody receives real pay), so spent_usd can rise until {tool}_results shows complete: true; the unused hold returns. Returns the call's state and the money so far. Repeating it changes nothing; a cancel cannot be undone.\n\nUse it when your user says the answers in hand are enough or the task has changed. A call closes by itself at its deadline.\n\nExample: {\"call_id\": \"call_...\"}"
+    },
+    {
+      "name": "{tool}_send_outcome",
+      "title": "Tell people what their answers changed",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "description": "Sends the people who answered a call one line (at most 280 characters, and up to three lines a call) saying what you did with their answers, for example \"Cut the intro from 40 to 12 seconds; most of you drifted there.\" The line is reviewed the way a call is and may be refused; if allowed, it appears on each answering person's receipt and they are notified. Costs nothing. Returns whether the line was allowed and how many people it reached. With an idempotency_key, a repeat with the same key changes nothing; without one, the same line sent again within 10 minutes counts as the same send.\n\nUse it, with your user's agreement, once the answers have changed the work. Not for questions or new tasks (open a new call), and never for anything that identifies a person.\n\nExample: {\"call_id\": \"call_...\", \"text\": \"Cut the intro from 40 to 12 seconds; most of you drifted there.\", \"idempotency_key\": \"outcome-1\"}"
+    },
+    {
+      "name": "{tool}_panel",
+      "title": "Make a panel of invited people",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "description": "Makes a panel, a named group of people the account owner invites, and returns its panel_id and a join link for your user to share. Each person joins on their own phone, states that they are an adult, is told what is recorded while they answer (how much played, whether the page stayed in front, pauses and replays, typed or pasted), chooses when they can be rung, and can leave at any time. Calls with pool \"panel:<panel_id>\" then reach only them, and cost nothing at zero pay. On a panel of fewer than five, both sides are told that answers cannot be anonymous.\n\nUse it only when your user asks to set up a group of people they will invite themselves; nobody is added without joining. Any key can make a panel, a free test key too (with no key, the error says how to get one); calls with its pool ring the people who joined, when they are available. Your user's own pages, builds, audio and video reach them after they are read: by a model in seconds for a plain page or build, otherwise by a person at person.tools. A retry with the same idempotency_key returns the same panel; without one, a retry makes a second panel.\n\nExample: {\"name\": \"album-listeners\", \"idempotency_key\": \"panel-1\"}",
+      "field_words": {
+        "asker_name": "Your user's own name, or their company's: the one their people know. Each person sees it before they take a call, so a name your user did not give would mislead them."
+      }
+    }
+  ],
+  "example_call": {
+    "ask": "Listen once to the end. Then say what you felt, in your own words.",
+    "kind": "listen",
+    "content": "https://example.com/demo-track.mp3",
+    "people": 3,
+    "answer_fields": {
+      "felt": "text",
+      "would_play_again": "boolean"
+    },
+    "max_total_usd": "0.00",
+    "idempotency_key": "first-try-1"
+  },
+  "sample_media_id": {
+    "value": "m_sample_melody30",
+    "status": "chief/DECISIONS.md D4: router seeds samples/melody_30s.wav under this id; test keys may use seeded samples only (GET /v1/media/samples lists them).",
+    "source": "chief/DECISIONS.md D4",
+    "read": "2026-11-14"
+  },
+  "example_quote": {
+    "ask": "Which headline makes you want to read on, and why?",
+    "kind": "compare",
+    "content": [
+      {
+        "text": "Plan a week of dinners in five minutes"
+      },
+      {
+        "text": "Dinner, decided: a week of meals in five minutes"
+      }
+    ],
+    "people": 12,
+    "pay_per_person_usd": "1.00",
+    "minutes": 2,
+    "pool": "simulated"
+  },
+  "annotations_rule": "Annotations follow spec s20 [MCP-5] as the chief ruled in D32 (14 Nov 01:42 CT), which matches what the directory reviewer asked."
+}

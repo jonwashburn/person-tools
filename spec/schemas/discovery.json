@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "discovery.json",
+  "title": "Discovery, GET /.well-known/{{wire_prefix}} (section 5)",
+  "type": "object",
+  "required": [
+    "protocol",
+    "versions",
+    "api_base",
+    "mcp",
+    "mcp_protocol_versions",
+    "jwks_uri",
+    "kinds",
+    "pools",
+    "screening_policy",
+    "retention"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "{{wire_prefix}}"
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "version",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+$"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "stable",
+              "deprecated"
+            ]
+          }
+        }
+      }
+    },
+    "api_base": {
+      "type": "string",
+      "pattern": "^(https://[^/\\s]+|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)$",
+      "description": "The host of the API, with no path (section 5); paths such as /v1/quotes are taken from it."
+    },
+    "mcp": {
+      "$ref": "common.json#/$defs/server_url"
+    },
+    "openapi": {
+      "$ref": "common.json#/$defs/server_url"
+    },
+    "jwks_uri": {
+      "$ref": "common.json#/$defs/server_url"
+    },
+    "mcp_protocol_versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "contains": {
+        "enum": [
+          "2026-07-28",
+          "2025-11-25",
+          "2025-06-18"
+        ]
+      }
+    },
+    "kinds": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "common.json#/$defs/kind"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "listen"
+          }
+        },
+        {
+          "contains": {
+            "const": "view"
+          }
+        },
+        {
+          "contains": {
+            "const": "answer"
+          }
+        }
+      ],
+      "description": "The core is listen, view and answer; every server accepts those (DISC-2)."
+    },
+    "features": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "enum": [
+          "keyless",
+          "url_content",
+          "media_upload",
+          "outcome",
+          "voice",
+          "panels"
+        ]
+      }
+    },
+    "pools": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "contains": {
+        "const": "simulated"
+      },
+      "items": {
+        "type": "string",
+        "pattern": "^(simulated|panel|[a-z0-9][a-z0-9._-]{0,63})$"
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "enum": [
+          "{{wire_prefix}}/fair-call/0.1"
+        ]
+      }
+    },
+    "screening_policy": {
+      "$ref": "common.json#/$defs/server_url"
+    },
+    "test_keys": {
+      "$ref": "common.json#/$defs/server_url"
+    },
+    "pay_terms": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1000,
+      "description": "Terms that pay differently from the table of section 12.3 (MONEY-8); null when none."
+    },
+    "privacy_floor": {
+      "type": "integer",
+      "minimum": 20,
+      "default": 20
+    },
+    "pay_floor_usd_per_hour": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_people": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50
+        },
+        "max_deadline_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10080
+        },
+        "max_wait_seconds": {
+          "type": "integer",
+          "minimum": 20,
+          "default": 20
+        },
+        "stop_minimum_usd": {
+          "$ref": "common.json#/$defs/money",
+          "default": "0.00"
+        }
+      },
+      "description": "Absent fields take the defaults of section 5."
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recordings_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "responses_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "records_days": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "ext": {
+      "$ref": "common.json#/$defs/ext"
+    }
+  },
+  "additionalProperties": false
+}

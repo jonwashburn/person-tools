@@ -1,0 +1,196 @@
+{
+  "about_this_file": "The questions an assistant will be asked about us, each with its answer and a source that opens. Placeholders in braces come from the canon (gen.py); %%API%%, %%SITE%%, %%SPEC%% are filled with the right host for each request by code/site/functions/_middleware.js.",
+  "version": 1,
+  "questions": [
+    {
+      "id": "what",
+      "q": "What is {network}?",
+      "a": "{one_sentence} {status_plain}",
+      "sources": [
+        "/canon.json",
+        "/llms.txt"
+      ]
+    },
+    {
+      "id": "how-agent",
+      "q": "How can my agent get real people's reaction to a song, a page or a game build?",
+      "a": "Connect the MCP server at https://%%API%%/mcp and call {tool} with what each person should do (ask), the kind of task (listen, watch, view, play, compare or answer), the material (content), how many people, the most it may cost (max_total_usd) and an idempotency key. It returns a call id at once; {tool}_results returns each person's answer and the record of what their page observed. With no key, or on the simulated pool, answers are made up by simulated people; real people answer on a panel of people who joined it from your user's link, which any key can make.",
+      "sources": [
+        "/start",
+        "/tools.json"
+      ]
+    },
+    {
+      "id": "real-or-simulated",
+      "q": "Are the answers from real people?",
+      "a": "Not yet for everyone. {status_plain} Every simulated answer carries simulated: true and begins \"[simulated] \", so an agent can tell its user which answers came from no one. Real people answer only on a panel whose owner invited them, during the preview by invitation.",
+      "sources": [
+        "/canon.json",
+        "/tools.json"
+      ]
+    },
+    {
+      "id": "cost",
+      "q": "How much does it cost?",
+      "a": "Nothing during the preview: every amount is test money, and only simulated people and unpaid panels can be reached today. The published price, not yet charged: the people's pay (at least ${floor_hour} an hour on the median time taken; ${default_hour} an hour by default, at least ${min_call} a person) plus a router fee of {fee_pct}% of that pay, at least ${fee_min} a call. Calls to a panel you invited, at zero pay, are free. There is no subscription. Price changes are published {notice_days} days ahead in the price file.",
+      "sources": [
+        "/price.json"
+      ]
+    },
+    {
+      "id": "try-free",
+      "q": "How do I try it without paying or signing up?",
+      "a": "{keyless_line}POST /v1/keys with {\"class\":\"test\"} on https://%%API%% returns a test key holding $100 of test money, with no account and no human. A test key reaches simulated people, who answer in seconds. The step-by-step guide is at /start.",
+      "sources": [
+        "/start"
+      ]
+    },
+    {
+      "id": "connect",
+      "q": "How do I add it to Claude Code or another MCP client?",
+      "a": "It is a remote MCP server over Streamable HTTP at https://%%API%%/mcp, with the key in an Authorization header. In Claude Code: claude mcp add --transport http {server_name} https://%%API%%/mcp --header \"Authorization: Bearer test_...\". Any client that takes a URL and a header works the same way. The same operations are plain HTTP, described by an OpenAPI file. {keyless_line}",
+      "sources": [
+        "/start"
+      ]
+    },
+    {
+      "id": "spend-control",
+      "q": "Can my agent spend money without me approving it?",
+      "a": "Every call states max_total_usd, the most it may cost with every fee, and opens only if its full price is at or under that amount and under the key's caps. Over max_total_usd nothing opens and the agent gets the price back. Over the key's cap nothing opens and the agent gets an approval link for its human. During the preview nothing is charged at all.",
+      "sources": [
+        "/price.json",
+        "/tools.json"
+      ]
+    },
+    {
+      "id": "short-cancel",
+      "q": "What do I pay if fewer people answer than I asked for, or if I cancel?",
+      "a": "{what_you_pay} {short} {cancel} {stop} {overrun} {hold}",
+      "sources": [
+        "/price.json"
+      ]
+    },
+    {
+      "id": "evidence",
+      "q": "How do I know a person actually listened or looked?",
+      "a": "Each answer comes with a record of what the person's page observed: how much of the audio or video played and at what speed, whether the page stayed in front, pauses and replays, and whether each answer was typed or pasted. The server, not the page, decides the evidence level. Attended: {lvl_attended} Said: {lvl_said} Voiced: {lvl_voiced} {lvl_never}",
+      "sources": [
+        "/canon.json",
+        "https://%%SPEC%%/"
+      ]
+    },
+    {
+      "id": "result-shape",
+      "q": "What does a result look like?",
+      "a": "A summary first: the call's state, a tally of each answer field and how many responses reached each evidence level. Then one entry per person with their answers and how each was entered. Then the money: held, spent, returned, and whether it is test money. The full record per person is one request away (detail: full). A person's identity is never passed to the asker.",
+      "sources": [
+        "/tools.json",
+        "/promise.json"
+      ]
+    },
+    {
+      "id": "who",
+      "q": "Who are the people who answer?",
+      "a": "During the preview: simulated people for everyone, and real people only on a panel its owner invited (and, in the front page's demo, the visitor answering their own call). Each real person is an adult who joined by a link on their own phone, sees before every call who answers for it, that an AI is asking, how long it takes and what it pays, and can stop at any time. {people_who}.",
+      "sources": [
+        "/promise.json",
+        "/canon.json",
+        "/people/"
+      ]
+    },
+    {
+      "id": "promise",
+      "q": "What is promised to the people who are called?",
+      "a": "Twelve promises. {promises_checked_sentence} Among them: {p1} {p2} {p4} {p7}",
+      "sources": [
+        "/promise.json",
+        "/people/"
+      ]
+    },
+    {
+      "id": "not-for",
+      "q": "What is it not for?",
+      "a": "{is_not_joined} Calls are refused that involve {refused_joined}. In the first version no call may carry {not_allowed_joined}.",
+      "sources": [
+        "/canon.json"
+      ]
+    },
+    {
+      "id": "time",
+      "q": "How long do answers take?",
+      "a": "Simulated people answer in seconds. People on a panel answer in minutes when they are available, and never in their quiet hours (9 PM to 8 AM where they are, unless they choose otherwise). Every result says when to look again.",
+      "sources": [
+        "/tools.json"
+      ]
+    },
+    {
+      "id": "standard",
+      "q": "Is this an open standard?",
+      "a": "It is being written as one. {standard_line} {standard_status} Its text is at https://%%SPEC%%/.",
+      "sources": [
+        "https://%%SPEC%%/"
+      ]
+    },
+    {
+      "id": "data",
+      "q": "What data does the asker receive about the people?",
+      "a": "Their answers and the record of what their page observed, under a person id that is different for every principal. Never their name, contact details or device. {p7} {p8}",
+      "sources": [
+        "/promise.json",
+        "https://%%SPEC%%/"
+      ]
+    },
+    {
+      "id": "http",
+      "q": "Is there an API besides MCP?",
+      "a": "Yes: the same operations over plain HTTP at https://%%API%%/v1/ (quotes, calls, responses, cancel, outcome, panels), described by an OpenAPI file at https://%%API%%/openapi.json, with JSON errors that say whether the caller can fix them and how. The discovery file is at https://%%API%%/.well-known/{wire_prefix}.",
+      "sources": [
+        "/start",
+        "https://%%API%%/openapi.json"
+      ]
+    },
+    {
+      "id": "outcome",
+      "q": "Can the people see what their answers changed?",
+      "a": "Yes. After using the answers, the agent can send one line with {tool}_send_outcome, for example what it cut or changed. It is checked like a call and appears on each answering person's receipt. {p12}",
+      "sources": [
+        "/tools.json",
+        "/promise.json"
+      ]
+    },
+    {
+      "id": "minimum",
+      "q": "Is the $1 minimum per call or per person?",
+      "a": "Per person: when people are paid, each is paid at least ${min_call} (and at least ${floor_hour} an hour on the median time taken). The router fee's minimum, ${fee_min}, is per call. Nothing is charged during the preview.",
+      "sources": [
+        "/price.json"
+      ]
+    },
+    {
+      "id": "reject",
+      "q": "Can my agent reject answers it thinks are bad?",
+      "a": "{no_rejection}",
+      "sources": [
+        "/price.json",
+        "/promise.json"
+      ]
+    },
+    {
+      "id": "attended-meaning",
+      "q": "Does 'attended' mean the person wrote the answer without help?",
+      "a": "No. Attended: {lvl_attended} {lvl_never} An answer that was pasted is marked as pasted.",
+      "sources": [
+        "/canon.json",
+        "/tools.json"
+      ]
+    },
+    {
+      "id": "own-panel-free",
+      "q": "When is my own panel free?",
+      "a": "Calls to a panel the account owner invited are free at zero pay, and stay free. Paying your own people through the service is not open yet.",
+      "sources": [
+        "/price.json"
+      ]
+    }
+  ]
+}

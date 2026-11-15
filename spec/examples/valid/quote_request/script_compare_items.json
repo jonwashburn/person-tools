@@ -1,0 +1,50 @@
+{
+  "ask": "Which mix sounds warmer?",
+  "kind": "compare",
+  "content": [
+    "https://example.com/mix-a.mp3",
+    "https://example.com/mix-b.mp3"
+  ],
+  "people": 2,
+  "pool": "simulated",
+  "answer_fields": {
+    "warmer": {
+      "type": "choice",
+      "choices": [
+        "first",
+        "second"
+      ]
+    },
+    "why": "text"
+  },
+  "voice": {
+    "max_seconds": 30
+  },
+  "script": [
+    {
+      "order": [
+        1,
+        0
+      ],
+      "items": [
+        {
+          "media_seconds": 40,
+          "play_fraction": 1
+        },
+        {
+          "media_seconds": 38,
+          "play_fraction": 0.5
+        }
+      ],
+      "answer_input": {
+        "why": "spoken"
+      },
+      "voice_seconds": 12,
+      "share_recording": true,
+      "seat_seconds": 95
+    },
+    {
+      "answer_input": "pasted"
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "call_id": "call_2b9x0c4v6n8m1q3w5e7r",
+  "status": "expired",
+  "complete": false,
+  "deadline": "2026-11-14T06:55:00Z",
+  "summary": {
+    "simulated": false,
+    "people": 8,
+    "enough": 5,
+    "offered": 9,
+    "taken": 1,
+    "answered": 6,
+    "stopped": 1,
+    "declined": 1,
+    "missed": 0,
+    "withdrawn": 0,
+    "evidence": {
+      "attended": 5,
+      "said": 1,
+      "voiced": 0,
+      "said_because": {
+        "played 41% of the audio": 1
+      }
+    },
+    "tally": {
+      "would_play_again": {
+        "true": 4,
+        "false": 2
+      },
+      "drift_at_seconds": {
+        "n": 3,
+        "min": 41,
+        "median": 88,
+        "max": 97
+      },
+      "felt": {
+        "n": 6
+      }
+    }
+  },
+  "responses": [
+    {
+      "response_id": "r_5t6y7u8i9o0p1a2s3d4f",
+      "simulated": false,
+      "person_ref": "pp_k2j3h4g5f6d7s8a9q0w1",
+      "kind": "listen",
+      "status": "answered",
+      "partial": false,
+      "evidence": "attended",
+      "level_reason": "played all 30 seconds at normal speed, page in front throughout",
+      "answers": {
+        "felt": "It opened up at the key change, then I lost it.",
+        "would_play_again": true,
+        "drift_at_seconds": 97
+      },
+      "answer_input": {
+        "felt": "typed",
+        "would_play_again": "tapped",
+        "drift_at_seconds": "typed"
+      },
+      "voice": null,
+      "minutes": 1.2,
+      "paid_usd": "2.00",
+      "receipt_id": "rc_1q2w3e4r5t6y7u8i9o0p",
+      "received_at": "2026-11-14T06:21:13Z"
+    },
+    {
+      "response_id": "r_stop0000000000000001",
+      "simulated": false,
+      "person_ref": "pp_stop000000000000001",
+      "kind": "listen",
+      "status": "stopped",
+      "stop_reason": "stopped",
+      "partial": true,
+      "evidence": "said",
+      "level_reason": "played 41% of the audio",
+      "answers": {
+        "felt": "Too slow to start."
+      },
+      "answer_input": {
+        "felt": "typed"
+      },
+      "voice": null,
+      "minutes": 0.5,
+      "paid_usd": "0.52",
+      "receipt_id": "rc_stop0000000000000001",
+      "received_at": "2026-11-14T06:22:40Z"
+    }
+  ],
+  "money": {
+    "held_usd": "21.60",
+    "spent_usd": "14.08",
+    "returned_usd": "0.00",
+    "test_money": false
+  },
+  "cursor": "7",
+  "next_check_after_seconds": 60,
+  "next_step": "The call has expired; one person is still in a seat and may still answer."
+}

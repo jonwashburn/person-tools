@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test_key.json",
+  "title": "A test key (section 18.1)",
+  "type": "object",
+  "required": [
+    "key",
+    "class",
+    "principal_id",
+    "balance_usd",
+    "caps",
+    "test_money"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^test_[A-Za-z0-9_-]{8,200}$"
+    },
+    "class": {
+      "const": "test"
+    },
+    "principal_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "balance_usd": {
+      "$ref": "common.json#/$defs/money"
+    },
+    "caps": {
+      "type": "object",
+      "required": [
+        "per_call_usd",
+        "per_day_usd"
+      ],
+      "additionalProperties": false,
+      "description": "The key's caps; null where none was set.",
+      "properties": {
+        "per_call_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "per_day_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "test_money": {
+      "const": true
+    }
+  }
+}

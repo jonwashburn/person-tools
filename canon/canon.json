@@ -1,0 +1,225 @@
+{
+  "about_this_file": "The one record of who we are, what is offered and what has been shown. Every surface (tool text, text index, price file, discovery files, pages) is generated from canon/names.json, this file, canon/promise.json and canon/tools.json. Each fact appears once, with its source and the date it was last read. Changes go through its owner.",
+  "version": 1,
+  "updated": "2026-11-14T02:02:00-06:00",
+  "names_file": "canon/names.json",
+  "identity": {
+    "one_sentence": "{network} lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person's answer with a record of what their page observed.",
+    "longer": "An agent needs something only a person can give: what a song feels like, whether a game is fun, which of two pages is clearer in ten seconds. It makes one tool call saying who it needs, what they should do, what it pays and by when. Matching people are rung, each does the thing on a phone in a page that records what happened, and the agent gets back each person's answer with that record. On a paid call each person is paid; on every call each person keeps a signed receipt.",
+    "is_not": [
+      "Not a way to reach your own user. To ask your own user, ask them directly.",
+      "Not for facts a search can find, or for work a model can do alone.",
+      "Not for anything a person must do away from a screen.",
+      "Not a way to get opinions from a model. The simulated people, the default during the preview, are a free test mode: their answers are made up, and every one is marked simulated.",
+      "Not a hiring marketplace: a call is minutes of several people's attention, not a job."
+    ],
+    "three_things": {
+      "standard": "{standard}: an open definition of the call that anyone may implement, under the Apache License 2.0; version 0.1 is a draft.",
+      "software": "Software that runs it (the router an agent talks to, the page a person opens when rung, adapters to pools of people, and a conformance suite), to be published as open source. Not yet public.",
+      "network": "The hosted router, at the API address in the discovery file, with the pools behind it. This is the part that will charge a fee."
+    },
+    "source": "PLAN.md sections 1 and 4; owner/GRANTS.md line d",
+    "read": "2026-11-14",
+    "short": {
+      "value": "Human feedback, user testing and surveys: your own people in two minutes; strangers on request.",
+      "max_chars": 100,
+      "use": "registry description and other 100-character fields",
+      "read": "2026-11-15",
+      "why": "the CEO's sentence, live since the own-panels gate opened (6:25 AM CT, 15 Nov), in the registry entry tools.person/human-feedback (owner republishes as 0.1.1)"
+    },
+    "also_called": {
+      "value": [
+        "human feedback",
+        "user testing",
+        "usability testing",
+        "playtesting",
+        "surveys",
+        "testers",
+        "participants",
+        "human tasks"
+      ],
+      "use": "the words agents search for (TEST_9c, 15 Nov 2026); llms.txt and every listing that takes tags",
+      "read": "2026-11-15"
+    },
+    "real_people_line": {
+      "value": "Real people: your own in two minutes; strangers on request.",
+      "live": true,
+      "note": "The CEO's sentence (owner/OWNER_all_6.md, 3:56 AM CT, 15 Nov 2026). Shown only when live is true: set it the hour SERVICE's bring-your-own-people release (a private panel and join link for any key, and the in-band ask for strangers) is live, not before. In the same edit, change status.plain's 'Real calls by invitation' to match (e.g. 'Real calls to people you invite; strangers on request'), so no surface says both.",
+      "read": "2026-11-15",
+      "went_live": "2026-11-15, 6:27 AM CT, when the owner opened the own-panels gate (owner note of 6:25 AM CT)"
+    }
+  },
+  "status": {
+    "stage": "preview",
+    "plain": "A preview. Simulated people for everyone, free. Your own people answer for real: they join your panel from a link on their phones, and your calls ring them. Strangers are not offered yet: ask for them in the call (wants_strangers), and your request and contact go to the operator. No money is charged: every amount is test money.",
+    "simulated_for_everyone": true,
+    "real_calls": "a real person is rung only on a panel they joined themselves from a link on their own phone; since 15 Nov 2026, 6:25 AM CT (the owner's yes on the own-panels gate), any key's calls ring the people who joined its own panel, when they are available and never in their quiet hours; a self-made key never rings strangers; the front page's demo (Call me) rings the visitor themselves with one of a few fixed asks",
+    "money": "test money only; no card is charged and nobody is paid through the service during the preview",
+    "standard_text": "draft; the identifiers on the wire carry the placeholder '{wire_prefix}' and change once, when version 0.1 is published as final",
+    "names": "working names: {network} for the service, {standard} for the standard, {tool} for the tool",
+    "source": "TEAM.md section 7 'Truth on every surface'; owner/GRANTS.md lines d, f, g, j",
+    "read": "2026-11-15"
+  },
+  "offer": {
+    "what_is_sold": "A call: one task sent to several people, a record of what each did, and a price shown before anything is spent.",
+    "kinds": {
+      "listen": "hear a piece of audio, then answer",
+      "watch": "watch a video, then answer",
+      "view": "look at a page or an image, then answer",
+      "play": "play a build, then answer",
+      "compare": "see or hear two to six versions, then say which and why",
+      "answer": "answer questions with nothing to play first"
+    },
+    "kinds_live": {
+      "value": [],
+      "note": "Filled from the live router's discovery file once each kind is seen working on live. Empty means none confirmed yet.",
+      "read": "2026-11-14"
+    },
+    "pools": {
+      "simulated": {
+        "who": "simulated people, generated by the service, never a real person",
+        "reachable_with": "any test key",
+        "cost": "free",
+        "marked": "every answer carries simulated: true",
+        "speed": "seconds; on request, the pace of real people"
+      },
+      "own_panel": {
+        "who": "people the principal invited by a join link, each an adult who joined on their own phone",
+        "reachable_with": "any key, a free test key too: a key reaches the people who joined the panels it made",
+        "cost": "free at zero pay, and it stays free",
+        "speed": "minutes when its people are on; never during a person's quiet hours"
+      },
+      "planned_not_reachable": {
+        "value": [
+          "a vetted outside panel of paid strangers (not open)",
+          "our own pool of paid people in the United States (not open)"
+        ],
+        "rule": "Never listed as reachable on any surface until a call can go through it. Never named after another company."
+      },
+      "source": "PLAN.md section 3 'Pools' and section 11; ROUND0.md 'Keys'",
+      "read": "2026-11-14"
+    },
+    "price": {
+      "source_file": "money/price.json",
+      "block": "public",
+      "rule": "Every price number is read from money/price.json 'public' block (and its examples marked public) by the generators. Nothing here repeats a number. 'internal_only' never reaches a surface.",
+      "plain_status": "Published price, not yet charged. During the preview every amount is test money.",
+      "read": "2026-11-14"
+    },
+    "terms": {
+      "max_total": "Every call states max_total_usd, the most it may cost. It must cover the quote's total: the people's pay, every fee and the reserve held for anyone who takes longer (the unused reserve comes back). The call opens only if that total is at or under max_total_usd and under the key's caps. Otherwise nothing opens and the quote comes back.",
+      "over_cap": "A call over a key's cap opens nothing and returns the price and a link where the human can approve it.",
+      "what_you_pay": "Always within max_total_usd: people who finished, at the quoted pay; people who stopped, for their time; each fee on those amounts; nothing for people never rung.",
+      "short": "If fewer people answer than asked, you pay for those who answered and anyone who stopped partway; anyone still in a seat at the deadline may finish and is paid in full; the rest of the hold returns.",
+      "cancel": "On cancel, nobody new is rung; people already in a seat may finish and are paid in full.",
+      "overrun": "A person who takes longer than estimated is topped up to the floor from the reserve; past the reserve the operator bears it; never above max_total_usd.",
+      "hold": "The unused hold returns to the balance when the call closes, and the result says how much.",
+      "no_rejection": "No asker can reject a person's work. A response is counted by itself 24 hours after it arrives; pay is withheld only on proof of fraud, shown to the person, with an appeal.",
+      "retries": "Every request that changes something carries an idempotency key; a repeat returns the first result.",
+      "errors": "Errors are JSON with code, message and fixable; when fixable, the field and a corrected example.",
+      "price_changes": "Changes to the price are published 30 days ahead in the price file.",
+      "status": "From policy/PAY_RULES.md (rules 1-3) and money/price.json, read 14 Nov 2026 12:40 AM CT",
+      "source": "policy/PAY_RULES.md; money/price.json public.stop_pay and public.acceptance; PLAN.md sections 2 and 4",
+      "read": "2026-11-14",
+      "stop": "A person who stops partway is paid for the time spent, at least 25 cents or the full pay if less; 'Stop: this upset me' pays in full."
+    },
+    "how_it_starts": {
+      "value": "An agent can price a call and make simulated calls with no key and no money. A free test key adds a balance and caps. Real people are rung only on a panel whose members joined it themselves, from its join link on their own phones; any key can make one, a free test key too. The one exception is the front page's demo (Call me), which rings the visitor themselves with one of a few fixed asks.",
+      "source": "PLAN.md section 2 'What that forces'",
+      "read": "2026-11-14"
+    },
+    "how_it_ends": {
+      "value": "A call closes at its deadline, when everyone asked has answered, or when the asker cancels. What came in is returned with the unspent part of the hold.",
+      "source": "PLAN.md section 10 'What an asker can rely on'; ROUND0.md",
+      "read": "2026-11-14"
+    },
+    "rely_on": {
+      "value": [
+        "A status page fed by real checks (/status).",
+        "A call that misses its deadline returns what it has and the unspent part of the hold.",
+        "A version of the standard stays served for at least twelve months after its successor is listed as stable.",
+        "Instructions an agent can follow from nothing to a first call, with examples (/start)."
+      ],
+      "source": "PLAN.md section 10",
+      "read": "2026-11-14"
+    },
+    "refused": {
+      "value": [
+        "making or verifying accounts",
+        "one-time codes, passwords or keys",
+        "paid follows, likes, reviews or posts",
+        "posing as someone else",
+        "contacting a third party",
+        "collecting personal data about named people",
+        "moving the person to another platform",
+        "anything sexual or involving minors",
+        "getting round a ban",
+        "testing a scam or a deception",
+        "any task in the physical world"
+      ],
+      "not_allowed_in_first_version": [
+        "violent, sexual, medical or grief material, warned or not"
+      ],
+      "held_for_review": [
+        "distressing content",
+        "political persuasion",
+        "anything touching health, religion or sexuality",
+        "a new principal spending over $500"
+      ],
+      "status": "WORKING until policy/POLICY.md exists; then that file wins",
+      "source": "PLAN.md section 6 'What a call may ask'",
+      "read": "2026-11-14"
+    },
+    "keyless_simulated": {
+      "value": true,
+      "rule": "Set true only after a call with no Authorization header was seen to open on the live API (chief D25). It changes the first-call guide and the questions.",
+      "checked": "2026-11-14 1:38 AM CT: POST /v1/calls with no Authorization opened call_wz29cs9wwwa8sjr8f9nvfd75bc (simulated)"
+    },
+    "own_panel_material": {
+      "value": "copy_in",
+      "lines": {
+        "text_only": "Today a call to your own people carries text and questions; sending them your own pages, builds and recordings opens next.",
+        "copy_in": "Your own pages and builds reach your people after a model reads them; your own audio and video after a person at person.tools has checked it."
+      },
+      "source": "OWNER_all_8 (the CEO, 9:26 AM CT 15 Nov 2026): copy-in for own panels YES; audio/video checked by a person. Set value to copy_in the hour SERVICE's copy-in is live.",
+      "read": "2026-11-15"
+    }
+  },
+  "people": {
+    "who": "adults only, in the United States, in English at first",
+    "told": "A person who is rung is told that an AI is asking and who answers for the call, before they take it.",
+    "promise_file": "canon/promise.json",
+    "small_panel": "On a panel of fewer than five, both sides are told that answers cannot be anonymous.",
+    "source": "PLAN.md section 5",
+    "read": "2026-11-14"
+  },
+  "evidence_levels": {
+    "said": "An answer, without a record that shows the person took in the material. Still paid.",
+    "attended": "The record shows the material played in front of the person by the rule for its kind.",
+    "voiced": "Attended, and the person also gave a spoken answer of at least 3 seconds in the same seat (recorded only with that person's yes; not offered during the preview).",
+    "never": "No level shows that an answer was formed without help. A person is never given a score.",
+    "status": "WORKING until spec/ 0.1 fixes the rule for each kind",
+    "source": "spec s14 (as served at https://askpeople-spec.pages.dev/0.1.md, 14 Nov 2026 1:38 AM CT); PLAN.md sections 3 and 4",
+    "read": "2026-11-14"
+  },
+  "record": {
+    "entries": [],
+    "note": "No real call has been answered yet, so no promise has yet been kept for a real person. checks_on_live lists the promise lines that the release checks confirm on the live service with our own headless test members, with the date of the last check (UTC). Each real-call entry will carry a date, what was promised, what happened, and the call id that shows it.",
+    "as_of": "2026-11-14T01:10:00-06:00"
+  },
+  "contact": {
+    "value": null,
+    "note": "No public address yet. Asked of the owner in chief/FOR_OWNER.md."
+  },
+  "proof": {
+    "first_call": {
+      "title": "The first real call",
+      "text": "On 15 November 2026 at 10:26 AM CT, one of our own programs asked a real person on the operator's own panel to listen once to a 30-second piece of music, then say what they felt and the one thing they would change. The answer came at 10:28 AM CT, under two minutes later: \"Calm\", and \"It's boring and dull\". The record shows 74% of the audio played.",
+      "outcome_lead": "The answer changed the work:",
+      "outcome": "the front-page sample was replaced the same morning. The new one has a beat, a bass line, chords and a hook.",
+      "call_id": "call_4jeizuxreeun5nzumgzgbiuzxq",
+      "source": "owner/OWNER_market_4.md (10:30 AM CT 15 Nov 2026) and owner/R1_CALL.json (created 16:26:58Z); /v1/proof answered_at 16:28:17Z. The outcome comes from /v1/proof outcome_line; never typed before operations writes it. Outcome sentence: operations, 10:49 AM CT (third person, our words; the outcome line to the person stays as written).",
+      "read": "2026-11-15"
+    }
+  }
+}

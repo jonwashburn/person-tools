@@ -1,0 +1,46 @@
+{
+ "id": "voice-release-1",
+ "title": "Before you speak an answer, please read this.",
+ "lede": "You can always type instead.",
+ "items": [
+  {
+   "n": 1,
+   "label": "What is recorded",
+   "text": "When you choose to answer by voice on a call, we record what you say, from when you tap Record until you tap Stop. Nothing else: not before, not after, not on any other call."
+  },
+  {
+   "n": 2,
+   "label": "It is your choice every time",
+   "text": "Each call asks again. Saying no never changes your pay or whether you are rung."
+  },
+  {
+   "n": 3,
+   "label": "What the asker gets",
+   "text": "The words you said and their timing. The recording itself only if you say yes on that call's screen."
+  },
+  {
+   "n": 4,
+   "label": "What nobody may do with it",
+   "text": "Nobody, we or the asker, may use your recording to tell who you are, compare your voice with any other, clone it, or train any speech or voice model. We never make a voiceprint."
+  },
+  {
+   "n": 5,
+   "label": "How long",
+   "text": "Recordings are deleted 90 days after the call closes, or sooner if you ask; a rule in our storage deletes them on time. Words written from a recording are kept like your typed answers (up to 13 months)."
+  },
+  {
+   "n": 6,
+   "label": "Who writes the words",
+   "text": "None is named yet. Until one is named, a spoken answer is kept as \"transcript pending\" and only its length reaches the asker."
+  },
+  {
+   "n": 7,
+   "label": "Changing your mind",
+   "text": "You can delete any recording, or all of them, from your page at any time."
+  }
+ ],
+ "accept": "I have read this and agree to record my spoken answer on this call",
+ "decline": "Type instead",
+ "status": "draft for counsel, not in force: shown on simulated and team-test calls only until the voice rules are live",
+ "source": "legal/RECORDING_RELEASE.md"
+}

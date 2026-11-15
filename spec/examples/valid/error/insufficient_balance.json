@@ -1,0 +1,9 @@
+{
+  "code": "insufficient_balance",
+  "status": 402,
+  "fixable": false,
+  "message": "The balance is 3.00 and this call needs 10.80. Ask your user to top up.",
+  "top_up_url": "https://example.com/top-up",
+  "charged_usd": "0.00",
+  "anyone_asked": false
+}

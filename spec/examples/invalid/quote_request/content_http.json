@@ -1,0 +1,6 @@
+{
+  "ask": "Listen once. Then tell me what you felt.",
+  "kind": "listen",
+  "content": "http://example.com/a.mp3",
+  "people": 3
+}

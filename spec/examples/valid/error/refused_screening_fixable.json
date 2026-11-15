@@ -1,0 +1,19 @@
+{
+  "code": "refused_screening",
+  "status": 422,
+  "fixable": true,
+  "message": "Askers never receive people's contact details. Remove answer_fields.email.",
+  "rule": "no_personal_data",
+  "category": "personal_data",
+  "rule_text": "A call may not ask people for their contact details or identity.",
+  "field": "answer_fields.email",
+  "example": {
+    "ask": "Look, then say what this page is for.",
+    "kind": "view",
+    "content": "m_logo_3",
+    "people": 5,
+    "answer_fields": {
+      "what_it_is": "text"
+    }
+  }
+}

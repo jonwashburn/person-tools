@@ -1,0 +1,636 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "error.json",
+  "title": "An error (section 8; codes in section 24)",
+  "type": "object",
+  "required": [
+    "code",
+    "message",
+    "status",
+    "fixable"
+  ],
+  "properties": {
+    "code": {
+      "$ref": "common.json#/$defs/error_code"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+    },
+    "fixable": {
+      "type": "boolean"
+    },
+    "field": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A dotted path in the body, or a header name (ERR-2)."
+    },
+    "example": {
+      "description": "A value for field that would not cause this error, or null to remove the field; never a whole body (ERR-2, SCREEN-3)."
+    },
+    "rule": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rule_text": {
+      "type": "string"
+    },
+    "category": {
+      "$ref": "common.json#/$defs/screening_category"
+    },
+    "charged_usd": {
+      "const": "0.00"
+    },
+    "anyone_asked": {
+      "const": false
+    },
+    "quote": {
+      "$ref": "quote.json"
+    },
+    "approve_url": {
+      "$ref": "common.json#/$defs/abs_url"
+    },
+    "top_up_url": {
+      "$ref": "common.json#/$defs/abs_url"
+    },
+    "retry_after_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "did_you_mean": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.json#/$defs/pool"
+      }
+    },
+    "type": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "problems": {
+      "type": "array",
+      "minItems": 1,
+      "description": "s8: several fixes at once; the top-level field and example repeat the first.",
+      "items": {
+        "type": "object",
+        "required": [
+          "field"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "example": {},
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "invalid_json"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          },
+          "field": {
+            "const": "body"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "missing_field"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "invalid_field"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "unknown_field"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          },
+          "example": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "unauthorized"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 401
+          },
+          "fixable": {
+            "const": true
+          },
+          "field": {
+            "const": "Authorization"
+          },
+          "example": {
+            "const": "Bearer test_..."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "forbidden_for_key_class"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "not_found"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 404
+          },
+          "fixable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "idempotency_key_reused"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 409
+          },
+          "fixable": {
+            "const": true
+          },
+          "field": {
+            "const": "idempotency_key"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "over_max_total_usd"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "over_key_cap"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 402
+          },
+          "fixable": {
+            "const": false
+          }
+        },
+        "required": [
+          "quote",
+          "approve_url"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "insufficient_balance"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 402
+          },
+          "fixable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "below_pay_floor"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "unknown_pool"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        },
+        "required": [
+          "pools"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "unknown_selector"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "selector_unsupported"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "privacy_floor"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "content_unavailable"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "content_too_large"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 413
+          },
+          "fixable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "unsupported_feature"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "refused_screening"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 422
+          }
+        },
+        "required": [
+          "rule",
+          "category",
+          "rule_text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "outcome_not_allowed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 409
+          },
+          "fixable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "version_unsupported"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 400
+          },
+          "fixable": {
+            "const": true
+          },
+          "field": {
+            "const": "{{wire_prefix}}-version"
+          }
+        },
+        "required": [
+          "versions"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "rate_limited"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 429
+          },
+          "fixable": {
+            "const": false
+          }
+        },
+        "required": [
+          "retry_after_seconds"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "internal"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": 500
+          },
+          "fixable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fixable": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "field",
+          "example"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "on_call": {
+      "description": "An error in answer to POST /v1/calls (ERR-3).",
+      "allOf": [
+        {
+          "$ref": "error.json"
+        }
+      ],
+      "required": [
+        "charged_usd",
+        "anyone_asked"
+      ]
+    }
+  }
+}

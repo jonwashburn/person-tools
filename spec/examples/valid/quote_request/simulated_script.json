@@ -1,0 +1,29 @@
+{
+  "ask": "Listen once. Then tell me what you felt.",
+  "kind": "listen",
+  "content": "m_sample_melody30",
+  "people": 4,
+  "pool": "simulated",
+  "pace": "human",
+  "script": [
+    {
+      "accept": true,
+      "play_fraction": 1,
+      "answers": {
+        "answer": "Calm."
+      }
+    },
+    {
+      "accept": false
+    },
+    {
+      "accept": "miss"
+    },
+    {
+      "stop_at_fraction": 0.4,
+      "stop_reason": "upset",
+      "send_partial": false,
+      "seat_seconds": 48
+    }
+  ]
+}

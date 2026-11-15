@@ -1,0 +1,26 @@
+{
+  "response_id": "r_vcd00000000000000001",
+  "simulated": false,
+  "person_ref": "pp_vcd00000000000000001",
+  "kind": "answer",
+  "status": "answered",
+  "partial": false,
+  "evidence": "voiced",
+  "level_reason": "a spoken answer of 6 seconds",
+  "answers": {
+    "name": "Lunch."
+  },
+  "answer_input": {
+    "name": "spoken"
+  },
+  "voice": {
+    "seconds": 6,
+    "transcript_status": "ready",
+    "transcript": "Lunch, I'd say.",
+    "recording_url": null
+  },
+  "minutes": 0.4,
+  "paid_usd": "0.50",
+  "receipt_id": "rc_vcd00000000000000001",
+  "received_at": "2026-11-14T06:21:13Z"
+}

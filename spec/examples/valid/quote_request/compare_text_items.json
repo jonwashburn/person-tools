@@ -1,0 +1,24 @@
+{
+  "ask": "Which headline makes you want to read on?",
+  "kind": "compare",
+  "content": [
+    {
+      "text": "Fusion in a straight line"
+    },
+    {
+      "text": "A reactor you can draw with a ruler"
+    }
+  ],
+  "people": 12,
+  "answer_fields": {
+    "preferred": {
+      "type": "choice",
+      "choices": [
+        "first",
+        "second",
+        "neither"
+      ]
+    },
+    "why": "text"
+  }
+}

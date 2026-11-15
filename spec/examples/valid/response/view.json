@@ -1,0 +1,20 @@
+{
+  "response_id": "r_view0000000000000001",
+  "simulated": false,
+  "person_ref": "pp_view000000000000001",
+  "kind": "view",
+  "status": "answered",
+  "partial": false,
+  "evidence": "attended",
+  "level_reason": "revealed and on screen for 11 seconds",
+  "answers": {
+    "what_it_is": "A booking app."
+  },
+  "answer_input": {
+    "what_it_is": "pasted"
+  },
+  "minutes": 0.7,
+  "paid_usd": "1.00",
+  "receipt_id": "rc_view0000000000000001",
+  "received_at": "2026-11-14T06:21:13Z"
+}

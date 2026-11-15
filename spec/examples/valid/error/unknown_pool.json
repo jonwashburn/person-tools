@@ -1,0 +1,12 @@
+{
+  "code": "unknown_pool",
+  "status": 400,
+  "fixable": true,
+  "message": "No pool named panel:nope for this key.",
+  "field": "pool",
+  "example": "simulated",
+  "pools": [
+    "simulated",
+    "panel:p_family"
+  ]
+}

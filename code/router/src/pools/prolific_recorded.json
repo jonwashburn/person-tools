@@ -1,0 +1,18 @@
+{
+  "about": "Answers shaped like Prolific's documented REST interface (https://api.prolific.com/api/v1/, header 'Authorization: Token <token>'), for the recorded mode. Request paths and request fields come from research/supply_panels.md; the RESPONSE field names below (id, status, participant_id, entered_code, started_at, completed_at) are as remembered from Prolific's public API reference and are UNVERIFIED until the first live read (PROLIFIC_GO_LIVE.md step 4). Nothing here is a real person.",
+  "responses": {
+    "POST /studies/": { "id": "recorded_study_1", "status": "UNPUBLISHED" },
+    "POST /studies/{id}/transition/": { "id": "recorded_study_1", "status": "ACTIVE" },
+    "GET /studies/{id}/": { "id": "recorded_study_1", "status": "ACTIVE", "total_available_places": 0, "places_taken": 0 },
+    "GET /studies/{id}/submissions/": { "results": [] },
+    "POST /submissions/{id}/transition/": { "status": "APPROVED" }
+  },
+  "participants": [
+    { "participant_id": "recorded_pid_01", "arrive_after_seconds": 2, "script": { "delay_seconds": 4 } },
+    { "participant_id": "recorded_pid_02", "arrive_after_seconds": 3, "script": { "delay_seconds": 5, "play_fraction": 0.6 } },
+    { "participant_id": "recorded_pid_03", "arrive_after_seconds": 4, "script": { "delay_seconds": 6, "stop_at_fraction": 0.3 } },
+    { "participant_id": "recorded_pid_04", "arrive_after_seconds": 5, "script": { "delay_seconds": 7 } },
+    { "participant_id": "recorded_pid_05", "arrive_after_seconds": 6, "script": { "delay_seconds": 8, "visible_fraction": 0.5 } },
+    { "participant_id": "recorded_pid_06", "arrive_after_seconds": 7, "script": { "delay_seconds": 9 } }
+  ]
+}

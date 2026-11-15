@@ -1,0 +1,55 @@
+{
+  "call_id": "call_2b9x0c4v6n8m1q3w5e7r",
+  "status": "complete",
+  "complete": true,
+  "summary": {
+    "simulated": true,
+    "people": 3,
+    "enough": 3,
+    "answered": 3,
+    "stopped": 0,
+    "evidence": {
+      "attended": 3,
+      "said": 0,
+      "voiced": 0
+    },
+    "tally": {
+      "would_play_again": {
+        "true": 2,
+        "false": 1
+      }
+    }
+  },
+  "responses": [
+    {
+      "response_id": "r_5t6y7u8i9o0p1a2s3d4f",
+      "simulated": true,
+      "person_ref": "pp_k2j3h4g5f6d7s8a9q0w1",
+      "kind": "listen",
+      "status": "answered",
+      "evidence": "attended",
+      "partial": false,
+      "level_reason": "played all 30 seconds at normal speed, page in front throughout",
+      "answers": {
+        "felt": "[simulated] Calm at first; the last bars felt unresolved.",
+        "would_play_again": true
+      },
+      "answer_input": {
+        "felt": "typed",
+        "would_play_again": "tapped"
+      },
+      "minutes": 1.5,
+      "paid_usd": "0.00",
+      "receipt_id": "rc_1q2w3e4r5t6y7u8i9o0p",
+      "received_at": "2026-11-14T06:25:06Z"
+    }
+  ],
+  "money": {
+    "held_usd": "0.00",
+    "spent_usd": "0.00",
+    "returned_usd": "0.00"
+  },
+  "cursor": "3",
+  "next_check_after_seconds": null,
+  "next_step": "All three answered. Ask for detail=full to see each person's record."
+}

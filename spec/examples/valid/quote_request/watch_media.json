@@ -1,0 +1,13 @@
+{
+  "ask": "Watch the trailer. When did you lose interest?",
+  "kind": "watch",
+  "content": "m_trailer_v2",
+  "people": 4,
+  "answer_fields": {
+    "lost_at_seconds": {
+      "type": "number",
+      "min": 0,
+      "optional": true
+    }
+  }
+}

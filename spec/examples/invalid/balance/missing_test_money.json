@@ -1,0 +1,9 @@
+{
+  "balance_usd": "89.20",
+  "held_usd": "10.80",
+  "caps": {
+    "per_call_usd": "25.00",
+    "per_day_usd": "100.00"
+  },
+  "spent_today_usd": "7.02"
+}

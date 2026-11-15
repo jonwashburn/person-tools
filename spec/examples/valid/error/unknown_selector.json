@@ -1,0 +1,8 @@
+{
+  "code": "unknown_selector",
+  "message": "instrument is not a selector; ask it as an answer field.",
+  "status": 400,
+  "fixable": true,
+  "field": "require.instrument",
+  "example": null
+}

@@ -1,0 +1,707 @@
+{
+ "suite": "0.1.0-draft.1",
+ "target": "https://api.person.tools",
+ "when": "2026-11-14 14:24 CST",
+ "counts": {
+  "PASS": 73,
+  "FAIL": 0,
+  "SKIP": 1
+ },
+ "results": [
+  {
+   "check": "D01",
+   "status": "PASS",
+   "reqs": [
+    "DISC-1",
+    "DISC-2",
+    "PEOPLE-3",
+    "SIM-1",
+    "MCP-1"
+   ],
+   "line": "protocol x-hc-draft, kinds listen,watch,view,play,compare,answer, pools simulated,panel, features ['keyless', 'url_content', 'outcome', 'panels'], profiles ['x-hc-draft/fair-call/0.1']"
+  },
+  {
+   "check": "D05",
+   "status": "PASS",
+   "reqs": [
+    "DISC-5",
+    "AUTH-1"
+   ],
+   "line": "voice->unsupported_feature; media_upload->unsupported_feature"
+  },
+  {
+   "check": "D02",
+   "status": "PASS",
+   "reqs": [
+    "VER-1",
+    "VER-2"
+   ],
+   "line": "answered 0.1; 9.9 -> version_unsupported ['0.1']"
+  },
+  {
+   "check": "D03",
+   "status": "PASS",
+   "reqs": [
+    "DISC-4"
+   ],
+   "line": "1 Ed25519 key(s)"
+  },
+  {
+   "check": "D04",
+   "status": "PASS",
+   "reqs": [
+    "SCREEN-5"
+   ],
+   "line": "https://person.tools/policy"
+  },
+  {
+   "check": "A01",
+   "status": "PASS",
+   "reqs": [
+    "AUTH-1",
+    "ERR-1",
+    "ERR-2",
+    "HTTP-2"
+   ],
+   "line": "unknown key -> 401 unauthorized, field Authorization, example 'Bearer test_...'; keyless call to a panel -> 401; samples open"
+  },
+  {
+   "check": "A04",
+   "status": "PASS",
+   "reqs": [
+    "AUTH-5",
+    "HTTP-1"
+   ],
+   "line": "keyless quote and unpaid call served, paid keyless call -> forbidden_for_key_class; fresh refs; call_5x7fcbzn8exp3cjtdfb4qzqtdg read by its id; a keyed call read keylessly -> not_found"
+  },
+  {
+   "check": "A02",
+   "status": "PASS",
+   "reqs": [
+    "SIM-6",
+    "AUTH-2",
+    "CONV-1"
+   ],
+   "line": "test key issued, balance 100.00 (test money)"
+  },
+  {
+   "check": "A03",
+   "status": "PASS",
+   "reqs": [
+    "AUTH-4"
+   ],
+   "line": "test key making a panel -> 403 forbidden_for_key_class"
+  },
+  {
+   "check": "Q01",
+   "status": "PASS",
+   "reqs": [
+    "CALL-2",
+    "MONEY-1",
+    "MONEY-2",
+    "MONEY-4",
+    "CONV-1"
+   ],
+   "line": "total 0.00, defaults ['answer_fields', 'content_rating', 'deadline_minutes', 'enough', 'may_train_on_answers', 'minutes', 'pace', 'pay_per_person_usd', 'pool']"
+  },
+  {
+   "check": "Q02",
+   "status": "PASS",
+   "reqs": [
+    "CONV-2",
+    "ERR-2"
+   ],
+   "line": "unknown field -> unknown_field, example null, did_you_mean people; ext accepted"
+  },
+  {
+   "check": "Q03",
+   "status": "PASS",
+   "reqs": [
+    "CALL-1",
+    "ERR-2"
+   ],
+   "line": "missing people, kind 'smell', people 0, people 100+1 each fixable with field and example"
+  },
+  {
+   "check": "Q04",
+   "status": "PASS",
+   "reqs": [
+    "ERR-1",
+    "HTTP-2"
+   ],
+   "line": "non-JSON and non-object bodies -> invalid_json"
+  },
+  {
+   "check": "Q05",
+   "status": "PASS",
+   "reqs": [
+    "CALL-3",
+    "CONV-1"
+   ],
+   "line": "2 (number) accepted and returned as '2.00'; 2.005 refused"
+  },
+  {
+   "check": "Q06",
+   "status": "PASS",
+   "reqs": [
+    "DISC-2",
+    "DISC-5"
+   ],
+   "line": "listen:ok watch:ok view:ok play:ok compare:ok answer:ok"
+  },
+  {
+   "check": "Q10",
+   "status": "PASS",
+   "reqs": [
+    "ERR-2",
+    "HTTP-4",
+    "HTTP-2"
+   ],
+   "line": "unknown pool -> pools ['simulated', 'self']; unknown media id -> content_unavailable (example 'm_sample_melody30'); unknown route and method -> 404 JSON"
+  },
+  {
+   "check": "Q11",
+   "status": "PASS",
+   "reqs": [
+    "CALL-1"
+   ],
+   "line": "missing people before a panel pool; unknown field before missing; kind before people; pool before require"
+  },
+  {
+   "check": "Q12",
+   "status": "PASS",
+   "reqs": [
+    "HTTP-5"
+   ],
+   "line": "samples for ['listen', 'play', 'view', 'watch']"
+  },
+  {
+   "check": "Q07",
+   "status": "PASS",
+   "reqs": [
+    "PEOPLE-5",
+    "PEOPLE-7"
+   ],
+   "line": "unknown -> unknown_selector; religion refused (unknown_selector); namespaced -> selector_unsupported; country -> 200"
+  },
+  {
+   "check": "Q08",
+   "status": "PASS",
+   "reqs": [
+    "CALL-4",
+    "SIM-5"
+   ],
+   "line": "script longer than people + 20 and bad pace -> invalid_field; unknown script field -> unknown_field"
+  },
+  {
+   "check": "Q09",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-10"
+   ],
+   "line": "17.99 for 60 minutes -> below_pay_floor, example 18.00"
+  },
+  {
+   "check": "Q13",
+   "status": "PASS",
+   "reqs": [
+    "CALL-7",
+    "MONEY-13",
+    "MONEY-14"
+   ],
+   "line": "quote without content priced, defaults_used.content 'none yet: priced from minutes'; a call at its quote's total 2.75 opened; for_your_user present"
+  },
+  {
+   "check": "C01",
+   "status": "PASS",
+   "reqs": [
+    "CALL-2",
+    "CALL-6",
+    "SIM-1",
+    "SIM-3",
+    "AUTH-2"
+   ],
+   "line": "call_id7dgd3mpafcfmnm26g79ua9iv opened open"
+  },
+  {
+   "check": "C02",
+   "status": "PASS",
+   "reqs": [
+    "IDEM-2"
+   ],
+   "line": "replays returned call_id7dgd3mpafcfmnm26g79ua9iv (C08 checks the balance did not move)"
+  },
+  {
+   "check": "C03",
+   "status": "PASS",
+   "reqs": [
+    "IDEM-3",
+    "ERR-3"
+   ],
+   "line": "same key, different body -> 409 idempotency_key_reused"
+  },
+  {
+   "check": "C04",
+   "status": "PASS",
+   "reqs": [
+    "CALL-1"
+   ],
+   "line": "missing max_total_usd -> missing_field"
+  },
+  {
+   "check": "C07",
+   "status": "PASS",
+   "reqs": [
+    "IDEM-1",
+    "IDEM-2"
+   ],
+   "line": "keyed: same call call_36mpjmm6tgrtswuxw5nnfpegmz; keyless: same call call_dfbyzznwdze7xdk2ve4v7r6rxv"
+  },
+  {
+   "check": "B01",
+   "status": "PASS",
+   "reqs": [
+    "CONV-1",
+    "MONEY-4"
+   ],
+   "line": "balance 97.75, held 0.00 (test money)"
+  },
+  {
+   "check": "C08",
+   "status": "PASS",
+   "reqs": [
+    "IDEM-2",
+    "MONEY-5",
+    "STATE-2",
+    "STATE-5"
+   ],
+   "line": "open held 1.50 = total; replay moved nothing; after cancel the call read cancelled/complete:false until the seat ended, then paid in full"
+  },
+  {
+   "check": "C09",
+   "status": "PASS",
+   "reqs": [
+    "IDEM-2",
+    "IDEM-3"
+   ],
+   "line": "an error does not bind a key; '1.00' equals 1; keys are scoped per operation"
+  },
+  {
+   "check": "C10",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-5",
+    "SIM-6"
+   ],
+   "line": "a 1.00 per-call cap refused a 2.75 call with over_key_cap and an approve_url"
+  },
+  {
+   "check": "C05",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-5",
+    "ERR-2"
+   ],
+   "line": "total 8.10 over 0.01 -> over_max_total_usd, example 8.10"
+  },
+  {
+   "check": "C06",
+   "status": "PASS",
+   "reqs": [
+    "ERR-3"
+   ],
+   "line": "6 errors, each charged_usd 0.00 and anyone_asked false"
+  },
+  {
+   "check": "R01",
+   "status": "PASS",
+   "reqs": [
+    "STATE-2",
+    "RES-2",
+    "SIM-1"
+   ],
+   "line": "complete in 6.0 s"
+  },
+  {
+   "check": "R02",
+   "status": "PASS",
+   "reqs": [
+    "SIM-2",
+    "RES-4",
+    "RES-5"
+   ],
+   "line": "5 responses, all simulated:true, text prefixed"
+  },
+  {
+   "check": "R03",
+   "status": "PASS",
+   "reqs": [
+    "RES-3"
+   ],
+   "line": "tally equals a recount for text, boolean, scale, choice, multiple choice, number"
+  },
+  {
+   "check": "R04",
+   "status": "PASS",
+   "reqs": [
+    "KIND-1",
+    "KIND-6",
+    "RES-5"
+   ],
+   "line": "5 compact and 9 full responses well formed"
+  },
+  {
+   "check": "R05",
+   "status": "PASS",
+   "reqs": [
+    "EVID-2",
+    "EVID-3",
+    "SIM-4",
+    "SIM-5",
+    "MONEY-8"
+   ],
+   "line": "full -> attended; half played, double speed, half visible -> said; all paid 1.00; two runs identical"
+  },
+  {
+   "check": "R13",
+   "status": "PASS",
+   "reqs": [
+    "SIM-7",
+    "SIM-5"
+   ],
+   "line": "generated answers and observed defaults follow SIM-7 for seats 1 to 3"
+  },
+  {
+   "check": "R06",
+   "status": "PASS",
+   "reqs": [
+    "EVID-2",
+    "KIND-3"
+   ],
+   "line": "text view: 20 s -> attended, 3 s -> said, revealed true for text"
+  },
+  {
+   "check": "R07",
+   "status": "PASS",
+   "reqs": [
+    "EVID-2"
+   ],
+   "line": "answer kind -> said"
+  },
+  {
+   "check": "R08",
+   "status": "PASS",
+   "reqs": [
+    "KIND-2"
+   ],
+   "line": "orders [(1, 0), (0, 1), (0, 1), (0, 1)]"
+  },
+  {
+   "check": "R09",
+   "status": "PASS",
+   "reqs": [
+    "RES-1",
+    "RES-2",
+    "IDEM-4",
+    "STATE-2"
+   ],
+   "line": "wait 5 answered in 6.4 s; cancel twice -> cancelled; complete False with 2 taken"
+  },
+  {
+   "check": "R10",
+   "status": "PASS",
+   "reqs": [
+    "RES-8",
+    "MONEY-9",
+    "RCPT-1"
+   ],
+   "line": "offer carries all 14 keys; unpaid shown; receipt_jws verifies"
+  },
+  {
+   "check": "R11",
+   "status": "PASS",
+   "reqs": [
+    "RES-1",
+    "RES-2"
+   ],
+   "line": "after=<cursor> returns nothing already seen; wait_seconds=999 is clamped"
+  },
+  {
+   "check": "R12",
+   "status": "SKIP",
+   "reqs": [
+    "RES-6",
+    "EVID-2",
+    "PRIV-2"
+   ],
+   "line": "the server does not list the feature voice (D05 checks how it answers instead)"
+  },
+  {
+   "check": "M01",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-8",
+    "STATE-2",
+    "SIM-5"
+   ],
+   "line": "stop at 48 s paid 0.80; upset paid 2.00; 3 answered at 2.00; status expired"
+  },
+  {
+   "check": "M02",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-5",
+    "MONEY-6",
+    "MONEY-7",
+    "STATE-2"
+   ],
+   "line": "held 10.80 = spent 9.60 + returned 1.20; spent = receipts' pay + fees"
+  },
+  {
+   "check": "M03",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-9"
+   ],
+   "line": "every seat on an unpaid call paid 0.00"
+  },
+  {
+   "check": "M04",
+   "status": "PASS",
+   "reqs": [
+    "STATE-3",
+    "STATE-2"
+   ],
+   "line": "past its deadline the call reads expired; seats still taken, so not yet complete (STATE-2)"
+  },
+  {
+   "check": "K01",
+   "status": "PASS",
+   "reqs": [
+    "RCPT-1",
+    "DISC-4"
+   ],
+   "line": "kid rk_65c9cec16498, signature verifies, 16 fields"
+  },
+  {
+   "check": "K02",
+   "status": "PASS",
+   "reqs": [
+    "RCPT-3",
+    "RCPT-4"
+   ],
+   "line": "genuine -> valid, on record; tampered -> invalid, decoded, not on record; malformed and missing -> 200 valid:false"
+  },
+  {
+   "check": "K03",
+   "status": "PASS",
+   "reqs": [
+    "RCPT-1"
+   ],
+   "line": "2 stopped seats each have a verifying receipt"
+  },
+  {
+   "check": "O01",
+   "status": "PASS",
+   "reqs": [
+    "OUT-2",
+    "OUT-3",
+    "IDEM-1",
+    "IDEM-2"
+   ],
+   "line": "delivered to 5; repeat was a retry; call lists it; receipt rev 2 with it in outcomes; rev 1 verifies"
+  },
+  {
+   "check": "O02",
+   "status": "PASS",
+   "reqs": [
+    "OUT-3"
+   ],
+   "line": "three lines accepted, the fourth -> outcome_not_allowed"
+  },
+  {
+   "check": "O03",
+   "status": "PASS",
+   "reqs": [
+    "OUT-1"
+   ],
+   "line": "barred line refused (credentials)"
+  },
+  {
+   "check": "N01",
+   "status": "PASS",
+   "reqs": [
+    "HTTP-1",
+    "HTTP-2"
+   ],
+   "line": "random id and another principal's call -> identical 404 not_found"
+  },
+  {
+   "check": "S01",
+   "status": "PASS",
+   "reqs": [
+    "SCREEN-1",
+    "SCREEN-2",
+    "SCREEN-3",
+    "SCREEN-6",
+    "SCREEN-7",
+    "PEOPLE-1",
+    "ERR-3"
+   ],
+   "line": "spec/screening_fixtures.json (12 forbidden, 6 allowed): credentials:refused accounts:refused paid_engagement:refused impersonation:refused personal_data:refused minors:refused third_party_contact:refused off_platform:refused physical_world:refused deception:refused ban_evasion:refused violent:refused"
+  },
+  {
+   "check": "S02",
+   "status": "PASS",
+   "reqs": [
+    "SCREEN-2",
+    "SCREEN-7"
+   ],
+   "line": "allowed fixtures 1,2,3,4,5,6 opened; 4 would be held"
+  },
+  {
+   "check": "P01",
+   "status": "PASS",
+   "reqs": [
+    "MCP-1",
+    "MCP-5",
+    "MCP-6"
+   ],
+   "line": "protocol 2026-07-28; 6 tools with outputSchema and annotations"
+  },
+  {
+   "check": "P02",
+   "status": "PASS",
+   "reqs": [
+    "MCP-2",
+    "MCP-3",
+    "MCP-4"
+   ],
+   "line": "quote, error and results identical to HTTP; SIMULATED text first; error is isError with fixable"
+  },
+  {
+   "check": "F01",
+   "status": "PASS",
+   "reqs": [
+    "FAIR-2",
+    "FAIR-5"
+   ],
+   "line": "stop at 6 s paid 0.25; upset paid in full"
+  },
+  {
+   "check": "F02",
+   "status": "PASS",
+   "reqs": [
+    "FAIR-6",
+    "FAIR-3",
+    "FAIR-8"
+   ],
+   "line": "5 offers state who answers, AI, minutes, 2.00 = 60.00 an hour, rating, what is recorded, training"
+  },
+  {
+   "check": "F03",
+   "status": "PASS",
+   "reqs": [
+    "FAIR-7"
+   ],
+   "line": "5 receipts show their fee shares: {'router_fee': '0.80'}"
+  },
+  {
+   "check": "F04",
+   "status": "PASS",
+   "reqs": [
+    "FAIR-4",
+    "RES-9",
+    "MONEY-8"
+   ],
+   "line": "paid 0.60 for 2 minutes, median 4 minutes -> each paid 1.20 with top_up_usd 0.60; 1 re-delivered after the cursor"
+  },
+  {
+   "check": "X01",
+   "status": "PASS",
+   "reqs": [
+    "CONV-1",
+    "MONEY-4"
+   ],
+   "line": "181 bodies: money strings throughout"
+  },
+  {
+   "check": "X02",
+   "status": "PASS",
+   "reqs": [
+    "VER-2"
+   ],
+   "line": "every API response carries the version header"
+  },
+  {
+   "check": "X03",
+   "status": "PASS",
+   "reqs": [
+    "HTTP-2"
+   ],
+   "line": "every /v1 answer was JSON"
+  },
+  {
+   "check": "X04",
+   "status": "PASS",
+   "reqs": [
+    "EVID-2",
+    "SIM-4",
+    "EVID-4"
+   ],
+   "line": "41 responses: every level recomputes from record.observed"
+  },
+  {
+   "check": "X05",
+   "status": "PASS",
+   "reqs": [
+    "MONEY-6",
+    "STATE-1",
+    "STATE-4"
+   ],
+   "line": "24 calls, 56 money reads: money invariant and state arrows hold at every read"
+  },
+  {
+   "check": "X06",
+   "status": "PASS",
+   "reqs": [
+    "RES-7",
+    "KIND-4",
+    "PRIV-1",
+    "KIND-5",
+    "SEC-3"
+   ],
+   "line": "41 responses carry no identity, trace or seat link"
+  },
+  {
+   "check": "X07",
+   "status": "PASS",
+   "reqs": [
+    "SIM-2",
+    "AUTH-3"
+   ],
+   "line": "all 41 responses to the test key are simulated"
+  },
+  {
+   "check": "X09",
+   "status": "PASS",
+   "reqs": [
+    "PEOPLE-8"
+   ],
+   "line": "in each of 14 calls every response came from a different person"
+  },
+  {
+   "check": "X08",
+   "status": "PASS",
+   "reqs": [
+    "DISC-3"
+   ],
+   "line": "declared; the F checks below decide it"
+  }
+ ],
+ "notes": [
+  "S02: 4 allowed fixture call(s) would be held (not refused)"
+ ],
+ "requests": 181,
+ "seconds": 407
+}

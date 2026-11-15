@@ -1,0 +1,33 @@
+{
+  "call_id": "call_open00000000000001",
+  "status": "open",
+  "complete": false,
+  "deadline": "2026-11-14T08:25:00Z",
+  "summary": {
+    "simulated": true,
+    "people": 3,
+    "enough": 3,
+    "offered": 3,
+    "taken": 0,
+    "answered": 0,
+    "stopped": 0,
+    "declined": 0,
+    "missed": 0,
+    "withdrawn": 0,
+    "evidence": {
+      "attended": 0,
+      "said": 0,
+      "voiced": 0
+    },
+    "tally": {}
+  },
+  "responses": [],
+  "money": {
+    "held_usd": "0.00",
+    "spent_usd": "0.00",
+    "returned_usd": "0.00",
+    "test_money": true
+  },
+  "cursor": null,
+  "next_check_after_seconds": 5
+}

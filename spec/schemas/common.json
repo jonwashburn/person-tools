@@ -1,0 +1,872 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.json",
+  "title": "Shared definitions, {{wire_prefix}} 0.1 (draft)",
+  "$defs": {
+    "money": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{2}$",
+      "description": "US dollars, a string with exactly two decimal places (section 2)."
+    },
+    "money_input": {
+      "description": "Money sent by an agent (section 9, CALL-3): a string of digits with 0 to 2 decimal places (\"5\", \"5.5\", \"5.50\"), or a JSON number with 0 to 2 decimal places. The limit on a number's decimals is checked by the server, not by this schema, because floating-point multipleOf is unreliable across validators.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,2})?$"
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "Opaque identifier (section 2)."
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$",
+      "description": "RFC 3339 in UTC with Z (section 2)."
+    },
+    "https_url": {
+      "type": "string",
+      "pattern": "^https://[^\\s]+$",
+      "maxLength": 2048
+    },
+    "abs_url": {
+      "type": "string",
+      "pattern": "^https?://[^\\s]+$",
+      "maxLength": 2048
+    },
+    "server_url": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^(https://[^/\\s]+|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?)(/[^\\s]*)?$",
+      "description": "An address in discovery: https, or http on a loopback host for local testing (section 5)."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "field_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "kind": {
+      "enum": [
+        "listen",
+        "watch",
+        "view",
+        "play",
+        "compare",
+        "answer"
+      ]
+    },
+    "media_kind": {
+      "enum": [
+        "listen",
+        "watch",
+        "view",
+        "play"
+      ]
+    },
+    "call_status": {
+      "enum": [
+        "held",
+        "open",
+        "enough",
+        "complete",
+        "expired",
+        "cancelled",
+        "refused"
+      ]
+    },
+    "seat_status": {
+      "enum": [
+        "offered",
+        "taken",
+        "answered",
+        "stopped",
+        "declined",
+        "missed",
+        "withdrawn"
+      ]
+    },
+    "evidence_level": {
+      "enum": [
+        "said",
+        "attended",
+        "voiced"
+      ]
+    },
+    "unobserved_item": {
+      "enum": [
+        "audible",
+        "eyes_on_screen",
+        "unassisted_answer",
+        "same_person"
+      ]
+    },
+    "answer_input_value": {
+      "enum": [
+        "typed",
+        "pasted",
+        "mixed",
+        "spoken",
+        "tapped"
+      ]
+    },
+    "line_kind": {
+      "enum": [
+        "to_people",
+        "pool_fee",
+        "router_fee",
+        "rail_fee",
+        "reserve",
+        "tax"
+      ]
+    },
+    "fee_kind": {
+      "enum": [
+        "pool_fee",
+        "router_fee",
+        "rail_fee",
+        "tax"
+      ]
+    },
+    "claim_basis": {
+      "enum": [
+        "self",
+        "observed",
+        "document",
+        "vouched",
+        "earned"
+      ]
+    },
+    "screening_category": {
+      "enum": [
+        "credentials",
+        "accounts",
+        "paid_engagement",
+        "impersonation",
+        "third_party_contact",
+        "personal_data",
+        "off_platform",
+        "sexual",
+        "minors",
+        "ban_evasion",
+        "deception",
+        "physical_world",
+        "outside_material",
+        "sensitive_data",
+        "unpaid_screener",
+        "harassment",
+        "voice_misuse",
+        "call_terms",
+        "violent",
+        "medical",
+        "grief"
+      ]
+    },
+    "error_code": {
+      "enum": [
+        "invalid_json",
+        "missing_field",
+        "invalid_field",
+        "unknown_field",
+        "unauthorized",
+        "forbidden_for_key_class",
+        "not_found",
+        "idempotency_key_reused",
+        "over_max_total_usd",
+        "over_key_cap",
+        "insufficient_balance",
+        "below_pay_floor",
+        "unknown_pool",
+        "unknown_selector",
+        "selector_unsupported",
+        "privacy_floor",
+        "content_unavailable",
+        "content_too_large",
+        "unsupported_feature",
+        "refused_screening",
+        "outcome_not_allowed",
+        "version_unsupported",
+        "rate_limited",
+        "internal"
+      ]
+    },
+    "content_rating": {
+      "enum": [
+        "general"
+      ]
+    },
+    "pool": {
+      "type": "string",
+      "pattern": "^(simulated|panel:[A-Za-z0-9_-]{1,64}|[a-z0-9][a-z0-9._-]{0,63})$",
+      "description": "simulated, panel:<panel_id>, or a pool name the server lists in discovery (section 16.1)."
+    },
+    "text_content": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        }
+      }
+    },
+    "media_ref": {
+      "description": "A media id the server holds, or an https address of the material (section 9.1).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "$ref": "#/$defs/https_url"
+        }
+      ]
+    },
+    "content_item": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/media_ref"
+        },
+        {
+          "$ref": "#/$defs/text_content"
+        }
+      ]
+    },
+    "content": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/content_item"
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/content_item"
+          }
+        }
+      ]
+    },
+    "answer_field": {
+      "description": "An answer field: an object, or just its type as a string (section 9.2).",
+      "oneOf": [
+        {
+          "enum": [
+            "text",
+            "boolean",
+            "number",
+            "choice",
+            "scale"
+          ]
+        },
+        {
+          "$ref": "#/$defs/answer_field_object"
+        }
+      ]
+    },
+    "answer_field_object": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "boolean",
+            "number",
+            "choice",
+            "scale"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "multiple": {
+          "type": "boolean"
+        },
+        "min_label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "max_label": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "text"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "min": false,
+              "max": false,
+              "choices": false,
+              "multiple": false,
+              "min_label": false,
+              "max_label": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "boolean"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "max_length": false,
+              "min": false,
+              "max": false,
+              "choices": false,
+              "multiple": false,
+              "min_label": false,
+              "max_label": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "number"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "max_length": false,
+              "choices": false,
+              "multiple": false,
+              "min_label": false,
+              "max_label": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "choice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "choices"
+            ],
+            "properties": {
+              "max_length": false,
+              "min": false,
+              "max": false,
+              "min_label": false,
+              "max_label": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "scale"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "min",
+              "max"
+            ],
+            "properties": {
+              "min": {
+                "type": "integer"
+              },
+              "max": {
+                "type": "integer"
+              },
+              "max_length": false,
+              "choices": false,
+              "multiple": false
+            }
+          }
+        }
+      ]
+    },
+    "answer_fields": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 12,
+      "propertyNames": {
+        "$ref": "#/$defs/field_name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/answer_field"
+      }
+    },
+    "answer_fields_expanded": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 12,
+      "propertyNames": {
+        "$ref": "#/$defs/field_name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/answer_field_object"
+      }
+    },
+    "selectors": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "country": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          }
+        },
+        "region": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}-[A-Z0-9]{1,3}$"
+          }
+        },
+        "language": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+          }
+        },
+        "age_band": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "18-24",
+              "25-34",
+              "35-44",
+              "45-54",
+              "55-64",
+              "65+"
+            ]
+          }
+        },
+        "device": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "phone",
+              "tablet",
+              "desktop"
+            ]
+          }
+        }
+      },
+      "patternProperties": {
+        "^[a-z0-9.-]+\\.[a-z]+/[a-z0-9_]+$": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Selectors over people's claims (section 16.2). Core keys, or keys under the domain of whoever defines them."
+    },
+    "voice_request": {
+      "type": "object",
+      "required": [
+        "max_seconds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "max_seconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300
+        }
+      }
+    },
+    "script_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "enum": [
+            true,
+            false,
+            "miss"
+          ]
+        },
+        "delay_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "media_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "play_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "realtime": {
+          "type": "boolean"
+        },
+        "visible_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "revealed": {
+          "type": "boolean"
+        },
+        "visible_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "session_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "input_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "order": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/script_item"
+          }
+        },
+        "share_recording": {
+          "type": "boolean"
+        },
+        "seat_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stop_at_fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stop_reason": {
+          "enum": [
+            "stopped",
+            "upset"
+          ]
+        },
+        "send_partial": {
+          "type": "boolean"
+        },
+        "answers": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/field_name"
+          }
+        },
+        "answer_input": {
+          "oneOf": [
+            {
+              "enum": [
+                "typed",
+                "pasted",
+                "mixed",
+                "spoken"
+              ]
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "$ref": "#/$defs/field_name"
+              },
+              "additionalProperties": {
+                "enum": [
+                  "typed",
+                  "pasted",
+                  "mixed",
+                  "spoken"
+                ]
+              }
+            }
+          ]
+        },
+        "voice_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "script_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One item of a compare call in a script entry: the fields of section 18 that describe one item.",
+      "properties": {
+        "media_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "play_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "realtime": {
+          "type": "boolean"
+        },
+        "visible_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "revealed": {
+          "type": "boolean"
+        },
+        "visible_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "session_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "input_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "ext": {
+      "type": "object",
+      "description": "Extensions, each under a domain name its author controls (section 2).",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "quote_line": {
+      "type": "object",
+      "required": [
+        "kind",
+        "amount_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/line_kind"
+        },
+        "amount_usd": {
+          "$ref": "#/$defs/money"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "fee_line": {
+      "type": "object",
+      "required": [
+        "kind",
+        "amount_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/fee_kind"
+        },
+        "amount_usd": {
+          "$ref": "#/$defs/money"
+        }
+      }
+    },
+    "defaults_used": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Every default the server applied, with its value (CALL-2).",
+      "properties": {
+        "enough": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pool": {
+          "$ref": "#/$defs/pool"
+        },
+        "answer_fields": {
+          "$ref": "#/$defs/answer_fields_expanded"
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 120
+        },
+        "pay_per_person_usd": {
+          "$ref": "#/$defs/money"
+        },
+        "deadline_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "content_rating": {
+          "$ref": "#/$defs/content_rating"
+        },
+        "may_train_on_answers": {
+          "type": "boolean"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "When the call had no idempotency_key: how a repeat is treated (IDEM-1)."
+        },
+        "pace": {
+          "enum": [
+            "instant",
+            "human"
+          ]
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "money_summary": {
+      "type": "object",
+      "required": [
+        "held_usd",
+        "spent_usd",
+        "returned_usd",
+        "test_money"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "held_usd": {
+          "$ref": "#/$defs/money"
+        },
+        "spent_usd": {
+          "$ref": "#/$defs/money"
+        },
+        "returned_usd": {
+          "$ref": "#/$defs/money"
+        },
+        "fees_true_up_usd": {
+          "$ref": "#/$defs/money_signed",
+          "description": "The fee true-up at the terminal state (MONEY-6); negative when the rule gives less than the shares charged."
+        },
+        "test_money": {
+          "type": "boolean"
+        }
+      }
+    },
+    "next_check": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 300
+    },
+    "fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "money_signed": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+      "description": "US dollars, two decimal places, may be negative (fees_true_up_usd)."
+    }
+  }
+}

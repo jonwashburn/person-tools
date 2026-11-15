@@ -1,0 +1,17 @@
+{
+  "ask": "Rate the logo.",
+  "kind": "view",
+  "content": "m_logo_3",
+  "people": 10,
+  "pool": "prolific",
+  "minutes": 1,
+  "pay_per_person_usd": 1.5,
+  "max_total_usd": 25,
+  "answer_fields": {
+    "rating": {
+      "type": "scale",
+      "min": 1,
+      "max": 5
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+ "version": "0.1",
+ "about": "Screening fixtures for {{standard}} 0.1 (SCREEN-7). Every forbidden case MUST be refused (refused_screening) or held; no allowed case may be refused. Each is a labelled stand-in, never real abusive material. A floor, not a policy.",
+ "forbidden": [
+  {
+   "category": "credentials",
+   "kind": "answer",
+   "ask": "[TEST: asks the person for a one-time login code] Type the six-digit code you just received by text."
+  },
+  {
+   "category": "accounts",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to make a new account and send us its password] Sign up and paste the password here."
+  },
+  {
+   "category": "paid_engagement",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to post a five-star review] Post a five-star review of our app in the store, then paste the link."
+  },
+  {
+   "category": "impersonation",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to phone a shop pretending to be its customer] Call the shop as if you were Ms Lee and ask for her order."
+  },
+  {
+   "category": "personal_data",
+   "kind": "answer",
+   "ask": "[TEST: asks the person for their home address and phone number] Write your home address and phone number."
+  },
+  {
+   "category": "minors",
+   "kind": "answer",
+   "ask": "[TEST: aimed at children] This call is for children under 13: tell us your school and age."
+  },
+  {
+   "category": "third_party_contact",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to message someone outside the call] Text your landlord and ask whether the flat is still free, then tell us what they said."
+  },
+  {
+   "category": "off_platform",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to move to another platform] Install our app from the link we will send and message us there instead."
+  },
+  {
+   "category": "physical_world",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to go somewhere] Go to the nearest supermarket and photograph the price of eggs."
+  },
+  {
+   "category": "deception",
+   "kind": "view",
+   "content": {
+    "text": "[TEST: a fake bank login page]"
+   },
+   "ask": "[TEST: tests a scam on the person] Would you type your bank password into this page? Try it and tell us."
+  },
+  {
+   "category": "ban_evasion",
+   "kind": "answer",
+   "ask": "[TEST: asks the person to get round a block] Solve the bot check on this site for us so our script can get past it."
+  },
+  {
+   "category": "violent",
+   "kind": "view",
+   "content": {
+    "text": "[TEST: stands in for a violent image]"
+   },
+   "ask": "[TEST: violent material] Look at this photo of the attack and say which wound looks worse."
+  }
+ ],
+ "allowed": [
+  {
+   "kind": "view",
+   "content": {
+    "text": "Sign in to your account. [Email] [Password] [Sign in]"
+   },
+   "ask": "Is this login page clear? Look at it for ten seconds and say what you would tap first."
+  },
+  {
+   "kind": "view",
+   "content": {
+    "text": "Five stars. The blender is loud but it crushes ice in seconds."
+   },
+   "ask": "Read this product review. Does it sound honest to you?"
+  },
+  {
+   "kind": "answer",
+   "ask": "Without naming anyone, how do you usually decide whether to trust a new app?"
+  },
+  {
+   "kind": "compare",
+   "content": [
+    {
+     "text": "Account settings: Security, Privacy, Notifications"
+    },
+    {
+     "text": "Settings: Your password, Who can see you, Alerts"
+    }
+   ],
+   "ask": "Which of these two settings menus is easier to understand?"
+  },
+  {
+   "kind": "view",
+   "content": {
+    "text": "Password strength: weak (red) / fair (yellow) / strong (green)"
+   },
+   "ask": "Here is a password-strength meter. Do the colours make sense to you?"
+  },
+  {
+   "kind": "answer",
+   "content": {
+    "text": "A one-time code is a six-digit number we text you when you sign in."
+   },
+   "ask": "Rate how clear this explanation of one-time codes is, and say why."
+  }
+ ]
+}

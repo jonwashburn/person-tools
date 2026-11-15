@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /internal/
+Disallow: /mcp
+Disallow: /v1/members/
+Disallow: /v1/seats/
+Disallow: /v1/join/
+Disallow: /v1/arrivals/
+Disallow: /v1/approvals/
+Disallow: /v1/calls/
+Disallow: /v1/quotes
+Disallow: /v1/keys
+Disallow: /v1/panels
+Disallow: /v1/media
+Disallow: /v1/receipts/
+Disallow: /v1/pools/
+Disallow: /v1/balance
+Disallow: /v1/me

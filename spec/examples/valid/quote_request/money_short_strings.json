@@ -1,0 +1,10 @@
+{
+  "ask": "Listen once. Then tell me what you felt.",
+  "kind": "listen",
+  "content": "m_sample_melody30",
+  "people": 3,
+  "pay_per_person_usd": "5",
+  "max_total_usd": "5.5",
+  "pool": "prolific",
+  "minutes": 10
+}

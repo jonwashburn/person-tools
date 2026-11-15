@@ -1,0 +1,7 @@
+{
+  "code": "rate_limited",
+  "status": 429,
+  "fixable": false,
+  "message": "Too many requests; wait 20 seconds.",
+  "retry_after_seconds": 20
+}

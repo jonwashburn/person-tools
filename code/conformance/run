@@ -1,0 +1,13 @@
+#!/bin/bash
+# Conformance suite for the call-server standard 0.1 (draft). Usage: code/conformance/run <base_url> [options]
+# Options: --key test_... --key-file FILE --profile fair-call --json report.json --only D01,Q01 --no-mcp --trace --list
+# Needs Python 3.10+ with httpx, jsonschema, cryptography and mcp. CONFORMANCE_PYTHON may name the interpreter; otherwise
+# the first of python3 and any tools/venv under the home folder that has those packages is used.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ok() { "$1" -c 'import httpx, jsonschema, cryptography, mcp' >/dev/null 2>&1; }
+PY="${CONFORMANCE_PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3 $HOME/*/tools/venv/bin/python; do [ -x "$(command -v "$c" 2>/dev/null || echo "$c")" ] && ok "$c" && { PY="$c"; break; }; done
+fi
+[ -n "$PY" ] || { echo "run: no Python with httpx, jsonschema, cryptography and mcp; set CONFORMANCE_PYTHON" >&2; exit 2; }
+exec "$PY" "$HERE/suite.py" "$@"

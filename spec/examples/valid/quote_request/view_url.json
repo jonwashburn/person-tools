@@ -1,0 +1,9 @@
+{
+  "ask": "Look for ten seconds. What is this page for?",
+  "kind": "view",
+  "content": "https://example.com/landing.png",
+  "people": 10,
+  "answer_fields": {
+    "what_it_is": "text"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "code": "forbidden_for_key_class",
+  "status": 403,
+  "fixable": false,
+  "message": "Making a panel needs a live key. Ask your user for one; a test key cannot make panels."
+}
