@@ -92,7 +92,8 @@
         "answered",
         "done",
         "not_now",
-        "lapsed"
+        "lapsed",
+        "withdrawn"
       ]
     },
     "reply": {
@@ -112,90 +113,41 @@
       }
     },
     "card": {
-      "type": "object",
-      "required": [
-        "blocks"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "blocks": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "minProperties": 1
-          }
-        }
-      },
-      "description": "The asker's layout: blocks drawn in order (headline, text, media, facts, price, when_where, choices, input); a client ignores a block it does not know."
+      "$ref": "card.json"
     },
     "brand": {
-      "type": "object",
-      "required": [
-        "name",
-        "domain",
-        "verified"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
+      "allOf": [
+        {
+          "$ref": "brand.json"
         },
-        "mark": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "colours": {
-          "type": "array",
-          "items": {
-            "type": "object",
+        {
+          "required": [
+            "id",
+            "verified"
+          ],
+          "if": {
             "required": [
-              "value",
-              "means"
+              "verified"
             ],
-            "additionalProperties": false,
             "properties": {
-              "value": {
-                "type": "string",
-                "pattern": "^#[0-9a-fA-F]{6}$"
-              },
-              "means": {
-                "type": "string",
-                "minLength": 1
+              "verified": {
+                "const": false
               }
             }
           },
-          "maxItems": 4
-        },
-        "grounds": {
-          "type": "object",
-          "required": [],
-          "additionalProperties": false,
-          "properties": {
-            "light": {
-              "type": "string",
-              "pattern": "^#[0-9a-fA-F]{6}$"
-            },
-            "dark": {
-              "type": "string",
-              "pattern": "^#[0-9a-fA-F]{6}$"
+          "then": {
+            "required": [
+              "test"
+            ],
+            "properties": {
+              "test": {
+                "const": true
+              }
             }
           }
-        },
-        "domain": {
-          "type": "string",
-          "minLength": 1
-        },
-        "verified": {
-          "const": true
-        },
-        "mark_url": {
-          "$ref": "common.json#/$defs/https_url"
         }
-      },
-      "description": "The asker's brand, present only once its domain is proved (MEMBER-10)."
+      ],
+      "description": "The brand as given (27.3), with id, domain and verified; a brand that has not proved its domain shows only to a test member, with verified false and test true (ASKS-10). A picture state carries url, served with no credential (27.10)."
     },
     "media": {
       "type": "object",
@@ -266,6 +218,63 @@
     "shell_only": {
       "type": "string",
       "minLength": 1
+    },
+    "contacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "consent"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^c[1-4]$"
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "phone": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{6,14}$"
+          },
+          "email": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 254
+          },
+          "consent": {
+            "enum": [
+              "they_contacted_the_asker",
+              "they_agreed_to_be_contacted"
+            ]
+          },
+          "consent_at": {
+            "$ref": "common.json#/$defs/time"
+          }
+        }
+      },
+      "description": "Someone else's contact details (27.7): name, phone and email only while the ask is open (ASKS-18, ASKS-19); never ref (27.10)."
+    },
+    "group": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9:_-]{1,80}$",
+      "description": "Asks of one service drawn together (27.8)."
     }
   },
   "$defs": {
@@ -301,6 +310,25 @@
                   "type": "null"
                 }
               ]
+            },
+            "line_for": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "description": "A choice that takes a line, mapped to the line's label (27.6)."
+            },
+            "keyboard": {
+              "enum": [
+                "text",
+                "number",
+                "phone",
+                "email"
+              ],
+              "description": "The keyboard for every line the ask takes (27.6)."
             }
           },
           "description": "A question: with 2 to 4 choices, or (choices absent or null) answered in words."
@@ -393,8 +421,31 @@
             }
           },
           "description": "Approve or deny exactly what text says, under the ask's own labels; editable lets the person change text."
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "contact"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "call"
+            },
+            "contact": {
+              "type": "string",
+              "pattern": "^c[1-4]$"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": "A call the person makes, on their own device, to a contact of the ask that has a phone (27.6)."
         }
-      ]
+      ],
+      "description": "One step: a question, a link, a command, an approval (26.5), or a call to make (27.6)."
     },
     "reply": {
       "type": "object",

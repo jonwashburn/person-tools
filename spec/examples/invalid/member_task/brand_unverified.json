@@ -1,11 +1,11 @@
 {
   "task_id": "tk_branded01",
-  "title": "Thanksgiving hours",
+  "title": "Christmas Eve hours",
   "urgency": "today",
   "from": "Example Diner",
   "step": {
     "type": "question",
-    "text": "Are you open on Thanksgiving?",
+    "text": "Are you open?",
     "choices": [
       "Open as usual",
       "Closed"
@@ -20,7 +20,7 @@
   "card": {
     "blocks": [
       {
-        "headline": "Thanksgiving is Thursday."
+        "headline": "Christmas Eve is Thursday, Dec 24."
       },
       {
         "text": "Are you open?"
@@ -28,19 +28,21 @@
     ]
   },
   "brand": {
+    "id": "br_diner01",
     "name": "Example Diner",
-    "colours": [
-      {
-        "value": "#e8590c",
-        "means": "needs you"
+    "domain": "diner.example.com",
+    "verified": false,
+    "mark": {
+      "states": {
+        "needs_you": {
+          "glyph": "disc",
+          "colour": "#e8590c"
+        }
       }
-    ],
+    },
     "grounds": {
       "light": "#f7f5f0",
       "dark": "#141414"
-    },
-    "domain": "diner.example.com",
-    "verified": false,
-    "mark_url": "https://api.example.com/v1/brand_media/m_mark01"
+    }
   }
 }

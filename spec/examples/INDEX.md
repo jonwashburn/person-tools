@@ -144,7 +144,7 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/member_task/from_a_person.json` | 26.10, an ask from a person, with their note (live shape) |
 | `valid/member_task/passed_on.json` | 26.10, an AI's ask passed on: the passer's private line, no connection id (live shape) |
 | `valid/member_task/link_sign_in.json` | 26.10, a link that opens a sign-in page, with its real domain |
-| `valid/member_task/branded.json` | 26.6, an ask whose asker's brand proved its domain (section 26's own example) |
+| `valid/member_task/branded.json` | 27.3 and 27.10, an ask whose service's brand proved its domain |
 | `valid/member_tasks/list.json` | 26.5, open, groups, history and passed_on (live shape) |
 | `valid/member_tasks/notice.json` | 26.10, the one-time notice before any ask from a person |
 | `valid/member_answer_request/choice_with_note.json` | 26.5, a choice with a note |
@@ -205,6 +205,21 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/desk_sign_in/code.json` | 26.11 (live shape) |
 | `valid/desk_sign_in_poll/waiting.json` | 26.11, 202 (live) |
 | `valid/desk_sign_in_poll/approved.json` | 26.11, 200 once (reference shape) |
+| `valid/brand_request/northside.json` | 27.3, section 27's own brand |
+| `valid/brand_request/name_and_domain.json` | 27.3, a name and a domain alone are a complete brand |
+| `valid/brand/picture_mark.json` | 27.3, a mark given as a picture from the server's store |
+| `valid/card/holiday.json` | 27.5, section 27's own card |
+| `valid/contacts/shopper.json` | 27.7, section 27's own contact |
+| `valid/ask_request/holiday.json` | 27.2 and 27.6, a question whose third choice takes a line, with a webhook |
+| `valid/ask_request/shopper.json` | 27.7, a question about a shopper, with a quote, the contact block and an input block |
+| `valid/ask_request/callback.json` | 27.6, a call to make |
+| `valid/ask_withdraw_request/elsewhere.json` | 27.2, an ask settled in the service's own app |
+| `valid/ask/answered.json` | 27.2, the holiday ask answered with a line, as the service reads it |
+| `valid/ask_answer_webhook/holiday.json` | 27.2, the answer posted to the ask's webhook |
+| `valid/member_task/branded_test.json` | 27.4 and 27.10, a test brand on a test member's ask, its picture mark with the address a client reads it at |
+| `valid/member_task/call_with_contact.json` | 27.6 and 27.7, a call to make, with its contact's details while the ask is open (never ref) |
+| `valid/member_connection/branded.json` | ASKS-24, a connection whose asks wear a brand |
+| `valid/member_connection_secret/new.json` | 26.8, a connection's new webhook secret, shown once |
 
 ## Invalid (each for exactly one reason)
 
@@ -357,7 +372,7 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `invalid/tool_args.panel/not_an_object.json` | the arguments are an object |
 | `invalid/member_task/one_choice.json` | a question with choices has 2 to 4 |
 | `invalid/member_task/urgency_soon.json` | urgency is now, today or whenever |
-| `invalid/member_task/brand_unverified.json` | a brand is on an ask only once verified (MEMBER-10) |
+| `invalid/member_task/brand_unverified.json` | a brand that has not proved its domain shows only as a test brand, with test: true (ASKS-10) |
 | `invalid/member_tasks/missing_open.json` | open is required |
 | `invalid/member_answer_request/action_skip.json` | skip is not an action |
 | `invalid/member_answer_request/note_too_long.json` | a note is at most 2,000 characters |
@@ -403,3 +418,9 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `invalid/member_account/membership_no_panel.json` | a membership names its panel |
 | `invalid/desk_sign_in/number_100.json` | the number has two digits |
 | `invalid/desk_sign_in_poll/session_without_member.json` | the session comes with the membership it acts for |
+| `invalid/member_task/contact_with_ref.json` | a contact's ref never reaches the person's client (27.10) |
+| `invalid/ask_request/card_unknown_block.json` | a card block from outside the fixed set (27.5) |
+| `invalid/ask_request/contact_without_consent.json` | a contact without its consent statement (27.7) |
+| `invalid/ask_request/group_bad_chars.json` | a group name outside letters, digits, ':', '_' and '-' (27.2) |
+| `invalid/ask_request/phone_not_e164.json` | a phone not written in E.164 is refused, not rewritten (27.7) |
+| `invalid/member_connection_secret/missing_secret.json` | the answer carries the new secret |

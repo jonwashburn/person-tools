@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ask_withdraw_request.json",
+  "title": "POST /v1/tasks/{task_id}/withdraw (section 27.2)",
+  "type": "object",
+  "required": [
+    "why"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "why": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 200
+    },
+    "elsewhere": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ask_answer_webhook.json",
+  "title": "The signed answer posted to an ask's webhook (section 27.2, ASKS-2)",
+  "type": "object",
+  "required": [
+    "task_id",
+    "key",
+    "state",
+    "reply",
+    "answered_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^tk_"
+    },
+    "key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "enum": [
+        "answered",
+        "done",
+        "not_now",
+        "lapsed"
+      ]
+    },
+    "reply": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "action",
+            "at"
+          ],
+          "properties": {
+            "action": {
+              "enum": [
+                "answer",
+                "done",
+                "not_now",
+                "approve",
+                "deny"
+              ]
+            },
+            "choice": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "at": {
+              "type": "string"
+            },
+            "approved_text": {
+              "type": "string"
+            },
+            "device_approved": {
+              "type": "boolean"
+            },
+            "mark": {
+              "type": "string"
+            },
+            "contact_ref": {
+              "type": "string"
+            },
+            "masked": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "answered_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

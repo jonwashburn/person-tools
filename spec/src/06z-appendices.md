@@ -7,13 +7,12 @@
 | Talking live with a person (`talk`, the level `live`) | It needs its own consent, recording and safety rules. |
 | Tasks away from the screen (`go`) | They need safeguards for the person and for others that 0.1 does not define. |
 | Settlement by funds an agent holds, and payment on the wire | The payment rails for agents are previews with their own terms; 0.1 settles from a principal's balance outside the protocol. |
-| Events pushed to the agent (webhooks) | Polling with `wait_seconds` and `next_check_after_seconds` works in every client; events can be added without changing a call. |
+| Events pushed to the agent of a call (webhooks; an ask's answer reaches its service by one, section 27.2) | Polling with `wait_seconds` and `next_check_after_seconds` works in every client; events can be added without changing a call. |
 | An asker marking an answer as not counted | Under the fair-call profile it could not change pay, and nothing in 0.1 needs it. |
 | Disputes and appeals as operations | The process belongs to each server's terms until there is a second server to agree with. |
 | A joint with another protocol by which an agent asks its own human to approve a spend | In 0.1 the whole of it is the `approve_url` an `over_key_cap` error carries (MONEY-5): a page where the principal's human approves. Appendix B shows how another protocol could carry it. |
 | Minors | Nothing is built for them, and no call may be aimed at them. |
 | An interface for adding pools to a router | It is a property of an implementation, not of the call; the reference software documents its own. |
-| The asker's side of an ask: how an AI's connection key places one, reads the reply and answers a note | Section 26 fixes what the person's app reads and sends, so that any app can serve any server's people; the asker's side follows once a second server carries asks. |
 | A person client that runs a call's experience itself, through the seat's own routes | In 0.1 a client opens the server's page for the seat (section 26.7); the routes a page uses are each server's until a second runner needs them. |
 | Signed answers: the shape of a device key's attestation and of the signature over an approval | Platforms attest keys in different formats; 0.1 marks every approval with whether a device signed it (section 26.6). |
 | Push to browsers and to devices other than Apple's | 0.1 defines one registration (section 26.7); a client without push looks again by itself. |

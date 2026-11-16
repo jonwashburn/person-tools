@@ -8,7 +8,8 @@ operator of a pool are both call servers; a router reaches another call server t
 levels, receipts, errors, idempotency, authentication, discovery, a required simulated pool, the HTTP binding and the
 mapping to tools of the Model Context Protocol. It defines a profile of rules that protect the people called (section
 23), which a server may declare and a separate set of checks tests, and the interface a server offers to the app a person
-answers in, the person client (section 26), which a server may offer and any app may implement. What 0.1 leaves for later is in Appendix A, each item
+answers in, the person client (section 26), which a server may offer and any app may implement, and asks from a service
+with branded cards (section 27), which a server may offer. What 0.1 leaves for later is in Appendix A, each item
 with its reason.
 
 Each requirement carries an identifier in brackets, such as `[CALL-3]`. The conformance suite maps every identifier to
@@ -24,6 +25,11 @@ read as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appea
   money ends in `_usd`. 0.1 has one currency. **[CONV-1]** A server MUST NOT send money as a JSON number.
 - **Times** are RFC 3339 strings in UTC with a `Z`, such as `"2026-11-14T06:40:00Z"`. Lengths of time are numbers whose
   field name carries the unit: `_seconds`, `_minutes`.
+- **Exceptions.** `expires_in` is a number of seconds (sections 26 and 27) without the unit in its name; some POSTs take no
+  body (`POST /v1/brand/verify`, `POST /v1/brand/key`, `POST /v1/desk/sign_in`,
+  `POST /v1/member/connections/{id}/secret`); the two picture uploads (`POST /v1/brand/mark`, `POST /v1/tasks/media`) take
+  the picture's bytes, not JSON; and a card's `price` block names any currency, because it shows an amount and moves no money
+  (27.11).
 - **Identifiers** are opaque strings of 1 to 64 characters from `A-Z a-z 0-9 _ -`. A client MUST NOT parse them. The
   prefixes in the examples (`call_`, `r_`, `q_`) are a convention of the examples, not a requirement.
 - **Unknown fields.** **[CONV-2]** A server MUST refuse a request body that contains a field this version does not
@@ -91,7 +97,8 @@ JSON, without authentication:
   The core is `listen`, `view` (with `{text}` content at least) and `answer`; a server MUST accept those three.
 - `features` lists the optional parts of this text the server offers: `keyless` (AUTH-5), `url_content` (https
   addresses as content, section 9.1), `media_upload` (`POST /v1/media`), `outcome` (section 15.2), `voice` (spoken
-  answers), `panels` (section 16.1), `person_client` (the member interface of section 26). **[DISC-5]** A server MUST offer every feature it lists, and MUST answer a request
+  answers), `panels` (section 16.1), `person_client` (the member interface of section 26), `branded_asks` (asks from a service,
+  their brands and cards, section 27). **[DISC-5]** A server MUST offer every feature it lists, and MUST answer a request
   that needs a feature it does not list with `unsupported_feature` (a request without a key, where `keyless` is not
   listed, is `unauthorized`), fixable where a change to the call avoids it. A
   server that offers only the core and the simulated pool conforms: it is a call server whose people are all scripted,
@@ -103,6 +110,8 @@ JSON, without authentication:
   server has issued in the last twelve months MUST verify against a key in that set, or against a key the set lists
   under `"revoked"` with the time it was revoked.
 - `test_keys` is present when the server issues test keys to anyone (section 18).
+- `webhook_header_prefix`, for a server that lists `branded_asks`, is the prefix of the headers on the answers it delivers
+  to a service (27.2); without it, a service uses `{{wire_prefix}}`.
 - `api_base`, `mcp` and every other address in discovery are absolute `https` addresses, except that a server run for
   local testing on a loopback address (`localhost`, `127.0.0.1`, `[::1]`) may use `http`. A server serving one host
   uses that host in every address; one serving several builds them from the request's host. A server reachable under more than one host SHOULD build them from
@@ -113,8 +122,8 @@ JSON, without authentication:
 
 ## 6. Authentication and keys
 
-**[AUTH-1]** Every request except discovery, the JWKS, `GET /v1/media/samples`, `POST /v1/keys` and
-`POST /v1/receipts/verify` MUST carry
+**[AUTH-1]** Every request except discovery, the JWKS, `GET /v1/media/samples`, `POST /v1/keys`,
+`POST /v1/receipts/verify` and `GET /v1/brand_media/{id}` (a brand's picture, section 27.10) MUST carry
 `Authorization: Bearer <key>`, unless the server serves it without a key under AUTH-5 below. A missing key where one is
 needed, or a key the server does not know, is the error `unauthorized` (HTTP 401), which is fixable: `field` is
 `Authorization`, `example` is `"Bearer test_..."`, and `message` says how to get a test key when the server issues them.
@@ -153,7 +162,8 @@ Agents retry. A retry must never open a second call or spend twice.
 - **[IDEM-1]** `POST /v1/calls`, `POST /v1/calls/{id}/outcome` and `POST /v1/panels` SHOULD carry
   `idempotency_key` in the body: a string of 1 to 128 characters chosen by the client. When it is absent, a server MUST
   treat the same body from the same principal (or, without a key, from the same network address) within 10 minutes as a
-  repeat under IDEM-2, and MUST say so in `defaults_used`.
+  repeat under IDEM-2, and MUST say so in `defaults_used`. `POST /v1/tasks` follows 27.2's rule instead (one ask for one
+  thing).
 - **[IDEM-2]** A repeat of the same key, by the same principal (or, without a key, from the same address), to the same
   operation, with the same body, within 24 hours, MUST return the same status and the same body as the first successful
   answer, with every field that changes over time (state, counts, money, outcomes, review times,

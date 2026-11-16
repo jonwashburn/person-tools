@@ -1,0 +1,25 @@
+{
+  "task_id": "tk_call01",
+  "title": "Call {c1} back about the 2021 Civic.",
+  "urgency": "today",
+  "from": "Northside Motors",
+  "step": {
+    "type": "call",
+    "contact": "c1",
+    "text": "Call {c1} back about the 2021 Civic."
+  },
+  "contacts": [
+    {
+      "id": "c1",
+      "role": "shopper",
+      "name": "Sam Ortiz",
+      "phone": "+15125550188",
+      "ref": "cv_301",
+      "consent": "they_contacted_the_asker"
+    }
+  ],
+  "created_at": "2026-11-23T15:00:00Z",
+  "state": "open",
+  "reply": null,
+  "notes": []
+}

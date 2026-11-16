@@ -14,8 +14,8 @@
   "P12"
  ],
  "of": 12,
- "from": "askpeople-api/baseline-failed-20261116T203954Z-api.txt",
- "baseline_finished": "2026-11-16T20:54:52Z",
+ "from": "baseline_api_last_complete.txt",
+ "baseline_finished": "2026-11-16T22:47:52Z",
  "rule": "A line counts as 'checked after every release' only when every baseline line listed for it passed in the newest bin/baseline run that ran to its end, whichever project's deploy ran it. The lists are exact baseline line names; [P<n>] tags in line names win where a line carries one. P7 has three clauses: identity (a [P7] line: the asker's result holds no identity), 'nothing an asker sends can see you' ([P7 part] lines: the call page reaches only our own address, a whole call makes no outside request) and 'your receipts are yours' (a [P10 part] line: the person saves every receipt); all three pass in the 09:13Z baseline, so the count of 12 holds only while all of them pass. The result is written to canon/out/promise_status.json, which every page reads. Tags: '[Pn]' on a passing line checks the whole of Pn; '[Pn part]' checks only part and never counts the promise; any failing '[Pn]' or '[Pn part]' line uncounts it (a broken part breaks the promise). Lines may be printed as 'PROMISE PASS ...'.",
  "sentence": null
 }

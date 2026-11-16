@@ -24,6 +24,8 @@ tags:
   - name: discovery
   - name: member
     description: The person client (section 26).
+  - name: asks
+    description: Asks from a service, their brands and cards (section 27).
 paths:
   /v1/quotes:
     post:
@@ -502,6 +504,16 @@ paths:
       responses:
         "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_connection_revoked.json"}}}}
         "404": {$ref: "#/components/responses/Error"}
+  /v1/member/connections/{connection_id}/secret:
+    post:
+      operationId: memberConnectionSecret
+      tags: [member]
+      summary: "A new webhook secret for one of the person's AIs, shown once; the old one stops at once (section 26.8, 27.2). No body."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/ConnectionId"}]
+      responses:
+        "200": {description: The new secret., content: {application/json: {schema: {$ref: "./schemas/member_connection_secret.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
   /v1/member/blocks:
     get:
       operationId: memberBlocks
@@ -860,6 +872,149 @@ paths:
       security: [{member: []}]
       responses:
         "200": {description: The answer., content: {application/json: {schema: {type: object, required: [sessions], properties: {sessions: {type: array, items: {type: object}}}}}}}
+  /v1/tasks:
+    post:
+      operationId: placeAsk
+      tags: [asks]
+      summary: "Place one ask on a person, with a connection's key or a principal's key on its own panel (section 27.2)."
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/BrandKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/ask_request.json"}}}}
+      responses:
+        "201": {description: "The ask as the service reads it.", content: {application/json: {schema: {$ref: "./schemas/ask.json"}}}}
+        "200": {description: "A repeat of an idempotency_key: the ask it made, as it is now, with repeated: true (ASKS-1).", content: {application/json: {schema: {$ref: "./schemas/ask.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /v1/tasks/{task_id}:
+    get:
+      operationId: readAsk
+      tags: [asks]
+      summary: "Follow an ask: its state, the reply and the notes (section 27.2); at most once a minute."
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/TaskId"}]
+      responses:
+        "200": {description: "The ask as the service reads it.", content: {application/json: {schema: {$ref: "./schemas/ask.json"}}}}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /v1/tasks/{task_id}/notes:
+    post:
+      operationId: answerNote
+      tags: [asks]
+      summary: "Answer a person's note in one line while the ask is open (section 27.2)."
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/TaskId"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 500}}}}}}
+      responses:
+        "200": {description: "The ask's notes, with this one; 409 already_answered once the ask is closed.", content: {application/json: {schema: {type: object, required: [task_id, notes], properties: {task_id: {type: string}, notes: {type: array}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/tasks/{task_id}/withdraw:
+    post:
+      operationId: withdrawAsk
+      tags: [asks]
+      summary: "Withdraw an ask the service no longer needs, or one settled in its own app (section 27.2, ASKS-4)."
+      security: [{bearer: []}]
+      parameters: [{$ref: "#/components/parameters/TaskId"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/ask_withdraw_request.json"}}}}
+      responses:
+        "200": {description: "The ask as 27.2 shows it, state withdrawn; again, as it is; an answered ask is 409 already_answered.", content: {application/json: {schema: {$ref: "./schemas/ask.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/tasks/media:
+    post:
+      operationId: addAskMedia
+      tags: [asks]
+      summary: "One photo (jpeg, png, webp, gif or heic, up to 10 MB) or clip (mp4 or quicktime, up to 20 MB and 60 s) for an ask, as the request body with its Content-Type (section 27.2); used within the hour."
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {"image/jpeg": {schema: {type: string, contentMediaType: image/jpeg}}, "image/png": {schema: {type: string, contentMediaType: image/png}}, "image/webp": {schema: {type: string, contentMediaType: image/webp}}, "image/gif": {schema: {type: string, contentMediaType: image/gif}}, "image/heic": {schema: {type: string, contentMediaType: image/heic}}, "video/mp4": {schema: {type: string, contentMediaType: video/mp4}}, "video/quicktime": {schema: {type: string, contentMediaType: video/quicktime}}}}
+      responses:
+        "201": {description: "The media id, for the ask's media field, with what was stored.", content: {application/json: {schema: {type: object, required: [media_id, content_type, bytes], properties: {media_id: {type: string, pattern: "^m_"}, content_type: {type: string}, bytes: {type: integer, minimum: 1}, seconds: {type: ["number", "null"], minimum: 0}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+  /v1/brand:
+    get:
+      operationId: readBrand
+      tags: [asks]
+      summary: "The brand this key gives, and whether its domain is proved (section 27.3)."
+      security: [{bearer: []}]
+      responses:
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    put:
+      operationId: giveBrand
+      tags: [asks]
+      summary: "Give the brand, or replace it whole (section 27.3); prove_it until the domain is proved (27.4)."
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/brand_request.json"}}}}
+      responses:
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /v1/brand/mark:
+    post:
+      operationId: addBrandMark
+      tags: [asks]
+      summary: "The mark's picture: one png, jpeg or webp of at most 256 KB, as the request body; never svg, never an address (ASKS-5)."
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {"image/png": {schema: {type: string, contentMediaType: image/png}}, "image/jpeg": {schema: {type: string, contentMediaType: image/jpeg}}, "image/webp": {schema: {type: string, contentMediaType: image/webp}}}}
+      responses:
+        "201": {description: "The media id, for a mark state's media.", content: {application/json: {schema: {type: object, required: [media_id], properties: {media_id: {type: string, pattern: "^m_"}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+  /v1/brand/verify:
+    post:
+      operationId: verifyBrand
+      tags: [asks]
+      summary: "Look for the domain's proof, by file or by DNS (section 27.4); no body; at most once a minute."
+      security: [{bearer: []}]
+      responses:
+        "200": {description: "Proved, with brand_id and, the first time only, brand_key; or not yet, with a note.", content: {application/json: {schema: {oneOf: [{type: object, required: [domain, verified, verified_at, how], properties: {domain: {type: string}, verified: {const: true}, verified_at: {$ref: "./schemas/common.json#/$defs/time"}, how: {enum: [file, dns]}, brand_id: {type: string, pattern: "^br_"}, brand_key: {type: string, pattern: "^bk_"}}}, {type: object, required: [domain, verified, note], properties: {domain: {type: string}, verified: {const: false}, note: {type: string}}}]}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /v1/brand/key:
+    post:
+      operationId: newBrandKey
+      tags: [asks]
+      summary: "A new brand key; the old one stops (section 27.4)."
+      security: [{bearer: []}]
+      responses:
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand_id, brand_key], properties: {brand_id: {type: string, pattern: "^br_"}, brand_key: {type: string, pattern: "^bk_"}}}}}}
+        "401": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/brand_media/{media_id}:
+    get:
+      operationId: brandMedia
+      tags: [asks]
+      summary: "A brand's picture, served with no key (section 27.10, AUTH-1)."
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/MediaId"}]
+      responses:
+        "200": {description: The picture., content: {image/png: {schema: {type: string, contentMediaType: image/png}}, image/jpeg: {schema: {type: string, contentMediaType: image/jpeg}}, image/webp: {schema: {type: string, contentMediaType: image/webp}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/connect/token:
+    post:
+      operationId: connectToken
+      tags: [asks]
+      summary: "Exchange a connect code for the connection's key and webhook secret, once, within ten minutes (section 27.9, SHOULD); a code used twice or after ten minutes is 410 expired (ASKS-25)."
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/BrandKeyRequired"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [code], additionalProperties: false, properties: {code: {type: string, minLength: 1}}}}}}
+      responses:
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [key, connection_id, webhook_secret], properties: {key: {type: string}, connection_id: {type: string}, webhook_secret: {type: string}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "410": {$ref: "#/components/responses/Error"}
 components:
   schemas:
     JWKS:
@@ -875,6 +1030,23 @@ components:
       scheme: bearer
       description: "A key: test_... reaches the simulated pool, any test panels a server names, and the panels its own principal made where the server lets test keys make panels; a live key may reach real people (section 6)."
   parameters:
+    BrandKey:
+      name: Brand-Key
+      in: header
+      required: false
+      description: "A proved brand's key: the ask wears that brand, whatever key placed it (ASKS-9). Never in an address or a log (ASKER-3)."
+      schema: {type: string, pattern: "^bk_"}
+    BrandKeyRequired:
+      name: Brand-Key
+      in: header
+      required: true
+      description: The brand key of the service that started the connection (section 27.9).
+      schema: {type: string, pattern: "^bk_"}
+    MediaId:
+      name: media_id
+      in: path
+      required: true
+      schema: {type: string, pattern: "^m_[a-z0-9_]{4,60}$"}
     ConnectionId:
       name: connection_id
       in: path

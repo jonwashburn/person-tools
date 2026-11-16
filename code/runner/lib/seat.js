@@ -223,6 +223,15 @@ async function mediaOut(context, resp) {
   return withSecurity(resp, { "Content-Security-Policy": "sandbox; default-src 'none'; frame-ancestors 'self'", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" });
 }
 
+// OWNER_router_28 item 3: the visitor's address, signed for the API with the secret both projects hold
+export async function visitorHeader(env, request) {
+  const ip = request.headers.get("CF-Connecting-IP"), sec = env.RELAY_FORWARD_SECRET;
+  if (!ip || !sec || !/^[0-9a-fA-F:.]{2,45}$/.test(ip)) return null;
+  const ts = String(Math.floor(Date.now() / 1000)), te = new TextEncoder();
+  const k = await crypto.subtle.importKey("raw", te.encode(sec), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const s = new Uint8Array(await crypto.subtle.sign("HMAC", k, te.encode(ip + "~" + ts))); let b = ""; for (const x of s) b += String.fromCharCode(x);
+  return ip + "~" + ts + "~" + btoa(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 export async function forwardTo(context, path, rest) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -233,6 +242,7 @@ export async function forwardTo(context, path, rest) {
   const range = request.headers.get("Range");
   if (range) h.set("Range", range);
   h.set("X-Runner-Forwarded", "1");
+  try { const v = await visitorHeader(env, request); if (v) h.set("X-HC-Visitor", v); } catch (e) {}   // OWNER_router_28 item 3
   // OWNER_router_10: the account and admin routes take a session or member credential in the Authorization header (never an address);
   // only those paths carry it through
   const au = request.headers.get("Authorization");

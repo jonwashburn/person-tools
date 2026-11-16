@@ -1,0 +1,22 @@
+{
+  "blocks": [
+    {
+      "headline": "Christmas Eve is Thursday, Dec 24."
+    },
+    {
+      "text": "Shoppers and callers will ask. Tell me once and the AI uses it."
+    },
+    {
+      "when_where": {
+        "when": "Thu 24 Dec"
+      }
+    },
+    {
+      "choices": [
+        "Open as usual",
+        "Closed",
+        "Other hours"
+      ]
+    }
+  ]
+}

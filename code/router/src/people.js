@@ -123,8 +123,9 @@ export async function setOwner(env, panelId, b) {
   await env.DB.batch([
     ...(had ? [env.DB.prepare('UPDATE panel_owners SET name = ? WHERE panel_id = ?').bind(name, p.id), env.DB.prepare('UPDATE principals SET name = ? WHERE id = ?').bind(name, pr)]
       : own ? [env.DB.prepare('UPDATE principals SET name = ? WHERE id = ?').bind(name, pr), env.DB.prepare('INSERT INTO panel_owners (panel_id, name, principal_id, created_at) VALUES (?,?,?,?)').bind(p.id, name, pr, now)]
-      : [env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'test', name, 0, null, now, 'person'),
+      : [env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner, test_run) VALUES (?,?,?,?,?,?,?,(SELECT test_run FROM principals WHERE id = ?))').bind(pr, 'test', name, 0, null, now, 'person', p.principal_id),   // operations 3:14: a test panel's owner is a test run's too
          env.DB.prepare('INSERT INTO panel_owners (panel_id, name, principal_id, created_at) VALUES (?,?,?,?)').bind(p.id, name, pr, now)]),
+    env.DB.prepare('UPDATE principals SET test_run = COALESCE(test_run, (SELECT test_run FROM principals WHERE id = ?)) WHERE id = ?').bind(p.principal_id, pr),
     env.DB.prepare('DELETE FROM owner_members WHERE panel_id = ?').bind(p.id),
     ...ms.map(id => env.DB.prepare('INSERT INTO owner_members (member_id, panel_id, added_at) VALUES (?,?,?)').bind(id, p.id, now)),
   ]);
@@ -169,6 +170,7 @@ export async function newLink(env, request, m, b) {
 export async function sendAsks(env, request, m, b) {
   const T = await import('./tasks.js');
   const KNOWN = ['to', 'title', 'step', 'unlocks', 'urgency', 'expires_in', 'card', 'idempotency_key'];
+  (await import('./contacts.js')).refuseContacts(b && b.contacts);   // OWNER_router_29 (ASKS-20): no one else's details between people
   for (const k of Object.keys(b || {})) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, ['from', 'asker', 'name', 'program'].includes(k) ? 'Your name comes from your account; it is never sent with the ask.' : `"${k}" is not a field here; send ${KNOWN.join(', ')}.`, null);
   const owned = await ownedBy(env, m);
   if (!owned.length) throw notFixable(403, 'forbidden', 'Only the person whose panel it is can send asks to its people.');
@@ -178,6 +180,8 @@ export async function sendAsks(env, request, m, b) {
   if (to.some(id => !mine.has(id))) throw notFixable(404, 'not_found', 'Asks go only to your own people: one of these ids is not one of them (GET /v1/member/people lists them). Nothing was sent.');
   const title = T.taskStr(b.title, 'title', 3, 120, 'Can you pick up the dry cleaning?');
   const step = T.readStep(b.step);
+  if (step.type === 'call') throw fixable('invalid_field', 'step.type', 'A call step names a contact of the ask, and an ask to your own people carries none.', 'question');
+  (await import('./contacts.js')).askContacts(undefined, { title, step, card: b.card && typeof b.card === 'object' ? b.card : null, unlocks: null }, 0);   // a {c1} names nobody here
   const unlocks = b.unlocks === undefined ? null : T.taskStr(b.unlocks, 'unlocks', 1, 300, 'I will know whether to go.');
   const urgency = b.urgency === undefined ? 'today' : String(b.urgency);
   if (!['now', 'today', 'whenever'].includes(urgency)) throw fixable('invalid_field', 'urgency', 'urgency is "now" (it rings once, unless they muted you), "today" or "whenever".', 'today');
@@ -194,7 +198,7 @@ export async function sendAsks(env, request, m, b) {
   const sent = [], notSent = [];
   for (const id of to) {
     const r = mine.get(id), o = owned.find(x => x.panel_id === r.panel_id);
-    const card = await T.cardFor(env, { principal_id: o.principal_id, id: null, class: 'test' }, b.card, false, null);
+    const card = await T.cardFor(env, { principal_id: o.principal_id, id: null, class: 'test' }, b.card, false, null, step);
     if (idem) {
       const had = await env.DB.prepare('SELECT id, hold_until FROM tasks WHERE principal_id = ? AND idem = ?').bind(o.principal_id, idem + ':' + r.id).first();
       if (had) { sent.push({ to: r.id, name: shownName(r), task_id: had.id, repeated: true }); continue; }
@@ -273,6 +277,7 @@ export async function passTask(env, request, m, taskId, b) {
   const t = await env.DB.prepare(`SELECT t.* FROM tasks t WHERE t.id = ? AND t.panel_id = ? AND ${w}`).bind(String(taskId || ''), m.panel_id, ...args).first();
   if (!t) throw notFixable(404, 'not_found', 'No ask on your list has that id.');
   if (t.state !== 'open' || (t.expires_at || t.created_at + 2592000000) < nowMs()) throw notFixable(409, 'already_answered', 'This ask is no longer open; nothing was passed.');
+  if (t.contacts_json && t.contacts_json !== '[]') throw notFixable(409, 'has_contacts', 'This ask carries someone else\'s details, so it is not passed on.');   // OWNER_router_29
   const step = JSON.parse(t.step_json);
   if (step.type === 'review') throw notFixable(409, 'conflict', 'A media check is for person.tools\'s own reviewer; it cannot be passed on.');
   const passes = (await env.DB.prepare('SELECT * FROM task_passes WHERE task_id = ? ORDER BY created_at').bind(t.id).all()).results || [];
@@ -561,6 +566,10 @@ function firstLine(text, max = 80) {
   const cut = one.slice(0, max - 1), sp = cut.lastIndexOf(' ');
   return (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s,;:.-]+$/, '') + '\u2026';
 }
+// REACH 3:35 PM CT 16 Nov: a page of your own (made at /start) leads with the person's own AIs
+export async function isOwnPage(env, m) {
+  return !!(m && await env.DB.prepare("SELECT 1 AS x FROM panels WHERE id = ? AND join_code_hash LIKE 'self:%'").bind(m.panel_id).first());
+}
 export async function taskAlertLine(env, m, taskId) {
   const T = await import('./tasks.js'); const [w, args] = T.forMember(m);
   const t = await env.DB.prepare(`SELECT t.* FROM tasks t WHERE t.id = ? AND t.panel_id = ? AND ${w}`).bind(String(taskId || ''), m.panel_id, ...args).first();
@@ -570,5 +579,6 @@ export async function taskAlertLine(env, m, taskId) {
   if (!(await alertWordsOf(env, m.id))) return { ...who, note: 'Only who is asking: turn on "Show the ask in my alerts" in your settings to see its first line here.' };
   const step = JSON.parse(t.step_json || '{}');
   const src = ['question', 'approve', 'link'].includes(step.type) && step.text ? step.text : t.title;
-  return { ...who, line: firstLine(T.maskSecrets(src).v), note: 'Shown because you turned on "Show the ask in my alerts". Your phone\'s own preview setting decides what shows on a locked screen.' };
+  const CT = await import('./contacts.js');   // OWNER_router_29: an alert draws a contact as their role, never their name
+  return { ...who, line: firstLine(T.maskSecrets(CT.drawRoles(src, CT.parse(t.contacts_json))).v), note: 'Shown because you turned on "Show the ask in my alerts". Your phone\'s own preview setting decides what shows on a locked screen.' };
 }

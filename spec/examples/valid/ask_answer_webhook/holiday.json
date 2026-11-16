@@ -1,0 +1,13 @@
+{
+  "task_id": "tk_hol01",
+  "key": "holiday:2026-12-24",
+  "state": "answered",
+  "reply": {
+    "action": "answer",
+    "choice": "Other hours",
+    "text": "10 to 2",
+    "note": null,
+    "at": "2026-11-23T15:04:10Z"
+  },
+  "answered_at": "2026-11-23T15:04:10Z"
+}

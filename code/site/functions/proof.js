@@ -38,6 +38,8 @@ export async function onRequest(ctx) {
   } else {
     const rc = data.real_calls_answered || {};
     const ours = n(rc.ours), outs = n(rc.outsiders), princ = n(data.outside_principals_with_a_call), keyless = n(data.keyless_outside_callers_last_7_days), asked = n(data.outsiders_who_asked_for_real_people);
+    const ownAi = n(data.outside_principals_with_an_answered_ask);   // goal 4 (16 Nov): an outsider's own AI asked them and they answered; shown once the API counts it
+    const notes = Array.isArray(data.record_notes) ? data.record_notes.filter(x => typeof x === 'string' && x.trim()) : [];   // OWNER_router_27: the record, said plainly
     const when = data.counted_at ? new Date(data.counted_at).toLocaleString('en-US', { timeZone: 'America/Chicago', dateStyle: 'medium', timeStyle: 'short' }) + ' CT' : '';
     const total = (ours || 0) + (outs || 0);
     const h1 = total === 0 ? 'No real call has been answered yet' : `${total} real ${total === 1 ? 'call has' : 'calls have'} been answered`;
@@ -49,9 +51,10 @@ ${(ours || 0) > 0 && EXPECT.first_call && EXPECT.first_call.text ? `<h2>${esc(EX
 <tr><td><strong>${esc(ours)}</strong></td><td>Real calls answered that our own programs made (the films, pages, songs and games we make for people)</td></tr>
 <tr><td><strong>${esc(outs)}</strong></td><td>Real calls answered that someone outside made</td></tr>
 <tr><td><strong>${esc(princ)}</strong></td><td>Outside accounts that have made a call, free or paid (our own checks and the front page's demo never count)</td></tr>
-<tr><td><strong>${esc(keyless)}</strong></td><td>Outside callers with no key, last seven days, counted by address (we keep no more)</td></tr>${asked === null ? '' : `<tr><td><strong>${esc(asked)}</strong></td><td>Outsiders whose call asked for strangers (recorded for the operator; strangers are not offered yet)</td></tr>`}
+<tr><td><strong>${esc(keyless)}</strong></td><td>Outside callers with no key, last seven days, counted by address (we keep no more)</td></tr>${ownAi === null ? '' : `<tr><td><strong>${esc(ownAi)}</strong></td><td>Outside people whose own AI asked them on their phone and got their answer (pages made by our team or a test never count)</td></tr>`}${asked === null ? '' : `<tr><td><strong>${esc(asked)}</strong></td><td>Outsiders whose call asked for strangers (recorded for the operator; strangers are not offered yet)</td></tr>`}
 </tbody></table>
 <h2>Our own calls</h2>${list ? `<ul>${list}</ul>` : '<p>None answered yet. Each of our calls appears here with what its answers changed.</p>'}
+${notes.length ? `<h2>The record, said plainly</h2>${notes.map(x => `<p>${esc(x)}</p>`).join('')}` : ''}
 <h2>How it is counted</h2><p>${esc(data.how_counted || '')}</p>`;
   }
   const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proof: ${esc(EXPECT.network)}</title><link rel="stylesheet" href="/m.css"></head><body class="m-doc"><main><nav aria-label="Site"><a href="/">Home</a><a href="/start">First call</a><a href="/questions">Questions</a><a href="/status">Status</a><a href="/proof" aria-current="page">Proof</a></nav><div class="m-label">Proof</div>${main}<p class="m-status">${esc(EXPECT.status_plain)}</p><p class="m-src">As data: <a href="/proof.json">/proof.json</a> · from the API: <a href="https://${esc(H.API)}/v1/proof">/v1/proof</a></p><footer>${esc(EXPECT.network)}</footer></main></body></html>`;

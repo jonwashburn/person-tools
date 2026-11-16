@@ -172,6 +172,8 @@ kbd { font-family: var(--mono); font-size: 11px; font-weight: 400; line-height: 
 .chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .chip.on b { color: var(--paper); }
 .chip svg { width: 13px; height: 13px; }
+.chip .b-slot .b-mark { width: 11px; height: 11px; }
+.chip.on .b-slot { color: var(--paper); }
 .sort, .search { display: flex; align-items: center; gap: 8px; }
 .sort select { flex: 1; height: 26px; border: 1px solid var(--rule-strong); background: var(--sheet); padding: 0 6px; font-size: 13px;
   border-radius: 0; }
@@ -243,10 +245,44 @@ kbd { font-family: var(--mono); font-size: 11px; font-weight: 400; line-height: 
 .blocks .b-price { font-weight: 800; font-size: 21px; letter-spacing: -.03em; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; }
 .blocks .b-when { margin: 0; color: var(--ink); font-weight: 560; }
 .ask-words { border-left: 3px solid var(--asker-rule); padding: 2px 0 2px 12px; margin: 0 0 12px; }
+.blocks .b-quote { margin: 0; border-left: 3px solid var(--rule-strong); padding: 0 0 0 12px; }
+.blocks .b-quote p { margin: 0; color: var(--ink); white-space: pre-wrap; }
+.blocks .b-quote .b-by { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.b-contact { display: grid; justify-items: start; gap: 2px; margin: 0 0 12px; padding: 9px 12px; border: 1px solid var(--rule-strong); max-width: 520px; }
+.b-contact .c-name { font-weight: 700; color: var(--ink); }
+.b-contact .c-num { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 560; }
+.b-contact .c-mail { color: var(--ink); }
+.b-contact .consent { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+p.b-contact.gone { display: block; border-style: dashed; color: var(--muted); font-size: 13.5px; }
+/* A branded ask (section 27): the brand's ground, its ink on the card's words, ink_soft on fact labels, the when line and a
+   quote's speaker, its rule on the card's edge and the lines inside. Every control keeps the Desk's own look (CARD-1). */
+.brand-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; margin: 6px 0 10px; font-size: 14.5px; line-height: 20px; }
+.b-slot { display: inline-flex; align-items: center; color: var(--ink); }
+.b-slot .b-mark { width: 14px; height: 14px; display: block; }
+.b-slot img.b-mark { object-fit: contain; }
+.brand-line .b-name { font-weight: 720; color: var(--b-ink, var(--ink)); }
+.brand-line .b-domain { color: var(--b-ink-soft, var(--muted)); }
+.flag.test-brand { border: 1px solid var(--ink); color: var(--ink); padding: 0 3px; }
+.card.branded { background: var(--b-ground); border: 1px solid var(--b-rule, var(--rule)); margin: 14px 18px 120px; padding-bottom: 28px; }
+.card.branded.round { border-radius: 14px; }
+.card.branded .card-title, .card.branded .blocks .b-headline, .card.branded .blocks .b-text, .card.branded .blocks .b-facts dd,
+.card.branded .blocks .b-price, .card.branded .blocks .b-quote p, .card.branded .ask-words p { color: var(--b-ink, var(--ink)); }
+.card.branded .blocks .b-facts dt, .card.branded .blocks .b-when, .card.branded .blocks .b-quote .b-by { color: var(--b-ink-soft, var(--muted)); }
+.card.branded .blocks .b-when { font-weight: 500; }
+.card.branded .who, .card.branded .notes, .card.branded .legend { border-color: var(--b-rule, var(--rule)); }
+.field.line-for input { width: 100%; max-width: 520px; padding: 7px 10px; border: 1.5px solid var(--ink); background: var(--sheet); }
+.field.line-for input:focus { outline: 2px solid var(--ink); outline-offset: 1px; background: var(--you-tint); }
+.field.line-for .answers { margin-top: 6px; }
+.ic.b-slot { border: 0; }
+.ic.b-slot .b-mark { width: 15px; height: 15px; }
+.b-ai { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; margin-left: 8px; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.ai-table td.name .b-ai { display: flex; margin: 3px 0 0 30px; }
+.b-ai .b-quiet { flex-basis: 100%; }
 .ask-words p { margin: 0; font-size: 17.5px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; font-weight: 480; }
 .unlocks { display: grid; grid-template-columns: max-content 1fr; gap: 10px; align-items: baseline; margin: 0 0 14px; font-size: 14px; }
 .unlocks p { margin: 0; color: var(--ink-soft); }
 .unlocks .its-words { color: var(--ink); }
+@media (max-width: 520px) { .unlocks { grid-template-columns: 1fr; gap: 2px; } }   /* label over its words on a phone */
 .media { margin: 0 0 14px; border: 1px solid var(--rule-strong); background: var(--sel); max-width: 640px; }
 .media img, .media video { display: block; width: 100%; max-height: 300px; object-fit: contain; background: #000; }
 .media figcaption { padding: 5px 9px; font-size: 12.5px; color: var(--muted); display: flex; gap: 10px; }

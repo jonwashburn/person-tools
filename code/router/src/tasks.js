@@ -25,7 +25,7 @@ const str = (v, field, min, max, example) => {
 function readStep(s) {
   if (!s || typeof s !== 'object' || Array.isArray(s)) throw fixable('missing_field', 'step', 'step is ONE thing to do: {"type":"command","command":"..."}, {"type":"link","url":"https://..."} or {"type":"question","text":"...","choices":["A","B"]}. Four asks are four tasks.', { type: 'command', command: 'bin/golive askpeople-api -m "..."', where: 'Terminal on the laptop, in ~/humancall' });
   if (Array.isArray(s.steps) || Array.isArray(s.commands)) throw fixable('invalid_field', 'step', 'A task is one step: send each step as its own task.', null);
-  const known = { command: ['type', 'command', 'where'], link: ['type', 'url', 'text'], question: ['type', 'text', 'choices'], approve: ['type', 'text', 'approve_label', 'deny_label', 'editable'], approval: ['type', 'text', 'approve_label', 'deny_label', 'editable'] };
+  const known = { command: ['type', 'command', 'where'], link: ['type', 'url', 'text'], question: ['type', 'text', 'choices', 'line_for', 'keyboard'], call: ['type', 'contact', 'text'], approve: ['type', 'text', 'approve_label', 'deny_label', 'editable'], approval: ['type', 'text', 'approve_label', 'deny_label', 'editable'] };
   if (!known[s.type]) throw fixable('invalid_field', 'step.type', 'step.type is "command", "link", "question" or "approve" (the person approves or denies).', 'command');
   if (s.type === 'approve' || s.type === 'approval') {   // OWNER_all_10 C, in the app's shape (APP_FOR_SERVICE 11:55)
     for (const k of Object.keys(s)) if (!known.approve.includes(k)) throw fixable('unknown_field', 'step.' + k, `"${k}" is not a field of an approve step; send text, approve_label and deny_label.`, null);
@@ -36,6 +36,10 @@ function readStep(s) {
   }
   for (const k of Object.keys(s)) if (!known[s.type].includes(k)) throw fixable('unknown_field', 'step.' + k, `"${k}" is not a field of a ${s.type} step; send ${known[s.type].slice(1).join(', ')}.`, null);
   if (s.type === 'command') return { type: 'command', command: str(s.command, 'step.command', 1, 2000, 'bin/golive askpeople-api -m "..."'), where: s.where === undefined ? null : str(s.where, 'step.where', 1, 200, 'Terminal on the laptop') };
+  if (s.type === 'call') {   // OWNER_router_29 (27.6): a contact of the ask to ring, from the person's own phone; nothing is dialled by the service
+    if (typeof s.contact !== 'string' || !/^c[1-4]$/.test(s.contact)) throw fixable('invalid_field', 'step.contact', 'contact names one of the ask\'s contacts: c1 to c4.', 'c1');
+    return { type: 'call', contact: s.contact, text: str(s.text, 'step.text', 3, 4000, 'Call back about the trade-in.') };
+  }
   if (s.type === 'link') {
     const u = str(s.url, 'step.url', 8, 2000, 'https://dash.cloudflare.com/');
     if (!/^https:\/\/[^\s]+$/.test(u)) throw fixable('invalid_field', 'step.url', 'step.url is one https address.', 'https://dash.cloudflare.com/');
@@ -48,7 +52,27 @@ function readStep(s) {
       throw fixable('invalid_field', 'step.choices', 'choices are 2 to 4 short strings (or leave them out for a typed answer).', ['Yes', 'No']);
     choices = s.choices.map(c => c.trim());
   }
-  return { type: 'question', text, choices };
+  // OWNER_router_26 item 7 (C5): a choice that takes a line ({"Other hours": "Your hours that day"}), and the keyboard for every line
+  let line_for = null, keyboard = null;
+  if (s.line_for !== undefined) {
+    if (!choices) throw fixable('invalid_field', 'step.line_for', 'line_for maps one of the choices to the label of its line, so it needs choices.', null);
+    if (!s.line_for || typeof s.line_for !== 'object' || Array.isArray(s.line_for) || !Object.keys(s.line_for).length) throw fixable('invalid_field', 'step.line_for', 'line_for is {"<one of the choices>": "<the line\'s label>"}.', { [choices[choices.length - 1]]: 'Your hours that day' });
+    line_for = {};
+    for (const [k, v] of Object.entries(s.line_for)) {
+      if (!choices.includes(String(k).trim())) throw fixable('invalid_field', 'step.line_for', `"${String(k).slice(0, 40)}" is not one of the choices.`, { [choices[choices.length - 1]]: 'Your hours that day' });
+      line_for[String(k).trim()] = str(v, 'step.line_for', 1, 80, 'Your hours that day');
+    }
+  }
+  if (s.keyboard !== undefined) { if (!KEYBOARDS.includes(s.keyboard)) throw fixable('invalid_field', 'step.keyboard', `keyboard is ${KEYBOARDS.join(', ')}.`, 'text'); keyboard = s.keyboard; }
+  return { type: 'question', text, choices, ...(line_for ? { line_for } : {}), ...(keyboard ? { keyboard } : {}) };
+}
+const KEYBOARDS = ['text', 'number', 'phone', 'email'];
+// ASKS-15: the line's form, by its keyboard
+function keyboardForm(kb, text) {
+  const t = String(text).trim();
+  if (kb === 'phone' && !(/^[+()\-\s\d]+$/.test(t) && (t.match(/\d/g) || []).length >= 7 && (t.match(/\d/g) || []).length <= 15)) throw fixable('invalid_field', 'text', 'This line takes a phone number: 7 to 15 digits, with +, spaces, brackets and hyphens.', '+1 312 555 0100');
+  if (kb === 'number' && !/^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$|^[+-]?\.\d+$/.test(t)) throw fixable('invalid_field', 'text', 'This line takes a number.', '42');
+  if (kb === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) throw fixable('invalid_field', 'text', 'This line takes an email address.', 'name@example.com');
 }
 
 // TRUST's shape: step is {command, where} | {link, text} | {question, choices}; every string anywhere is scanned
@@ -60,7 +84,7 @@ async function boundsOpts(env) {
 function trustShape(task) {
   const s = task.step || {};
   const step = s.type === 'command' ? { command: s.command, ...(s.where ? { where: s.where } : {}) } : s.type === 'link' ? { link: s.url, ...(s.text ? { text: s.text } : {}) }
-    : s.type === 'question' ? { question: s.text, ...(s.choices ? { choices: s.choices } : {}) } : undefined;
+    : s.type === 'question' ? { question: s.text, ...(s.choices ? { choices: s.choices } : {}) } : s.type === 'call' ? { question: s.text } : undefined;
   return { ...task, ...(step ? { step } : {}) };
 }
 // The CEO's ruling (OWNER_router_2, 10:08 AM CT 15 Nov): a task placed by an operator or team key on its own principal's panel
@@ -72,8 +96,8 @@ const URL_RX = /\bhttps?:\/\/[^\s"'<>]+/g;
 function taskFields(task) {
   const s = task.step || {}, f = [['title', task.title], ['unlocks', task.unlocks], ['asker.program', task.asker && task.asker.program], ['asker.session', task.asker && task.asker.session]];
   if (s.type === 'command') f.push(['step.command', s.command], ['step.where', s.where]);
-  if (s.type === 'link') f.push(['step.text', s.text]);
-  if (s.type === 'question') { f.push(['step.text', s.text]); (s.choices || []).forEach((c, i) => f.push([`step.choices[${i}]`, c])); }
+  if (s.type === 'link' || s.type === 'call') f.push(['step.text', s.text]);
+  if (s.type === 'question') { f.push(['step.text', s.text]); (s.choices || []).forEach((c, i) => f.push([`step.choices[${i}]`, c])); Object.values(s.line_for || {}).forEach((v) => f.push(['step.line_for', v])); }
   return f.filter(([, v]) => typeof v === 'string' && v);
 }
 function standingRules(field, text, opts) {   // the two private lists only: any other finding of TRUST's bounds is not used here
@@ -99,14 +123,21 @@ function maskSecrets(v) { if (typeof v !== 'string') return { v, masked: false }
 // or null; web addresses are taken out first (a long link path is not a key)
 function keyShape(v) { const t = String(v == null ? '' : v).replace(URL_RX, ' '); if (typeof TBX.keyShapeIn === 'function') { const w = TBX.keyShapeIn(t); if (w) return w; } return SECRET_RX.test(t) ? 'a key or a token' : null; }
 
-function out(t, request) {
+function out(t, request, brand) {
   const firstTo = t.orig_to_name || t.to_name;   // OWNER_router_18 item 7: a passed ask still reads as sent to its first addressee
   return { task_id: t.id, state: t.state, title: t.title, to: t.connection_id ? 'the person who connected this AI' : firstTo.startsWith('mb:') ? 'the panel\'s one member' : firstTo, urgency: t.urgency,
     step: JSON.parse(t.step_json), unlocks: t.unlocks || null, asker: { program: t.program || null, session: t.session || null },
     created_at: iso(t.created_at), rang: !!t.rang_at, reply: t.reply_json ? JSON.parse(t.reply_json) : null, url: apiBase(request) + '/v1/tasks/' + t.id,
-    ...(t.card_json ? { card: JSON.parse(t.card_json) } : {}),
+    card: t.card_json ? JSON.parse(t.card_json) : null, contacts: t.contacts_json ? JSON.parse(t.contacts_json) : null, group: null, webhook: t.webhook_url || null,   // OWNER_router_26 item 21: what was sent, null when not
+    ...(brand !== undefined ? { brand } : {}),
     notes: t.notes_json ? JSON.parse(t.notes_json).filter(n => !n.private) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)), ...(t.lapsed_at ? { lapsed_at: iso(t.lapsed_at) } : {}),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}) };
+}
+
+// the brand an asker's asks wear, as the asker reads it (item 21): {id, name}, or null
+async function askerBrand(env, principalId) {
+  const r = await env.DB.prepare('SELECT brand_json, brand_id FROM brands WHERE principal_id = ?').bind(principalId).first();
+  if (!r) return null; try { return { id: r.brand_id || null, name: JSON.parse(r.brand_json).name || null }; } catch { return null; }
 }
 
 async function panelFor(env, key, ref) {
@@ -173,12 +204,12 @@ async function createTask0(env, request, key, b) {
     const pr = await env.DB.prepare('SELECT team FROM principals WHERE id = ?').bind(key.principal_id).first();
     if (!pr || pr.team !== 1 || !key.team) throw fixable('forbidden_for_key_class', 'Authorization', 'Tasks are open only to the operator\'s own keys for now; ask your people with POST /v1/calls, which is screened.', null, {}, 403);
   }
-  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card', 'expires_in'];
+  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card', 'expires_in', 'contacts'];
   for (const k of Object.keys(b || {})) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'task-001');
     const had = await env.DB.prepare('SELECT * FROM tasks WHERE key_id = ? AND idem = ?').bind(key.id, idem).first();
-    if (had) return { status: 200, body: { ...out(had, request), repeated: true } };
+    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.principal_id)), repeated: true } };
   }
   const title = str(b.title, 'title', 3, 120, 'Turn On in the app');
   const step = readStep(b.step);
@@ -191,7 +222,8 @@ async function createTask0(env, request, key, b) {
   if (!URGENCY.includes(urgency)) throw fixable('invalid_field', 'urgency', 'urgency is "now" (rings once), "today" or "whenever" (the list only).', 'today');
   await bounds({ title, step, unlocks, asker: { program, session }, urgency }, env);
   await notUs({ title, step, unlocks });   // OWNER_router_11 item 1
-  const card = await cardFor(env, key, b.card, true, null);   // OWNER_router_9
+  const card = await cardFor(env, key, b.card, true, null, step);   // OWNER_router_9
+  const contacts = (await import('./contacts.js')).askContacts(b.contacts, { title, step, card, unlocks }, nowMs());   // OWNER_router_29
   const panel = await panelFor(env, key, b.panel);
   const to = await addressee(env, panel, b.to);
   { const { blocked } = await import('./blocks.js');   // OWNER_router_4 item 1: the asker hears only "not available"
@@ -201,9 +233,10 @@ async function createTask0(env, request, key, b) {
   await env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, card_json, expires_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)`).bind(id, key.principal_id, key.id, panel.id, to, title, JSON.stringify(step), unlocks, program, session, urgency, now,
       b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000).run();
+  if (contacts) await env.DB.prepare('UPDATE tasks SET contacts_json = ? WHERE id = ?').bind(JSON.stringify(contacts), id).run();
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (urgency === 'now') { try { await ringTask(env, t); } catch { } t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first(); }
-  return { status: 201, body: out(t, request) };
+  return { status: 201, body: out(t, request, await askerBrand(env, t.principal_id)) };
 }
 
 // OWNER_router_11 item 1: no asker's text may claim to be us (title, step text, labels, choices, unlocks; cards in cardFor)
@@ -212,23 +245,26 @@ const BIDI_RX = /[\u202A-\u202E\u2066-\u2069]/;
 function noBidi(field, v) { if (typeof v === 'string' && BIDI_RX.test(v)) throw fixable('invalid_field', field, `${field} has a direction-control character (U+202A to U+202E or U+2066 to U+2069), which makes words read differently from what was written. Send the words without it.`, null); }
 async function notUs(task) {
   const { claimsUs } = await import('./cards.js'); const s = task.step || {};
-  for (const [field, v] of [['title', task.title], ['unlocks', task.unlocks], ['step.text', s.text], ['step.where', s.where], ['step.command', s.command], ['step.url', s.url], ['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label], ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c]))]) noBidi(field, v);
+  for (const [field, v] of [['title', task.title], ['unlocks', task.unlocks], ['step.text', s.text], ['step.where', s.where], ['step.command', s.command], ['step.url', s.url], ['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label], ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c])), ...Object.values(s.line_for || {}).map((v) => ['step.line_for', v])]) noBidi(field, v);
+  { const { refuseReserved } = await import('./cards.js');   // OWNER_router_26 item 4
+    for (const [field, v] of [['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label], ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c]))]) if (typeof v === 'string' && v) await refuseReserved(field, v); }
   const f = [['title', task.title], ['unlocks', task.unlocks], ['step.text', s.text], ['step.where', s.where], ['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label],
     ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c]))].filter(([, v]) => typeof v === 'string' && v);
   for (const [field, v] of f) if (await claimsUs(v)) throw fixable('claims_to_be_us', field, `"${String(v).slice(0, 60)}" reads as person.tools speaking (a check, a verification or our own controls): only the person's app draws those.`, null, {}, 422);
 }
 // OWNER_router_9: a card's blocks, checked (cards.js), and every word in them passes what the task's own words pass: a key's value
 // never, and for the operator's own keys the two standing rules
-async function cardFor(env, key, raw, standing, ownConnection) {
+async function cardFor(env, key, raw, standing, ownConnection, step) {
   if (raw === undefined || raw === null) return null;
   const { readCard, textOf } = await import('./cards.js');
   const card = await readCard(env, key, raw, { own: ownConnection });
   const opts = standing ? await boundsOpts(env) : null;
   for (const w of textOf(card)) {
     noBidi('card', w);
-    if (keyShape(w)) throw fixable('secret_in_task', 'card', 'Something in the card looks like a key or a token. Never send a key\'s value.', null, {}, 422);
+    if (keyShape(w)) throw fixable('secret_in_task', 'card', 'Something in the card looks like a key or a token. Never send a key\'s value.', null, {}, 400);
     if (opts) standingRules('card', w, opts);
   }
+  { const { cardFitsStep } = await import('./cards.js'); cardFitsStep(card, step); }   // OWNER_router_26 item 5
   return card;
 }
 
@@ -238,12 +274,12 @@ async function connectionTask(env, request, key, b) {
   const c = key.connection;
   if (c.blocked) throw notFixable(403, 'not_available', 'This person is not available to this AI.');
   { const { blocked } = await import('./blocks.js'); if (await blocked(env, key.principal_id, [c.member_id])) throw notFixable(403, 'not_available', 'This person is not available to this AI.'); }
-  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card', 'expires_in'];
+  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card', 'expires_in', 'contacts'];
   for (const k of Object.keys(b)) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, ['panel', 'to', 'asker'].includes(k) ? 'This key asks one person, the one who connected it, under the name they gave it: leave out panel, to and asker.' : `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'ask-001');
     const had = await env.DB.prepare('SELECT * FROM tasks WHERE key_id = ? AND idem = ?').bind(key.id, idem).first();
-    if (had) return { status: 200, body: { ...out(had, request), repeated: true } };
+    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.principal_id)), repeated: true } };
   }
   const title = str(b.title, 'title', 3, 120, 'Someone is at the front door');
   const step = readStep(b.step);
@@ -251,11 +287,12 @@ async function connectionTask(env, request, key, b) {
   const urgency = b.urgency === undefined ? 'today' : String(b.urgency);
   if (!URGENCY.includes(urgency)) throw fixable('invalid_field', 'urgency', 'urgency is "now" (first on the list, and it rings once unless the person quieted this AI), "today" or "whenever".', 'today');
   const { allowedUrgencies } = await import('./connections.js'); const allowed = allowedUrgencies(c);   // operations 12:25: a connection may be limited
-  if (!allowed.includes(urgency)) throw fixable('invalid_field', 'urgency', `This person takes ${allowed.map(x => '"' + x + '"').join(' or ')} from this AI.`, allowed[0], { allowed }, 422);
+  if (!allowed.includes(urgency)) throw fixable('invalid_field', 'urgency', `This person takes ${allowed.map(x => '"' + x + '"').join(' or ')} from this AI.`, allowed[0], { allowed }, 400);
   for (const [field, v] of [...taskFields({ title, step, unlocks }), ...(step.type === 'approve' ? [['step.text', step.text]] : [])]) if (keyShape(v)) throw fixable('secret_in_task', field, 'Something here looks like a key or a token. Never send a key\'s value: name the file it is in.', null, {}, 422);
   await notUs({ title, step, unlocks });   // OWNER_router_11 item 1
   if (c.lab) await bounds({ title, step, unlocks, urgency }, env);
-  const card = await cardFor(env, key, b.card, !!c.lab, c.id);   // OWNER_router_9
+  const card = await cardFor(env, key, b.card, !!c.lab, c.id, step);   // OWNER_router_9
+  const contacts = (await import('./contacts.js')).askContacts(b.contacts, { title, step, card, unlocks }, nowMs());   // OWNER_router_29
   const now = nowMs();
   const day = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(CASE WHEN created_at > ? THEN 1 ELSE 0 END) AS h FROM tasks WHERE connection_id = ? AND created_at > ?').bind(now - 3600000, c.id, now - 86400000).first();
   if (day && day.n >= 300) throw notFixable(429, 'rate_limited', 'This AI has asked 300 times today; nothing was stored. Its person reads the list tomorrow.', { retry_after_seconds: 3600 });
@@ -275,12 +312,13 @@ async function connectionTask(env, request, key, b) {
     env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, connection_id, webhook_url, card_json, expires_at)
       VALUES (?,?,?,?,?,?,?,?,?,NULL,?,'open',?,?,?,?,?,?)`).bind(id, key.principal_id, key.id, c.panel_id, c.person_name || ('mb:' + c.member_id), title, JSON.stringify(step), unlocks,
       c.name, urgency, now, b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), c.id, hook, card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000),
+    ...(contacts ? [env.DB.prepare('UPDATE tasks SET contacts_json = ? WHERE id = ?').bind(JSON.stringify(contacts), id)] : []),
     env.DB.prepare('UPDATE connections SET last_used_at = ? WHERE id = ?').bind(now, c.id),
     ...(attach ? [attach] : []),
   ]);
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (urgency === 'now' && !c.quiet) { try { await ringTask(env, t); } catch { } t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first(); }
-  return { status: 201, body: out(t, request) };
+  return { status: 201, body: out(t, request, await askerBrand(env, t.principal_id)) };
 }
 
 // a note on a task, in order (operations 1:00 PM CT); masked like a reply; at most 50 per task
@@ -313,6 +351,7 @@ function expiresIn(b) {
 // an open ask past its time lapses now (as retention does each minute): never a default answer; the webhook says lapsed
 export async function lapseNow(env, t) {
   const r = await env.DB.prepare('UPDATE tasks SET state = \'lapsed\', lapsed_at = ? WHERE id = ? AND state = \'open\'').bind(nowMs(), t.id).run();
+  if (r.meta.changes === 1 && t.contacts_json) { try { await (await import('./contacts.js')).stripClosed(env, t.id); } catch { } }
   if (r.meta.changes === 1 && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'lapsed' }); } catch { } }
 }
 
@@ -321,13 +360,14 @@ export async function getTask(env, request, key, id) {
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ? AND principal_id = ?').bind(String(id || ''), key.principal_id).first();
   if (!t) throw notFixable(404, 'not_found', 'No task of yours has that id.');
   if (t.state === 'open' && (t.expires_at || t.created_at + 2592000000) < nowMs()) { await lapseNow(env, t); t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(); }
-  return out(t, request);
+  return out(t, request, await askerBrand(env, t.principal_id));
 }
 
 export async function listTasks(env, request, key, state) {
   if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer real_...', {}, 401);
   const rows = (await env.DB.prepare(`SELECT * FROM tasks WHERE principal_id = ? ${state === 'all' ? '' : 'AND state = \'open\''} ORDER BY created_at DESC LIMIT 200`).bind(key.principal_id).all()).results || [];
-  return { tasks: rows.map(t => out(t, request)) };
+  const brands = new Map(); for (const t of rows) if (!brands.has(t.principal_id)) brands.set(t.principal_id, await askerBrand(env, t.principal_id));
+  return { tasks: rows.map(t => out(t, request, brands.get(t.principal_id))) };
 }
 
 // ---- the person's side: one list, and the reply
@@ -348,10 +388,11 @@ export async function memberTasks(env, request, m, q) {
     env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND t.state NOT IN ('open', 'withdrawn', 'lapsed')
       ${like ? 'AND (t.title LIKE ? OR t.step_json LIKE ? OR t.unlocks LIKE ? OR t.program LIKE ?)' : ''} ORDER BY t.answered_at DESC LIMIT ?`)
       .bind(...mineArgs, ...(like ? [like, like, like, like] : []), histLimit(request)),
-    env.DB.prepare(`SELECT DISTINCT b.principal_id, b.brand_json, b.domain, b.verified_at FROM brands b JOIN tasks t ON t.principal_id = b.principal_id WHERE ${mine}`).bind(...mineArgs),
+    env.DB.prepare(`SELECT DISTINCT b.principal_id, b.brand_json, b.domain, b.verified_at, b.brand_id FROM brands b JOIN tasks t ON t.principal_id = b.principal_id WHERE ${mine}`).bind(...mineArgs),
     env.DB.prepare(`SELECT DISTINCT c.id, c.name, c.icon FROM connections c JOIN tasks t ON t.connection_id = c.id WHERE ${mine}`).bind(...mineArgs),
     env.DB.prepare(`SELECT o.task_id, o.content_type, o.bytes, o.seconds, o.delete_at FROM own_material o JOIN tasks t ON t.id = o.task_id WHERE ${mine}`).bind(...mineArgs),
     ...P.deckStatements(env, m),
+    env.DB.prepare("SELECT 1 AS own FROM panels WHERE id = ? AND join_code_hash LIKE 'self:%'").bind(m.panel_id),   // last: own_page (REACH 3:35)
   ])) || []).map(r => (r && r.results) || []);
   const extras = P.deckFromResults(m, rs.slice(5));   // OWNER_router_18: the notice, answers to read, what was passed on
   // asks from a person wait for the one-time notice (OWNER_router_18 item 8d)
@@ -362,22 +403,24 @@ export async function memberTasks(env, request, m, q) {
   open.length = 0; open.push(...live);
   for (const g of gone) { let at = -1; open.forEach((t, i) => { if ((t.program || '') === (g.program || '')) at = i; }); if (at < 0) open.push(g); else open.splice(at + 1, 0, g); }
   const hist = rs[1];
+  const CT = await import('./contacts.js');
   const view = (t) => ({ task_id: t.id, title: t.title, urgency: t.urgency, from: (t.passed_by && t.passed_from) || t.program || 'one of your programs', step: JSON.parse(t.step_json), unlocks: t.unlocks || null,
     created_at: iso(t.created_at), state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, notes: t.notes_json ? JSON.parse(t.notes_json) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}),
-    ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: 'The person whose panel you joined. The name is their account\'s, checked by person.tools; it is never typed into the ask.' } } : {}),
+    ...(t.contacts_json ? { contacts: CT.forPerson(CT.parse(t.contacts_json)) } : {}),   // OWNER_router_29: never the service's ref
+    ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: `You joined ${t.program || 'this person'}'s people. The name is their account's, checked by person.tools; it is never typed into the ask.` } } : {}),
     ...(t.passed_by ? { passed_on_by: t.passed_by_name || 'one of your people' } : {}),
     shell_only: JSON.parse(t.step_json).type === 'command' ? 'Only you can run this: copy the line and paste it where it says. The service cannot run it for you.' : undefined });
   const groups = [];
   for (const t of open) { const g = groups.find(x => x.from === (t.program || 'one of your programs')); if (g) g.task_ids.push(t.id); else groups.push({ from: t.program || 'one of your programs', task_ids: [t.id] }); }
-  const out = { open: open.map(view), groups, history: hist.map(view), ...extras };
+  const out = { open: open.map(view), groups, history: hist.map(view), ...extras, ...((rs[rs.length - 1] || [])[0] ? { own_page: true } : {}) };
   // OWNER_router_9: each ask's card as its asker sent it, and the asker's brand; "from" stays the service's own
   { const rows = [...open, ...hist], brands = {};
-    for (const b of rs[2]) if (b.verified_at && b.domain) { try { brands[b.principal_id] = { ...JSON.parse(b.brand_json), domain: b.domain, verified: true }; } catch { } }   // as cards.js brandOf
+    const { brandView } = await import('./cards.js');   // OWNER_router_26 items 1, 3, 24: proved brands to all; test brands to test members only
+    for (const b of rs[2]) { const v = brandView(b, m, apiBase(request)); if (v) brands[b.principal_id] = v; }
     for (const [i, x] of [...out.open, ...out.history].entries()) { const t = rows[i];
       if (t.card_json) x.card = JSON.parse(t.card_json);
-      if (!(t.principal_id in brands)) brands[t.principal_id] = null;
-      if (brands[t.principal_id]) x.brand = { ...brands[t.principal_id], ...(brands[t.principal_id].mark ? { mark_url: apiBase(request) + '/v1/brand_media/' + brands[t.principal_id].mark.media } : {}) }; } }
+      if (brands[t.principal_id]) x.brand = brands[t.principal_id]; } }
   const own = [...out.open, ...out.history].filter((x, i) => (i < out.open.length ? open[i] : hist[i - out.open.length]).connection_id);
   if (own.length) {   // WEB 4:07: two queries for the whole list, not two per ask
     const rows = new Map([...open, ...hist].map(r => [r.id, r]));
@@ -411,13 +454,18 @@ export async function memberReply(env, request, m, taskId, b) {
   for (const k of Object.keys(b || {})) if (!['action', 'choice', 'text', 'note'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send action, choice, text and note.`, null);
   const action = b.action;
   const step = JSON.parse(t.step_json);
-  const ACTIONS = step.type === 'approve' ? ['approve', 'deny', 'not_now', 'note'] : ['done', 'answer', 'not_now', 'note'];   // SPEC 8.1; OWNER_all_10 C; 'note' (operations 1:00)
+  const ACTIONS = step.type === 'approve' ? ['approve', 'deny', 'done', 'not_now', 'note'] : ['done', 'answer', 'not_now', 'note'];   // OWNER_router_26 item 6: done on every step   // SPEC 8.1; OWNER_all_10 C; 'note' (operations 1:00)
   if (!ACTIONS.includes(action)) throw fixable('invalid_field', 'action', `action is ${ACTIONS.map(a => '"' + a + '"').join(', ')}.`, ACTIONS[0]);
   let choice = null, text = null;
   if (action === 'answer') {
     if (b.choice !== undefined) { if (!step.choices || !step.choices.includes(b.choice)) throw fixable('invalid_field', 'choice', 'choice is one of the task\'s choices.', step.choices ? step.choices[0] : null); choice = b.choice; }
     if (b.text !== undefined) text = str(b.text, 'text', 1, 4000, 'my answer');
-    if (choice === null && text === null) throw fixable('missing_field', 'choice', 'An answer is a choice or a typed line.', step.choices ? step.choices[0] : null);
+    if (choice === null && text === null && step.type !== 'call') throw fixable('missing_field', 'choice', 'An answer is a choice or a typed line.', step.choices ? step.choices[0] : null);
+    // OWNER_router_26 items 7 and 26 (ASKS-14, ASKS-15): a choice that takes a line carries text; no other choice does; a line keeps its keyboard's form
+    const takesLine = choice !== null && step.line_for && Object.prototype.hasOwnProperty.call(step.line_for, choice);
+    if (takesLine && text === null) throw fixable('invalid_field', 'text', `"${choice}" takes a line: send text with it (${step.line_for[choice]}).`, null);
+    if (choice !== null && !takesLine && text !== null) throw fixable('invalid_field', 'text', 'Only a choice that takes a line carries text; this one does not. Send the choice alone, or a note.', null);
+    if (text !== null && step.keyboard && (takesLine || choice === null)) keyboardForm(step.keyboard, text);
   }
   if (action === 'note') {   // operations 1:00 PM CT: a note back to the asker; the task stays open and nothing is answered
     for (const k of Object.keys(b)) if (!['action', 'note'].includes(k)) throw fixable('unknown_field', k, 'A note is {"action": "note", "note": "..."}.', null);
@@ -433,11 +481,15 @@ export async function memberReply(env, request, m, taskId, b) {
   const mt = maskSecrets(text), mn = maskSecrets(note); text = mt.v; note = mn.v;
   const now = nowMs();
   // WEB gap 36 (router_12 item 3): an approval from a client with no device key is allowed and carries no device_approved mark; it says so
-  const reply = { action, choice, text, note, at: iso(now), ...(action === 'approve' ? { approved_text: text || step.text } : {}),   // the asker reads exactly what was approved
+  const CT = await import('./contacts.js'), clist = CT.parse(t.contacts_json), cref = action === 'answer' ? CT.contactRef(clist, step, choice) : undefined;
+  // a signed approval of text that names a contact covers the text as the person saw it: only its digest is kept, never the name
+  const drawn = action === 'approve' && clist && CT.hasRefs(text || step.text) ? { approved_digest_drawn: await (await import('./tasksig.js')).taskDigest(CT.drawNames(text || step.text, clist)) } : {};
+  const reply = { action, choice, text, note, at: iso(now), ...(cref !== undefined ? { contact_ref: cref } : {}), ...drawn, ...(action === 'approve' ? { approved_text: text || step.text } : {}),   // the asker reads exactly what was approved
     ...(['approve', 'deny'].includes(action) ? { device_approved: false, mark: 'none: sent without a device signature, so it carries no device_approved mark' } : {}),
     ...(mt.masked || mn.masked ? { masked: 'A key-shaped value was removed; save it to the file the step names.' } : {}) };
   const state = action === 'done' ? 'done' : ['answer', 'approve', 'deny'].includes(action) ? 'answered' : 'not_now';
   await env.DB.prepare('UPDATE tasks SET state = ?, reply_json = ?, answered_at = ?, answered_by = ? WHERE id = ?').bind(state, JSON.stringify(reply), now, m.id, t.id).run();
+  if (t.contacts_json) { try { await CT.stripClosed(env, t.id); } catch { } }   // OWNER_router_29: the details go with the open ask
   // OWNER_all_10 C: a connected AI that named a webhook gets this answer there too (signed; app.js sends it after the reply)
   let delivery = null;
   if (t.webhook_url && t.connection_id) { const { queueAnswer } = await import('./own.js'); delivery = await queueAnswer(env, { ...t, state }).catch(() => null); }
@@ -557,17 +609,19 @@ export async function withdrawTask(env, request, key, id, b, admin = false) {
   for (const k of Object.keys(b || {})) if (k !== 'why') throw fixable('unknown_field', k, `"${k}" is not a field here; send why.`, null);
   const why = str(b && b.why, 'why', 3, 200, 'Not needed any more: the step was done another way.');
   if (SECRET_RX.test(why.replace(URL_RX, ' '))) throw fixable('secret_in_task', 'why', 'Something here looks like a key or a token. Never send a key\'s value.', null, {}, 422);
-  if (t.state === 'withdrawn') return out(t, request);   // idempotent
+  if (t.state === 'withdrawn') return out(t, request, await askerBrand(env, t.principal_id));   // idempotent
   if (t.state !== 'open') throw notFixable(409, 'already_answered', `This task was already answered (${t.state}); it stays as it is.`);
   await env.DB.prepare('UPDATE tasks SET state = \'withdrawn\', withdrawn_at = ?, withdraw_why = ? WHERE id = ? AND state = \'open\'').bind(nowMs(), why, t.id).run();
-  return out(await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(), request);
+  if (t.contacts_json) { try { await (await import('./contacts.js')).stripClosed(env, t.id); } catch { } }
+  return out(await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(), request, await askerBrand(env, t.principal_id));
 }
 
 // OWNER_router_1 item 4: every refused task, for the operator (GET /internal/task_refusals?hours=24). Never a matched secret.
 export async function recordRefusal(env, key, b, err) {
   try {
     const a = (b && typeof b.asker === 'object' && b.asker) || {};
-    const clip = (v, n) => typeof v === 'string' ? maskSecrets(v.slice(0, n)).v : null;
+    const { maskForLog } = await import('./contacts.js');   // TRUST 5:06: no phone number or email address kept in the refusal list
+    const clip = (v, n) => typeof v === 'string' ? maskSecrets(maskForLog(v).slice(0, n)).v : null;
     const e = (err && err.body) || {};
     await env.DB.prepare('INSERT INTO task_refusals (id, principal_id, program, session, title, rule, field, message, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
       .bind(rid('tr_'), key && !key.anon ? key.principal_id : null, clip(a.program, 40), clip(a.session, 80), clip(b && b.title, 120), e.code || 'error', e.field || null, clip(e.message, 300), nowMs()).run();

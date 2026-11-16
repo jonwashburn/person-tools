@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ask.json",
+  "title": "An ask as the service that placed it reads it: the answer to POST /v1/tasks and GET /v1/tasks/{task_id} (section 27.2)",
+  "type": "object",
+  "required": [
+    "task_id",
+    "state",
+    "title",
+    "urgency",
+    "step",
+    "created_at",
+    "expires_at",
+    "reply",
+    "notes",
+    "url"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^tk_"
+    },
+    "state": {
+      "enum": [
+        "open",
+        "answered",
+        "done",
+        "not_now",
+        "lapsed",
+        "withdrawn"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "urgency": {
+      "enum": [
+        "now",
+        "today",
+        "whenever"
+      ]
+    },
+    "step": {
+      "type": "object"
+    },
+    "unlocks": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "card": {
+      "oneOf": [
+        {
+          "$ref": "card.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contacts": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "role",
+              "consent"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "consent": {
+                "type": "string"
+              },
+              "consent_at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "description": "As sent while the ask is open; after it closes only id, role, ref and consent (27.7, ASKS-19)."
+    },
+    "group": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "webhook": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "brand": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "reply": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "action",
+            "at"
+          ]
+        }
+      ]
+    },
+    "notes": {
+      "type": "array"
+    },
+    "url": {
+      "type": "string"
+    },
+    "repeated": {
+      "const": true
+    },
+    "withdrawn_at": {
+      "type": "string"
+    },
+    "withdraw_why": {
+      "type": "string"
+    },
+    "elsewhere": {
+      "type": "boolean"
+    },
+    "lapsed_at": {
+      "type": "string"
+    }
+  },
+  "description": "Servers may add fields; a service ignores what it does not know."
+}

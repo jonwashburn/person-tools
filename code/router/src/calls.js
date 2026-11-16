@@ -93,6 +93,7 @@ async function resolvePool(env, key, spec) {
     const exists = await env.DB.prepare('SELECT kind FROM panels WHERE id = ? OR name = ?').bind(ref, ref).first();
     if (exists) throw fixable('forbidden_for_key_class', 'pool', 'A test key reaches the simulated pool only (and the team\'s own test panels with a team key). Use pool "simulated".', 'simulated', {}, 403);
   }
+  if (panel) { const { isPeoplePanel } = await import('./panels.js'); if (await isPeoplePanel(env, panel)) throw fixable('unknown_pool', 'pool', 'That panel is a person\'s own people: only that person sends them asks. No call goes to it.', 'simulated', {}, 403); }
   if (panel && panel.kind === 'private' && key.class !== 'real' && panel.principal_id !== key.principal_id) throw fixable('forbidden_for_key_class', 'pool', 'A private panel of real people needs a live key. Use pool "simulated".', 'simulated', {}, 403);
   // OWN_PANELS.md rule 10: a closed panel answers the quote as the call does (TRUST 6:09: an agent is never told yes first)
   if (panel && String(panel.join_code_hash || '').startsWith('gone:')) throw fixable('unknown_pool', 'pool', `The panel "${ref}" is closed: nobody can be asked on it. Make a new panel (POST /v1/panels), or use pool "simulated".`, 'simulated');
@@ -656,8 +657,10 @@ export async function settle(env, request, opts = {}) {
   }
   const calls = opts.callId
     ? (await env.DB.prepare('SELECT * FROM calls WHERE id = ? AND closed_at IS NULL').bind(opts.callId).all()).results
-    : (await env.DB.prepare(`SELECT * FROM calls WHERE closed_at IS NULL AND (deadline_at <= ? OR status = 'cancelled' OR (status = 'held' AND created_at <= ?)
-        OR id IN (SELECT call_id FROM seats WHERE due_at IS NULL AND state IN ('answered','stopped','expired','released'))) LIMIT ?`).bind(now, now - REVIEW_HOURS * 3600000, limit).all()).results;
+    // 16 Nov 3:4x PM CT: only unclosed calls are read (open, held, cancelled; every other status is set with closed_at), through the
+    // partial index calls_unclosed, and each one's seats through its own index: 35,498 rows read per request became a handful
+    : (await env.DB.prepare(`SELECT * FROM calls c WHERE c.status IN ('open', 'held', 'cancelled') AND c.closed_at IS NULL AND (c.deadline_at <= ? OR c.status = 'cancelled' OR (c.status = 'held' AND c.created_at <= ?)
+        OR EXISTS (SELECT 1 FROM seats s WHERE s.call_id = c.id AND s.due_at IS NULL AND s.state IN ('answered','stopped','expired','released'))) LIMIT ?`).bind(now, now - REVIEW_HOURS * 3600000, limit).all()).results;
   for (const c of calls || []) { try { await maybeClose(env, request, c, now); } catch (e) { console.log('maybeClose', c.id, String(e && e.stack || e)); } }
   return { seats: due.length, calls: (calls || []).length };
 }
@@ -848,6 +851,8 @@ export async function openFailed(env, m, seatId, b) {
   if (!live && !missed) throw notFixable(404, 'not_found', 'No offer of yours has that id.');
   const twice = await env.DB.prepare(`SELECT 1 AS x FROM events e JOIN seats s2 ON s2.id = e.seat_id WHERE s2.call_id = ? AND e.body_json LIKE '{"open_failed"%' AND json_extract(e.body_json, '$.open_failed') = ? LIMIT 1`).bind(s.call_id, m.id).first();
   if (twice) throw notFixable(409, 'conflict', 'A failed open was already reported for this call; it is reported once per call.');
+  const today = await env.DB.prepare(`SELECT COUNT(*) AS n FROM events WHERE body_json LIKE '{"open_failed"%' AND json_extract(body_json, '$.open_failed') = ? AND received_at > ?`).bind(m.id, now - 86400000).first();
+  if (today && today.n >= 2) throw notFixable(409, 'conflict', 'Two failed opens were already reported in the last 24 hours; this one is not taken, so its lapse counts as usual. If the app cannot open calls, tell the operator.');   // TRUST 7:46 PM CT 15 Nov
   await env.DB.prepare('INSERT INTO events (seat_id, received_at, body_json) VALUES (?,?,?)').bind(s.id, now, JSON.stringify({ open_failed: m.id, why: why || null })).run();
   if (missed) {   // after the hold: that lapse is taken back (not a miss, no step toward Off), and the call waits for the re-offer
     await env.DB.batch([

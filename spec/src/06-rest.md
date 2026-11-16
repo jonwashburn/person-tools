@@ -81,7 +81,8 @@ own key under `ext` and never a new value in these lists.
 - **Content ratings:** `general`.
 - **Profiles:** `{{wire_prefix}}/fair-call/0.1`.
 - **The person client's lists** (step types, actions on an ask, ask states, urgencies, note authors, card blocks, brand mark
-  states, connection icons) are in section 26.12.
+  states, connection icons) are in section 26.12, and those of asks from a service (mark glyphs, dressing places, corners,
+  consent statements, keyboards) in section 27.11.
 
 **Error codes:**
 
@@ -113,6 +114,15 @@ own key under `ext` and never a new value in these lists.
 | `already_answered` | 409 | no | Section 26: the ask was answered already, on this or another device, or no longer takes notes. |
 | `conflict` | 409 | no | Section 26: the request conflicts with the state of what it names, such as a sign-in code stopped by a wrong number. |
 | `expired` | 410 | no | Section 26: what the request names has ended, such as a sign-in code. |
+| `contrast_too_low` | 400 | yes | Section 27: a brand colour under its contrast floor on a ground the brand gives. `ratio`, `floor`, `ground`. |
+| `reserved_word` | 400 | yes | Section 27: a label that is, as a whole, one of the client's own words (Done, Later, Not now, Undo, Report, Stop, Block). |
+| `choices_differ` | 400 | yes | Section 27: a card's `choices` block differs from the step's choices. |
+| `unknown_reference` | 400 | yes | Section 27: a reference such as `{c2}` to a contact the ask does not carry. |
+| `number_outside_contacts` | 400 | yes | Section 27: a long number in an ask's words; `example` moves it into `contacts`. |
+| `brand_not_proved` | 400 | yes | Section 27: an unknown, stopped or unproved brand key; `field` is `Brand-Key`. |
+| `group_full` | 400 | yes | Section 27: a seventh open ask in one group. |
+| `contacts_not_allowed` | 400 | no | Section 27: contacts on a call to a pool, an offer, or a person's ask to their own people. |
+| `has_contacts` | 409 | no | Section 27: an ask that carries contacts cannot be passed on. |
 | `internal` | 500 | no | The server failed. Nothing was charged; try again later. |
 
 ## 25. Conformance
@@ -125,7 +135,9 @@ simulated pool. Its file `traceability` maps every requirement identifier
 in this text to the check that tests it, or says why none can.
 
 A server that lists `person_client` in discovery also meets every requirement of section 26 marked `MEMBER-`, and a person
-client meets those marked `CLIENT-` (section 26.13).
+client meets those marked `CLIENT-` (section 26.13). A server that lists `branded_asks` also meets every requirement of
+section 27 marked `ASKS-` (ASKS-25 only where it offers 27.9), a service meets those marked `ASKER-`, and a person client
+meets those marked `CARD-` against such a server (section 27.12).
 
 A server that passes says exactly: "passes suite `<version>` against {{standard}} 0.1 core", and, for each profile it
 declares and passes, the profile's name. Nothing more. A pass by an implementation its authors wrote for this text's own

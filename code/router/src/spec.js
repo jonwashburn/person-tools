@@ -53,6 +53,7 @@ function lev(a, b) {
 const ALIASES = { experience: 'kind and content', respond: 'answer_fields', who: 'people, enough and pool', pay: 'pay_per_person_usd and minutes', by_minutes: 'deadline_minutes',
   count: 'people', estimated_minutes: 'minutes', options: 'choices', media_id: 'content', fields: 'answer_fields', question: 'ask', max_total: 'max_total_usd', deadline: 'deadline_minutes', seconds: 'minutes', delay_s: 'delay_seconds', stop_at_s: 'stop_at_fraction' };
 function unknownField(name, allowed, path) {
+  if (name === 'contacts') return notFixable(400, 'contacts_not_allowed', 'Calls to a pool and offers carry no one else\'s contact details: contacts belong on an ask from a person\'s own AI or to a principal\'s own private panel. Nothing was stored.');   // OWNER_router_29 (ASKS-20)
   let best = ALIASES[name] || null;
   if (!best) { let bd = 99; for (const a of allowed) { const d = lev(name, a); if (d < bd) { bd = d; best = a; } } if (bd > Math.max(2, Math.floor(name.length / 3))) best = null; }
   return fixable('unknown_field', path, `"${path}" is not a field of this version${best ? `; did you mean ${best}?` : '.'} Remove it, or put extensions under "ext".`, null, best ? { did_you_mean: best } : {});

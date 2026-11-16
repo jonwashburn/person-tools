@@ -62,7 +62,21 @@ async function body(request) {
 }
 
 async function ipHashOf(env, request) {
-  return (await sha256hex('ip:' + (request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.SEAT_SECRET || ''))).slice(0, 24);
+  return (await sha256hex('ip:' + ((await visitorIp(env, request)) || request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.SEAT_SECRET || ''))).slice(0, 24);
+}
+// OWNER_router_28 item 3 (TRUST 3:43): an address the page relay vouches for (X-HC-Visitor, HMAC-SHA256 with RELAY_FORWARD_SECRET, at most
+// 60 s old) is the visitor's; an unsigned or wrongly signed one is ignored, so the request counts as the relay's own address
+export async function visitorIp(env, request) {
+  const v = request.headers.get('x-hc-visitor'), sec = env && env.RELAY_FORWARD_SECRET;
+  if (!v || !sec) return null;
+  const parts = v.split('~'); if (parts.length !== 3) return null;
+  const [ip, ts, sig] = parts;
+  if (!/^[0-9a-fA-F:.]{2,45}$/.test(ip) || !/^\d{9,11}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 60 || !/^[A-Za-z0-9_-]{40,48}$/.test(sig)) return null;
+  try {
+    const te = new TextEncoder(), k = await crypto.subtle.importKey('raw', te.encode(sec), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+    const raw = Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - sig.length % 4) % 4)), (c) => c.charCodeAt(0));
+    return (await crypto.subtle.verify('HMAC', k, raw, te.encode(ip + '~' + ts))) ? ip : null;
+  } catch { return null; }
 }
 
 async function mintTestKey(env, request, caps = { call: 5000, day: 20000 }, testRun = undefined) {
@@ -115,7 +129,8 @@ function discovery(request) {
     mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'],
     kinds: ['listen', 'watch', 'view', 'play', 'compare', 'answer'],
     pools: ['simulated', 'panel'],   // 'self' (the front page's demo pool, fixed asks only) is accepted but not listed (chief 04:21)
-    features: ['keyless', 'url_content', 'outcome', 'panels', 'person_client'],   // person_client: the member interface of the standard's section 26 (WEB 2:57 PM CT 16 Nov: schema and suite list it)
+    features: ['keyless', 'url_content', 'outcome', 'panels', 'person_client', 'branded_asks'],   // branded_asks: section 27, tier 1 live (OWNER_router_26 item 23)
+    webhook_header_prefix: 'x-person-tools',   // 27.2: the prefix of the headers on answers delivered to a service
     profiles: [BUILD.wire_prefix + '/fair-call/0.1'],   // DISC-3: its checks (F01-F04) pass and are held by the baseline
     screening_policy: siteBase(request) + '/policy',
     test_keys: base + '/v1/keys',
@@ -237,27 +252,31 @@ export async function handle(request, env, ctx) {
     if (path === '/.well-known/jwks.json') return json(jwks(), 200, { 'Cache-Control': 'public, max-age=300' });
     if (path === '/openapi.yaml' || path === '/openapi.json') { const { openapi } = await import('./openapi.js'); return json(openapi(request), 200, { 'Cache-Control': 'public, max-age=300' }); }
     if (path === '/v1/status' && request.method === 'GET') {
-      const l = await env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s, COUNT(*) AS n FROM ledger').first();
-      const b = await env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s FROM balances').first();
-      const held = await env.DB.prepare('SELECT COUNT(*) AS n FROM held_calls WHERE released_at IS NULL').first();
-      const lt = await env.DB.prepare('SELECT v FROM meta WHERE k = \'last_tick\'').first();
-      const oe = await env.DB.prepare('SELECT MIN(received_at) AS t FROM events').first();
-      const oi = await env.DB.prepare('SELECT MIN(created_at) AS t FROM idempotency').first();
-      const { modelReadStatus } = await import('./model_cap.js');
-      const model_read = await modelReadStatus(env).catch(() => ({ on: !!env.ANTHROPIC_API_KEY, error: 'the day\'s spend could not be read' }));
-      const media = await env.DB.prepare(`SELECT
+      // the slow API (the CEO 3:31 PM CT 16 Nov): every read goes out at once; they were a dozen round trips one after another
+      const { modelReadStatus } = await import('./model_cap.js'); const { reviewStatus } = await import('./tasks.js'); const { ownCounts } = await import('./own.js'); const { apnsConfigured } = await import('./apns.js');
+      const [l, b, held, lt, oe, oi, model_read, media, review, ais, pushDevices] = await Promise.all([
+        env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s, COUNT(*) AS n FROM ledger').first(),
+        env.DB.prepare('SELECT COALESCE(SUM(cents),0) AS s FROM balances').first(),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM held_calls WHERE released_at IS NULL').first(),
+        env.DB.prepare('SELECT v FROM meta WHERE k = \'last_tick\'').first(),
+        env.DB.prepare('SELECT MIN(received_at) AS t FROM events').first(),
+        env.DB.prepare('SELECT MIN(created_at) AS t FROM idempotency').first(),
+        modelReadStatus(env).catch(() => ({ on: !!env.ANTHROPIC_API_KEY, error: 'the day\'s spend could not be read' })),
+        env.DB.prepare(`SELECT
           SUM(CASE WHEN h.released_at IS NULL THEN 1 ELSE 0 END) AS waiting,
           SUM(CASE WHEN c.created_at >= ? THEN 1 ELSE 0 END) AS day
         FROM held_calls h JOIN calls c ON c.id = h.call_id JOIN principals p ON p.id = c.principal_id
-        WHERE c.screening_json LIKE '%"uninspected_material"%' AND COALESCE(p.owner, 'outside') = 'outside'`).bind(nowMs() - 86400000).first().catch(() => null);   // outsiders only, as /v1/proof counts (TRUST 12:35)
+        WHERE c.screening_json LIKE '%"uninspected_material"%' AND COALESCE(p.owner, 'outside') = 'outside'`).bind(nowMs() - 86400000).first().catch(() => null),
+        reviewStatus(env), ownCounts(env),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE apns_token IS NOT NULL AND left_at IS NULL').first().catch(() => null),
+      ]);
       return json({ ok: l.s === 0 && b.s === 0, ledger_sum_cents: l.s, ledger_lines: l.n, balances_sum_cents: b.s, held_calls_waiting: held.n, build: BUILD.stamp,
         last_tick: lt ? lt.v : null, oldest_event_at: oe && oe.t ? iso(oe.t) : null, oldest_idempotency_at: oi && oi.t ? iso(oi.t) : null,
         screening: SCREENING.MISSING ? 'missing (every call from a live key is held)' : 'installed ' + (SCREENING.SCREENING_VERSION || SCREENING.VERSION || ''), time: iso(nowMs()),
         model_read,
-        outsider_media_review: await (async () => { const { reviewStatus } = await import('./tasks.js'); return reviewStatus(env); })(),
-        connected_ais: await (async () => { const { ownCounts } = await import('./own.js'); return ownCounts(env); })(),   // counts only
-        apple_push: await (async () => { const { apnsConfigured } = await import('./apns.js'); const d = await env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE apns_token IS NOT NULL AND left_at IS NULL').first().catch(() => null);
-          return { configured: apnsConfigured(env), devices: (d && d.n) || 0, note: apnsConfigured(env) ? 'offers alert the app' : 'not switched on: needs APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC; device tokens are kept, nothing is sent' }; })(),
+        outsider_media_review: review,
+        connected_ais: ais,   // counts only
+        apple_push: { configured: apnsConfigured(env), devices: (pushDevices && pushDevices.n) || 0, note: apnsConfigured(env) ? 'offers alert the app' : 'not switched on: needs APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC; device tokens are kept, nothing is sent' },
         held_for_uninspected_material: { waiting_now: (media && media.waiting) || 0, held_last_24_hours: (media && media.day) || 0,
           note: 'Calls held because nothing has heard or seen their outside material; the model reads text only, so these wait for a person.' },
         ...(teamCheck(env, request) ? { team_check: true } : {}) }, 200, { 'X-Robots-Tag': 'all' });   // public: indexable (TRUST 3:28)
@@ -434,6 +453,11 @@ export async function handle(request, env, ctx) {
       if (!m0[2] && request.method === 'GET') return json(await BL.listBlocks(env, mm));
       if (m0[2] && request.method === 'DELETE') return json(await BL.removeBlock(env, mm, m0[2]));
     }
+    // OWNER_router_27 item 1: an approval of a task, signed by the person's device (tasksig.js); a body without task_id goes on unchanged
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/signatures$/.exec(path)) && request.method === 'POST') {
+      const peek = await request.clone().json().catch(() => null);
+      if (peek && typeof peek === 'object' && !Array.isArray(peek) && peek.task_id !== undefined) { const { memberByToken } = await import('./seats.js'); const { signTask } = await import('./tasksig.js'); return json(await signTask(env, await memberByToken(env, m0[1]), peek)); }
+    }
     // OWNER_router_4 item 2 (SPEC 8.1: device_key, signatures): the device's key, attested by Apple, and the answers it signs
     if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/(device_key\/nonce|device_key|signatures|answers\/(call_[a-z0-9]+)\/signature)$/.exec(path))) {
       const { memberByToken } = await import('./seats.js'); const D = await import('./devicekeys.js'); const mm = await memberByToken(env, m0[1]);
@@ -495,7 +519,7 @@ export async function handle(request, env, ctx) {
     if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/settings$/.exec(path)) && ['GET', 'POST', 'PATCH'].includes(request.method)) {
       const S = await import('./seats.js'); const PP = await import('./people.js'); const mm = await S.memberByToken(env, m[1]);
       const allowed = await PP.alertWordsAllowed(env, mm);   // until TRUST's attack holds and it is opened: test members only, and nobody else sees it
-      if (request.method === 'GET') { const r = await S.memberSettingsRead(env, request, m[1]); if (allowed) r.settings = { ...(r.settings || {}), alert_words: await PP.alertWordsOf(env, mm.id) }; return json(r); }
+      if (request.method === 'GET') { const r = await S.memberSettingsRead(env, request, m[1]); if (allowed) r.settings = { ...(r.settings || {}), alert_words: await PP.alertWordsOf(env, mm.id) }; if (await PP.isOwnPage(env, mm)) r.own_page = true; return json(r); }
       const b = await body(request); let aw;
       if (b && Object.prototype.hasOwnProperty.call(b, 'alert_words')) {
         if (typeof b.alert_words !== 'boolean') throw fixable('invalid_field', 'alert_words', 'alert_words is true or false: show an ask\'s first line in your own alerts (off unless you turn it on).', false);

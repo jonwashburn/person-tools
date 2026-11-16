@@ -1,0 +1,40 @@
+{
+  "title": "Christmas Eve is Thursday, Dec 24. Are you open?",
+  "urgency": "whenever",
+  "idempotency_key": "holiday:2026-12-24",
+  "card": {
+    "blocks": [
+      {
+        "headline": "Christmas Eve is Thursday, Dec 24."
+      },
+      {
+        "text": "Shoppers and callers will ask. Tell me once and the AI uses it."
+      },
+      {
+        "when_where": {
+          "when": "Thu 24 Dec"
+        }
+      },
+      {
+        "choices": [
+          "Open as usual",
+          "Closed",
+          "Other hours"
+        ]
+      }
+    ]
+  },
+  "step": {
+    "type": "question",
+    "text": "Are you open?",
+    "choices": [
+      "Open as usual",
+      "Closed",
+      "Other hours"
+    ],
+    "line_for": {
+      "Other hours": "Your hours that day"
+    }
+  },
+  "webhook": "https://northside.example/hooks/asks"
+}

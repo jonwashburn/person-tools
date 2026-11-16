@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ask_request.json",
+  "title": "POST /v1/tasks: an ask a service places (section 27.2)",
+  "type": "object",
+  "required": [
+    "title",
+    "step"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 120
+    },
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "question"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 4000
+            },
+            "choices": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            },
+            "line_for": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            },
+            "keyboard": {
+              "enum": [
+                "text",
+                "number",
+                "phone",
+                "email"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "link"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https://\\S+$"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "command"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "command"
+            },
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "where": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "approve"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 4000
+            },
+            "approve_label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "deny_label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "editable": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "contact"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "call"
+            },
+            "contact": {
+              "type": "string",
+              "pattern": "^c[1-4]$"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 4000
+            }
+          }
+        }
+      ]
+    },
+    "urgency": {
+      "enum": [
+        "now",
+        "today",
+        "whenever"
+      ]
+    },
+    "expires_in": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 2592000
+    },
+    "unlocks": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "card": {
+      "$ref": "card.json"
+    },
+    "media": {
+      "type": "string"
+    },
+    "contacts": {
+      "$ref": "contacts.json"
+    },
+    "group": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_-]{1,80}$"
+    },
+    "webhook": {
+      "type": "string",
+      "pattern": "^https://\\S+$"
+    }
+  },
+  "description": "line_for keys must be among choices, references {c1}..{c4} must name a contact, a choices block must equal step.choices, and no label may be one of the client's own words: the server checks these (ASKS-11, ASKS-13, ASKS-17)."
+}

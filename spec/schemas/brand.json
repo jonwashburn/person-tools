@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "brand.json",
+  "title": "A service's brand (section 27.3)",
+  "type": "object",
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+    },
+    "mark": {
+      "type": "object",
+      "required": [
+        "states"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "states": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "needs_you"
+              ]
+            },
+            {
+              "required": [
+                "idle"
+              ]
+            }
+          ],
+          "properties": {
+            "needs_you": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "glyph",
+                    "colour"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "glyph": {
+                      "enum": [
+                        "disc",
+                        "ring",
+                        "square",
+                        "frame"
+                      ]
+                    },
+                    "colour": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                  },
+                  "description": "A shape the client draws, in its state colour (27.3)."
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "media"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "media": {
+                      "type": "string",
+                      "pattern": "^m_[a-z0-9_]{4,60}$"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "A picture from the server's store; url appears only where a client reads it (27.10)."
+                }
+              ]
+            },
+            "answered": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "glyph",
+                    "colour"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "glyph": {
+                      "enum": [
+                        "disc",
+                        "ring",
+                        "square",
+                        "frame"
+                      ]
+                    },
+                    "colour": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                  },
+                  "description": "A shape the client draws, in its state colour (27.3)."
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "media"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "media": {
+                      "type": "string",
+                      "pattern": "^m_[a-z0-9_]{4,60}$"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "A picture from the server's store; url appears only where a client reads it (27.10)."
+                }
+              ]
+            },
+            "idle": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "glyph",
+                    "colour"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "glyph": {
+                      "enum": [
+                        "disc",
+                        "ring",
+                        "square",
+                        "frame"
+                      ]
+                    },
+                    "colour": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                  },
+                  "description": "A shape the client draws, in its state colour (27.3)."
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "media"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "media": {
+                      "type": "string",
+                      "pattern": "^m_[a-z0-9_]{4,60}$"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "A picture from the server's store; url appears only where a client reads it (27.10)."
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "colours": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ink": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "ink_soft": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "rule": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      }
+    },
+    "grounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "light": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "dark": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      }
+    },
+    "corners": {
+      "enum": [
+        "square",
+        "round"
+      ]
+    },
+    "quiet_line": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^br_"
+    },
+    "verified": {
+      "type": "boolean"
+    },
+    "test": {
+      "type": "boolean"
+    }
+  },
+  "dependentRequired": {
+    "colours": [
+      "grounds"
+    ]
+  },
+  "description": "id, verified and test appear only where a client reads the brand (27.10); a service never sends them."
+}

@@ -115,6 +115,7 @@ const S = {
   cred: null, remember: false, memberId: null,
   open: [], history: [], conns: null, settings: null,
   sel: null, hsel: null, view: 'asks',
+  features: new Set(),     // the server's optional parts, from discovery
   sort: pref('sort', 'fair'), filter: null,
   pending: new Map(),      // task_id -> {task, body, label, until, timer}
   sentLocal: new Map(),    // task_id -> task with reply, answered here this session
@@ -163,9 +164,42 @@ function kindOf(t) {
   if (s.type === 'approve') return 'approve';
   if (s.type === 'link') return 'link';
   if (s.type === 'command') return 'command';
+  if (s.type === 'call' && contactOf(t, s.contact)) return 'dial';   // History keeps the contact's role, not the number
   return 'other';
 }
-const KIND_WORD = { choice: 'Pick one', words: 'Answer in words', approve: 'Approve or deny', link: 'Open a link', command: 'Run a command', call: 'A call', other: 'An ask' };
+const KIND_WORD = { choice: 'Pick one', words: 'Answer in words', approve: 'Approve or deny', link: 'Open a link', command: 'Run a command', call: 'A call', dial: 'Make a call', other: 'An ask' };
+
+/* ---------- someone else's contact details (section 27.7: CARD-11 to CARD-14) ----------
+   A contact's name, phone and email show only on the open card. Everywhere else (the list, the line across the top, History,
+   search) a reference reads as the contact's role, and the Desk keeps no copy of the details once the ask closes. */
+const contactsOf = (t) => (Array.isArray(t && t.contacts) ? t.contacts.filter((c) => c && typeof c === 'object' && /^c[1-4]$/.test(c.id || '')) : []);
+const contactOf = (t, id) => contactsOf(t).find((c) => c.id === id) || null;
+const roleOf = (c) => 'the ' + String(c.role || 'contact');
+const capFirst = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+function refs(t, str, open) {   // {c1}: the contact's name on the open card, "the <role>" everywhere else (CARD-12)
+  if (typeof str !== 'string' || str.indexOf('{c') < 0 || !contactsOf(t).length) return str;
+  return str.replace(/\{(c[1-4])\}/g, (m, id, at) => { const c = contactOf(t, id); if (!c) return m; const w = open && c.name ? String(c.name) : roleOf(c); return at === 0 ? capFirst(w) : w; });
+}
+function forgetDetails(t) {   // what History keeps of a closed ask's contacts: who they were to the person, never their details
+  if (!contactsOf(t).length) return t;
+  return Object.assign({}, t, { contacts: contactsOf(t).map((c) => ({ id: c.id, role: c.role, consent: c.consent })) });
+}
+const E164 = /^\+[1-9][0-9]{6,14}$/;
+function fmtPhone(p) {
+  const v = String(p || ''); const m = /^\+1([0-9]{3})([0-9]{3})([0-9]{4})$/.exec(v);
+  return m ? '(' + m[1] + ') ' + m[2] + '-' + m[3] : v;
+}
+function contactBlock(t, id, open) {   // CARD-13: the details, and under them whose statement the consent is
+  const c = contactOf(t, id); if (!c) return null;
+  if (!open || !(c.name || c.phone || c.email)) return h('p', { class: 'b-contact gone' }, capFirst(roleOf(c)) + '\u2019s details were deleted when the ask closed.');
+  const b = brandOf(t), who = b ? b.name : whoName(t), nm = c.name ? String(c.name) : roleOf(c);
+  const mail = typeof c.email === 'string' && /^[^\s@<>"]+@[^\s@<>"]+$/.test(c.email) ? c.email : null;
+  return h('div', { class: 'b-contact' },
+    h('b', { class: 'c-name' }, c.name ? String(c.name) : capFirst(roleOf(c))),
+    c.phone ? h('span', { class: 'c-num' }, fmtPhone(c.phone)) : null,
+    mail ? h('a', { class: 'c-mail', href: 'mailto:' + mail }, mail) : null,
+    h('p', { class: 'consent' }, who + ' says ' + nm + (c.consent === 'they_agreed_to_be_contacted' ? ' agreed to be contacted.' : ' got in touch first.')));
+}
 const CALL_VERB = { listen: 'listen', watch: 'watch', view: 'look', play: 'play', compare: 'compare', answer: 'answer' };
 function quickRank(t) {
   const k = kindOf(t);
@@ -174,7 +208,7 @@ function quickRank(t) {
   if (k === 'words') return 3;
   if (k === 'link') return 4;
   if (k === 'command') return 5;
-  if (k === 'call') return 4;
+  if (k === 'call' || k === 'dial') return 4;
   return 6;
 }
 // Two choices take the arrows: ← the first, → the second, unless they read as a yes and a no in the other order. Then yes
@@ -196,6 +230,7 @@ function yesNo(t) {
   }
   if (k === 'approve') return { no: { label: s.deny_label || 'Deny', body: { action: 'deny' } },
     yes: { label: s.approve_label || 'Approve', body: { action: 'approve' } } };
+  if (k === 'dial') return { no: { label: 'Not now', body: { action: 'not_now' } }, yes: { label: 'Called', body: { action: 'answer' } } };
   if (k === 'words' || k === 'link' || k === 'command') return { no: { label: 'Not now', body: { action: 'not_now' } },
     yes: { label: 'Done', body: { action: 'done' } } };
   return { no: { label: 'Not now', body: { action: 'not_now' } }, yes: null };
@@ -314,7 +349,7 @@ function scrubAddress() {
   if (/mt_[A-Za-z0-9_-]{6,}/.test(location.href)) history.replaceState(null, '', location.pathname);
 }
 async function trySignIn(cred, remember) {
-  S.cred = cred; S.people = null; S.peopleErr = null; S.isOwner = null;
+  S.cred = cred; S.people = null; S.peopleErr = null; S.isOwner = null; S.ownPage = null;
   if (SEND_ON || PASS_ON) S.peopleEarly = loadPeople(); // in parallel with the asks: the top bar is whole sooner
   const data = await api('GET', '/v1/member/tasks');
   S.remember = !!remember;
@@ -344,7 +379,7 @@ function signOut(msg) {
   sdel('local', 'desk.mems'); sdel('session', 'desk.mems'); S.mems = []; applyPagesSwitch();
   try { for (const k of Object.keys(localStorage)) if (k.startsWith('desk.later.') || k.startsWith('desk.seen.') || k.startsWith('desk.sentseen.')) localStorage.removeItem(k); } catch (e) { /* blocked */ }
   if (S.pendingSend) { clearTimeout(S.pendingSend.timer); S.pendingSend = null; }
-  Object.assign(S, { cred: null, member: null, memberLabel: null, memberId: null, account: undefined, passkeyMsg: null, historyDeep: null, historyNote: null, leaving: null, isOwner: null, peopleEarly: null, noticeAckAt: 0, lookAgain: false, firstLook: false, firstSlow: false, peopleP: null, onPending: undefined, onBusy: false, onChangedAt: 0,
+  Object.assign(S, { cred: null, member: null, memberLabel: null, memberId: null, account: undefined, passkeyMsg: null, historyDeep: null, historyNote: null, leaving: null, isOwner: null, ownPage: null, peopleEarly: null, noticeAckAt: 0, lookAgain: false, firstLook: false, firstSlow: false, peopleP: null, onPending: undefined, onBusy: false, onChangedAt: 0,
     people: null, sent: null, ssel: null, sentSeen: new Set(), compose: null, ring: null, notice: null, answersToRead: [], limits: null, invite: null, open: [], history: [], conns: null, blocks: null, mutes: null, offers: [], settings: null, sel: null, hsel: null,
     filter: null, later: {}, seen2: new Set(), blockedCalls: new Set(), lastOk: 0, lastErr: null, shownOnce: null, cardSig: '' });
   S.pending.clear(); S.sentLocal.clear(); S.drafts.clear(); S.failed.clear(); S.media.clear(); S.closed.clear();
@@ -576,7 +611,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && QR
 
 /* ---------- loading and looking again ---------- */
 function absorb(data) {
-  const open = Array.isArray(data && data.open) ? data.open : [];
+  noteOwnPage(data && data.own_page);
+  // A withdrawn ask may stay in 'open' for a day (ASKS-4): never counted, alerted or answered here (CARD-17), so it leaves the
+  // list; one settled in the service's own app leaves without a word, any other says who took it back and why
+  const listed = Array.isArray(data && data.open) ? data.open : [];
+  const open = listed.filter((t) => !t.state || t.state === 'open');
+  const taken = new Map(listed.filter((t) => t.state === 'withdrawn').map((t) => [t.task_id, t]));
   const prevSel = S.sel;
   S.open = open;
   S.history = Array.isArray(data && data.history) ? data.history : [];
@@ -592,7 +632,9 @@ function absorb(data) {
   if (changed) saveLater();
   if (prevSel && !ids.has(prevSel) && !S.pending.has(prevSel) && !S.failed.has(prevSel) && !S.closed.has(prevSel)) {
     const order = lastOrder; const i = order.indexOf(prevSel);
-    S.gone = 'That ask left your list: its AI withdrew it, or you answered it on another device.';
+    const w = taken.get(prevSel);
+    S.gone = w ? (w.elsewhere ? null : whoName(w) + ' took this ask back' + (w.withdraw_why ? ': ' + String(w.withdraw_why) : '') + '.')
+      : 'That ask left your list: its AI withdrew it, or you answered it on another device.';
     S.sel = null;
     const next = flatOrder();
     if (next.length) S.sel = (order.slice(i + 1).find((id) => next.some((t) => t.task_id === id))) || next[0].task_id;
@@ -632,7 +674,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 async function loadSettings() {
   try {
     const s = await api('GET', '/v1/member/settings');
-    S.settings = s; if (s && s.member_id && s.member_id !== S.memberId) { S.memberId = s.member_id; loadLater(); loadSeen(); loadSentSeen(); S.cardSig = ''; render(); }
+    S.settings = s; noteOwnPage(s && s.own_page); if (s && s.member_id && s.member_id !== S.memberId) { S.memberId = s.member_id; loadLater(); loadSeen(); loadSentSeen(); S.cardSig = ''; render(); }
     if (S.view === 'settings') renderSettings();
   } catch (e) { /* the Desk works without it */ }
 }
@@ -738,7 +780,7 @@ async function flush(id, keepalive) {
       S.open = S.open.filter((x) => x.task_id !== id); markClosed(id);
       const reply = Object.assign({ at: new Date().toISOString(), choice: null, text: null, note: null }, p.body,
         p.body.action === 'approve' ? { approved_text: p.body.text || t.step.text } : {});
-      S.sentLocal.set(id, Object.assign({}, t, { state: p.body.action === 'pass' ? 'passed' : (res && res.state) || 'answered', reply,
+      S.sentLocal.set(id, Object.assign({}, forgetDetails(t), { state: p.body.action === 'pass' ? 'passed' : (res && res.state) || 'answered', reply,
         passed_to: p.body.action === 'pass' ? (p.passedTo || { member_id: p.body.to, name: nameOfMember(p.body.to) }) : undefined }));
       if (p.body.action === 'pass' && SEND_ON) setTimeout(loadSent, 1500);
       S.drafts.delete(id);
@@ -876,6 +918,13 @@ function render() {
   if (S.view === 'asks') { renderChips(); renderList(); renderCard(); }
   renderBanner();
   if (S.view === 'history') { renderHistory(); }
+  scheduleLapse();
+}
+// An ask that closes within the hour shows its time left, kept current, and leaves the list the moment it lapses (CARD-16)
+function scheduleLapse() {
+  clearTimeout(S.lapseT); const now = Date.now();
+  const soon = S.open.map((t) => ms(t.expires_at)).filter((x) => x && x > now && x - now <= 3600e3);
+  if (soon.length) S.lapseT = setTimeout(() => { S.cardSig = ''; render(); }, Math.max(250, Math.min(Math.min(...soon) - now + 50, 30000)));
 }
 /* The tab's icon carries the count, filled in ink when something is urgent: a signal that makes no sound. */
 let lastIcon = '';
@@ -900,7 +949,7 @@ function renderBanner() {
   const first = fair(now)[0];
   fill(b, h('span', { class: 'label' }, 'Now'),
     h('span', null, now.length === 1 ? (first.isCall ? ['A call for you: ', String(first.offer.minutes || '?'), ' minutes', first.offer.pay && first.offer.pay.unpaid_test ? ', unpaid test' : '', '. ', whoName(first)] : [whoName(first), ': ', first.title])
-      : [String(now.length), ' need you now. First: ', whoName(first), ': ', first.title]),
+      : [String(now.length), ' need you now. First: ', whoName(first), ': ', refs(first, first.title, false)]),
     ...(S.sel === first.task_id ? [] : [h('button', { class: 'btn', type: 'button', onclick: () => { S.sel = first.task_id; render(); focusCard(); } }, 'Show')]));
   b.hidden = false;
 }
@@ -912,7 +961,9 @@ function renderChips() {
   if (S.filter && !groups.has(S.filter)) S.filter = null;
   const chip = (key, label, n, t) => h('button', { class: 'chip' + (S.filter === key ? ' on' : ''), type: 'button', 'aria-pressed': S.filter === key ? 'true' : 'false',
     onclick: () => { S.filter = (S.filter === key ? null : key); const f = flatOrder(); if (f.length && !f.some((x) => x.task_id === S.sel)) S.sel = f[0].task_id; render(); } },
-  t ? (t.connection && ICONS[t.connection.icon] ? svgIcon(t.connection.icon) : null) : null, label, h('b', null, String(n)));
+  chipMark(t, S.filter === key) || (t ? (t.connection && ICONS[t.connection.icon] ? svgIcon(t.connection.icon) : null) : null), label, h('b', null, String(n)));
+  // the chips group asks by who is asking, one of the places a brand's mark may stand (CARD-3); checked on the chip's own ground
+  function chipMark(t, on) { const b = t && brandOf(t); const m = b ? brandMark(b, 'needs_you', on ? token('--ink', '#1d1d1b', '#faf8f3') : null) : null; return m ? h('span', { class: 'b-slot' }, m) : null; }
   const kids = [chip(null, 'All', list.length, null)];
   [...groups.entries()].sort((a, b) => b[1].n - a[1].n || whoName(a[1].t).localeCompare(whoName(b[1].t)))
     .forEach(([k, g]) => kids.push(chip(k, whoLabel(g.t), g.n, g.t)));
@@ -946,7 +997,7 @@ function rowFor(t, opts = {}) {
   return h('li', { class: 'item' + (selected ? ' sel' : '') + (fresh ? ' new' : ''), role: 'option', id: (opts.history ? 'h-' : 'o-') + t.task_id,
     'aria-selected': selected ? 'true' : 'false', dataset: { id: t.task_id },
     onclick: () => { if (opts.history) { S.hsel = t.task_id; renderHistory(); } else { S.sel = t.task_id; render(); } openReading(); } },
-  t.isCall ? iconFor(null, t.from) : taskIcon(t), h('span', { class: 't' }, t.title || (t.step && t.step.text) || 'An ask'),
+  t.isCall ? iconFor(null, t.from) : taskIcon(t), h('span', { class: 't' }, refs(t, t.title || (t.step && t.step.text), false) || 'An ask'),
   h('span', { class: 'age', title: when(opts.history && t.reply ? t.reply.at : t.created_at) }, fresh ? h('span', { class: 'dot', 'aria-label': 'new', title: 'New since you last looked on this computer' }) : null, age(opts.history && t.reply ? t.reply.at : t.created_at)),
   h('span', { class: 'sub' }, sub));
 }
@@ -1017,17 +1068,23 @@ function whoBlock(t, extra) {
       h('span', { class: 'when' }, 'Asked ' + when(t.created_at)),
       !extra && leftWords(t.expires_at) ? h('span', { class: 'when closing' }, 'Closes at ' + fmtClock.format(ms(t.expires_at)) + ' · ' + leftWords(t.expires_at)) : null));
 }
-function blocksFor(t) {
-  const blocks = t.card && Array.isArray(t.card.blocks) ? t.card.blocks : [];
-  const out = [];
+const cardBlocks = (t) => (t.card && Array.isArray(t.card.blocks) ? t.card.blocks : []);
+// A card's choices or input block places the answers (27.5); a card without one has them after its last block
+const answerSlot = (t) => cardBlocks(t).findIndex((b) => b && typeof b === 'object' && (b.choices !== undefined || (b.input && typeof b.input === 'object')));
+// A headline block is the card's first line (27.5): it heads the card, and the title stays the list's line
+const headOf = (t, open) => { const b = cardBlocks(t)[0]; return b && typeof b.headline === 'string' && b.headline ? refs(t, b.headline, open) : null; };
+function blocksFor(t, from, to, open) {
+  const blocks = cardBlocks(t).slice(from || 0, to === undefined || to < 0 ? undefined : to);
+  const out = [], r = (x) => refs(t, x, !!open);
   for (const b of blocks) {
     if (!b || typeof b !== 'object') continue;
-    if (typeof b.headline === 'string') out.push(h('p', { class: 'b-headline' }, b.headline));
-    else if (typeof b.text === 'string') out.push(h('p', { class: 'b-text' }, linked(b.text)));
-    else if (Array.isArray(b.facts)) out.push(h('dl', { class: 'b-facts' }, b.facts.filter((f) => f && f.label !== undefined).map((f) => [h('dt', null, String(f.label)), h('dd', null, String(f.value ?? ''))])));
+    if (typeof b.headline === 'string') out.push(h('p', { class: 'b-headline' }, r(b.headline)));
+    else if (typeof b.text === 'string') out.push(h('p', { class: 'b-text' }, linked(r(b.text))));
+    else if (Array.isArray(b.facts)) out.push(h('dl', { class: 'b-facts' }, b.facts.filter((f) => f && f.label !== undefined).map((f) => [h('dt', null, String(f.label)), h('dd', null, r(String(f.value ?? '')))])));
     else if (b.price !== undefined) out.push(h('p', { class: 'b-price' }, typeof b.price === 'object' ? [b.price.amount, ' ', b.price.currency || '', b.price.label ? ' · ' + b.price.label : ''] : String(b.price)));
-    else if (b.when_where !== undefined) out.push(h('p', { class: 'b-when' }, typeof b.when_where === 'object' ? [b.when_where.when || '', b.when_where.when && b.when_where.where ? ' · ' : '', b.when_where.where || ''] : String(b.when_where)));
-    else if (b.quote && typeof b.quote === 'object') out.push(h('blockquote', { class: 'b-quote' }, h('p', null, '\u201c' + String(b.quote.text || '') + '\u201d'), b.quote.by ? h('p', { class: 'b-by' }, String(b.quote.by)) : null));
+    else if (b.when_where !== undefined) out.push(h('p', { class: 'b-when' }, typeof b.when_where === 'object' ? [r(b.when_where.when || ''), b.when_where.when && b.when_where.where ? ' · ' : '', r(b.when_where.where || '')] : r(String(b.when_where))));
+    else if (b.quote && typeof b.quote === 'object') out.push(h('blockquote', { class: 'b-quote' }, h('p', null, '\u201c' + r(String(b.quote.text || '')) + '\u201d'), b.quote.by ? h('p', { class: 'b-by' }, r(String(b.quote.by))) : null));
+    else if (typeof b.contact === 'string') out.push(contactBlock(t, b.contact, !!open));
     // media, choices and input blocks are drawn by the Desk from the ask itself; any other block is ignored (8.1)
   }
   return out.length ? h('div', { class: 'blocks' }, out) : null;
@@ -1049,7 +1106,8 @@ function brandOf(t) { const b = t && t.brand; return b && typeof b === 'object' 
 function brandLook(b) {
   const g = b.grounds && typeof b.grounds === 'object' ? b.grounds[darkNow() ? 'dark' : 'light'] : null;
   if (!HEXC.test(g || '')) return null;                                               // no ground for this mode: the Desk's own card
-  if (contrast(token('--ink', '#1d1d1b', '#faf8f3'), g) < 4.5) return null;            // the Desk's own words and controls must read on it
+  // the Desk's own words and controls must read on it: its ink, its quiet words and its asker colour
+  if ([token('--ink', '#1d1d1b', '#faf8f3'), token('--muted', '#5d5a53', '#a9a59c'), token('--asker', '#006d94', '#2bb3f0')].some((v) => contrast(v, g) < 4.5)) return null;
   const c = b.colours && typeof b.colours === 'object' && !Array.isArray(b.colours) ? b.colours : {};
   const words = (v) => HEXC.test(v || '') && contrast(v, g) >= 4.5 ? v : null;
   return { ground: g, ink: words(c.ink), inkSoft: words(c.ink_soft), rule: HEXC.test(c.rule || '') ? c.rule : null, round: b.corners === 'round' };
@@ -1081,6 +1139,19 @@ function brandMark(b, state, ground) {
   if (outline) { el.setAttribute('fill', 'none'); el.setAttribute('stroke', colour); el.setAttribute('stroke-width', String(sw)); } else el.setAttribute('fill', colour);
   svg.appendChild(el); return svg;
 }
+const openFrom = (c) => S.open.filter((t) => !t.isCall && t.connection && t.connection.id === (c.id || c.connection_id)).length;
+function aiMark(c) {   // a connection whose asks wear a brand shows the mark's idle state in place of its icon
+  const b = c.brand && typeof c.brand === 'object' && c.brand.name ? c.brand : null;
+  const m = b ? brandMark(b, 'idle', null) : null;
+  return m ? h('span', { class: 'ic b-slot' }, m) : iconFor(c.icon, c.name, false, c.icon_url);
+}
+function aiBrandWords(c) {
+  const b = c.brand && typeof c.brand === 'object' && c.brand.name ? c.brand : null;
+  if (!b) return null;
+  return h('span', { class: 'b-ai' }, b.domain ? h('span', { class: 'b-domain' }, String(b.domain)) : null,
+    b.test === true || b.verified === false ? h('span', { class: 'flag test-brand' }, 'Test brand, not verified') : null,
+    !openFrom(c) && typeof b.quiet_line === 'string' && b.quiet_line ? h('span', { class: 'b-quiet' }, b.quiet_line) : null);
+}
 function brandLine(t, look) {   // the mark, the brand's name and its domain (CARD-3, CARD-6); a test brand says so (CARD-7)
   const b = brandOf(t); if (!b) return null;
   const mark = brandMark(b, !t.state || t.state === 'open' ? 'needs_you' : 'answered', look && look.ground);
@@ -1097,8 +1168,9 @@ function dress(card, look) {   // CSSOM, not a style attribute: the page's polic
   if (look.rule) card.style.setProperty('--b-rule', look.rule);
   return card;
 }
-// Done is on every ask (CARD-9); an approval takes it where the server says it offers branded asks (discovery)
-const doneOk = (t) => { const k = kindOf(t); return k === 'choice' || k === 'words' || k === 'link' || k === 'command' || (k === 'approve' && S.features.has('branded_asks')); };
+// Done is on every ask the server takes it for // (CARD-9). Section 26 offers it on a question's line, a link and a command; on a choice and an approval only a server that
+// lists branded_asks takes it (ASKS-12), and an ask that wears a brand comes from one.
+const doneOk = (t) => { const k = kindOf(t); return k === 'words' || k === 'link' || k === 'command' || k === 'dial' || ((k === 'choice' || k === 'approve') && (S.features.has('branded_asks') || !!brandOf(t))); };
 // A choice that takes a line (CARD-10): choosing it opens the line, labelled by the asker, and sends the choice with the words
 const lineFor = (t, c) => { const lf = t.step && t.step.line_for; return lf && typeof lf === 'object' && typeof lf[c] === 'string' ? lf[c] : null; };
 function choose(t, c) {
@@ -1208,7 +1280,7 @@ function callCard(t) {
   return h('article', { class: 'card', 'aria-labelledby': 'card-title' }, kids);
 }
 function passBtn(t) {
-  return canPass() && !t.isCall ? h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openPass(t), title: 'Hand this ask to one of your people' }, 'Pass on', kbd('P')) : null;
+  return canPass() && !t.isCall && !contactsOf(t).length ? h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openPass(t), title: 'Hand this ask to one of your people' }, 'Pass on', kbd('P')) : null;
 }
 function laterBtn(t) {
   return h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => toggleLater(t), title: 'Only this computer knows; the AI is not told' },
@@ -1225,16 +1297,18 @@ function cardFor(t) {
   kids.push(whoBlock(t));
   kids.push(h('div', { class: 'ai-says' + (t.sender && !t.passed_on_by ? ' mine' : '') }, h('span', { class: 'label' }, t.sender && !t.passed_on_by ? 'A person is asking' : 'An AI is asking'),
     h('span', { class: 'label' }, '· ' + KIND_WORD[k]), isLater(t) ? h('span', { class: 'flag later' }, 'Later') : null));
-  kids.push(h('h2', { class: 'card-title', id: 'card-title' }, t.title || 'An ask'));
+  const head = headOf(t, true), slot = answerSlot(t), slotIn = slot >= 0 ? cardBlocks(t)[slot].input : null, rf = (x) => refs(t, x, true);
+  kids.push(h('h2', { class: 'card-title', id: 'card-title' }, head || rf(t.title) || 'An ask'));
   if (S.gone) { kids.push(h('p', { class: 'help' }, S.gone)); S.gone = null; }
   if (failed) kids.push(h('div', { class: 'notsent', role: 'alert' }, h('span', { class: 'label' }, 'Not sent'), h('p', null, failed.message),
     ansBtn('Send it again', null, () => answer(t, failed.body))));
-  const blocks = blocksFor(t); if (blocks) kids.push(blocks);
+  const blocks = blocksFor(t, head ? 1 : 0, slot, true); if (blocks) kids.push(blocks);
   const media = mediaFor(t); if (media) kids.push(media);
 
-  // The ask's own words, then what the answer lets it do
+  // The ask's own words, then what the answer lets it do; where the card places a question's answers, the question stands
+  // right before them (27.5, CARD-8)
   if (k === 'approve' && s.editable) {
-    const cur = d.approve === null ? (s.text || '') : d.approve;
+    const cur = d.approve === null ? rf(s.text || '') : d.approve;
     const edited = d.approve !== null && d.approve !== s.text;
     const badge = h('span', { class: 'edited', hidden: !edited }, 'Edited');
     const reset = h('button', { class: 'linkish end', type: 'button', hidden: !edited, onclick: () => { d.approve = null; S.cardSig = ''; renderCard(true); } }, 'Put back the AI\'s words');
@@ -1251,9 +1325,11 @@ function cardFor(t) {
       h('pre', { id: 'cmd-line' }, line)));
     kids.push(h('p', { class: 'cmd-where' }, s.where ? ['Where: ', h('b', null, s.where)] : null,
       s.where ? '. ' : '', t.shell_only ? t.shell_only : 'Copy the line and run it yourself; person.tools cannot run it for you.'));
-  } else if (s.text) {
-    kids.push(h('div', { class: 'ask-words' + (t.sender ? ' mine' : '') }, h('p', null, linked(s.text))));
+  } else if (s.text && !(slot >= 0 && (k === 'choice' || k === 'words'))) {
+    kids.push(h('div', { class: 'ask-words' + (t.sender ? ' mine' : '') }, h('p', null, linked(rf(s.text)))));
   }
+  // a call to make: the contact, unless the card already draws them (CARD-11)
+  if (k === 'dial' && !cardBlocks(t).some((b) => b && b.contact === s.contact)) kids.push(contactBlock(t, s.contact, true));
   if (k === 'link' && s.sign_in_page) kids.push(h('p', { class: 'note-state' }, 'This link opens a sign-in page' + (s.domain ? ' on ' + s.domain : '') + '. Sign in only where you meant to; nobody at person.tools will ever ask for your password.'));
   if (k === 'link') {
     const u = safeUrl(s.url);
@@ -1264,6 +1340,8 @@ function cardFor(t) {
   if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', linked(t.unlocks), '”')));
   if (leftWords(t.expires_at)) kids.push(h('p', { class: 'note-state' }, 'If you do not answer by ' + fmtClock.format(ms(t.expires_at)) + ', the ask closes and ' + whoName(t) + ' is told you did not answer. Nothing is chosen for you.'));
 
+  if (s.text && slot >= 0 && (k === 'choice' || k === 'words')) kids.push(h('div', { class: 'ask-words' + (t.sender ? ' mine' : '') }, h('p', null, linked(rf(s.text)))));
+
   // Answers: the kinds of 8.1, with the ask's own words on its two answers
   const ans = [];
   const chosen = p && p.body.action !== 'note' ? p.body : null;
@@ -1273,11 +1351,11 @@ function cardFor(t) {
     (many ? s.choices : twoChoices(s.choices).filter((c) => c !== undefined)).forEach((c, i) => {
       const body = { action: 'answer', choice: c };
       const key = many ? String(i + 1) : (i === 0 ? '←' : i === 1 ? '→' : String(i + 1));
-      ans.push(ansBtn(lineFor(t, c) ? c + '…' : c, key, () => choose(t, c), isChosen(body) || d.lineFor === c ? 'chosen' : ''));
+      ans.push(ansBtn(rf(c) + (lineFor(t, c) ? '…' : ''), key, () => choose(t, c), isChosen(body) || d.lineFor === c ? 'chosen' : ''));
     });
     ans.push(h('span', { class: 'spacer' }));
     ans.push(ansBtn('Not now', 'X', () => answer(t, { action: 'not_now' })));
-    ans.push(ansBtn('Done', 'D', () => answer(t, { action: 'done' })));
+    if (doneOk(t)) ans.push(ansBtn('Done', 'D', () => answer(t, { action: 'done' })));
     ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('div', { class: 'answers choices', role: 'group', 'aria-label': 'Your answer' }, ans));
     if (d.lineFor && lineFor(t, d.lineFor)) {
@@ -1289,14 +1367,14 @@ function cardFor(t) {
       input.addEventListener('input', () => { d.lineText = input.value; });
       input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); sendLine(); } });
       kids.push(h('div', { class: 'field line-for' }, h('label', { class: 'label', for: 'f-line' }, lineFor(t, c)), input,
-        h('div', { class: 'answers' }, ansBtn('Send ' + c, '↵', sendLine, 'btn-you'),
+        h('div', { class: 'answers' }, ansBtn('Send ' + rf(c), '↵', sendLine, 'btn-you'),
           h('button', { class: 'linkish', type: 'button', onclick: () => { d.lineFor = null; S.cardSig = ''; renderCard(true); } }, 'Choose again'))));
     }
   } else if (k === 'words') {
     const send = () => { const v = (d.text || '').trim(); if (!v) { flashCard('Write a line first, or choose Done or Not now.'); return; } answer(t, { action: 'answer', text: v }); };
     kids.push(h('div', { class: 'field' },
-      h('div', { class: 'row-l' }, h('label', { class: 'label', for: 'f-text' }, 'Your answer'), h('p', { class: 'help' }, 'Enter sends · Shift+Enter for a new line · while you type, other keys only type')),
-      textField('f-text', 'text', d.text, { placeholder: 'Write a line', 'aria-describedby': 'card-title' }, (v) => { d.text = v; },
+      h('div', { class: 'row-l' }, h('label', { class: 'label', for: 'f-text' }, slotIn && typeof slotIn.label === 'string' && slotIn.label ? slotIn.label : 'Your answer'), h('p', { class: 'help' }, 'Enter sends · Shift+Enter for a new line · while you type, other keys only type')),
+      textField('f-text', 'text', d.text, { placeholder: slotIn && typeof slotIn.placeholder === 'string' && slotIn.placeholder ? slotIn.placeholder : 'Write a line', 'aria-describedby': 'card-title', inputmode: { number: 'decimal', phone: 'tel', email: 'email' }[s.keyboard] || null }, (v) => { d.text = v; },
         (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.isComposing) { ev.preventDefault(); send(); } })));
     ans.push(ansBtn('Send', '↵', send, 'btn-you'));
     ans.push(h('span', { class: 'spacer' }));
@@ -1304,6 +1382,17 @@ function cardFor(t) {
     ans.push(ansBtn(yn.yes.label, '→', () => answer(t, yn.yes.body), isChosen(yn.yes.body) ? 'chosen' : ''));
     ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('div', { class: 'answers', role: 'group', 'aria-label': 'Your answer' }, ans));
+  } else if (k === 'dial') {
+    // the Desk's own Call control dials on this computer's phone app; Called says the person made the call
+    const c = contactOf(t, s.contact), first = c.name ? String(c.name).split(/\s+/)[0] : capFirst(roleOf(c));
+    if (E164.test(c.phone || '')) ans.push(h('a', { class: 'btn btn-you', href: 'tel:' + c.phone, id: 'dial-link' }, 'Call ' + first + ', ' + fmtPhone(c.phone), kbd('O')));
+    ans.push(ansBtn('Called', '→', () => answer(t, { action: 'answer' }), isChosen({ action: 'answer' }) ? 'chosen' : ''));
+    ans.push(h('span', { class: 'spacer' }));
+    ans.push(ansBtn('Not now', 'X', () => answer(t, { action: 'not_now' })));
+    ans.push(ansBtn('Done', 'D', () => answer(t, { action: 'done' })));
+    ans.push(laterBtn(t));
+    kids.push(h('div', { class: 'answers', role: 'group', 'aria-label': 'Your answer' }, ans));
+    kids.push(h('p', { class: 'footnote' }, 'Call opens your phone app with the number; nothing is dialled for you. Called tells ' + whoName(t) + ' you made the call. Done clears the ask without saying.'));
   } else if (k === 'approve' || k === 'link' || k === 'command') {
     ans.push(ansBtn(yn.no.label, '←', () => answer(t, yn.no.body), isChosen(yn.no.body) ? 'chosen' : ''));
     ans.push(ansBtn(yn.yes.label, '→', () => answer(t, yn.yes.body), isChosen(yn.yes.body) ? 'chosen' : ''));
@@ -1320,6 +1409,7 @@ function cardFor(t) {
     kids.push(h('div', { class: 'answers' }, ans));
   }
 
+  if (slot >= 0) { const after = blocksFor(t, slot + 1); if (after) kids.push(after); }
   if (p && p.body.action !== 'note') kids.push(h('p', { class: 'sending-line', role: 'status' }, p.body.action === 'pass'
     ? 'Passing it on to ' + (nameOfMember(p.body.to) || 'them') + ' in 5 s. Z takes it back.'
     : 'Sending to ' + whoName(t) + ' in 5 s: ' + p.label + '. Z takes it back.'));
@@ -1367,6 +1457,8 @@ function legendFor(t) {
   if (yn.no) items.push(item(['←', 'N'], yn.no.label));
   if (yn.yes) items.push(item(['→', 'Y'], yn.yes.label));
   if (k === 'choice' || k === 'other' || k === 'approve') items.push(item(['X'], 'Not now (' + (t.sender ? whoName(t) : 'the AI') + ' is told)'));
+  if ((k === 'choice' || k === 'approve' || k === 'dial') && doneOk(t)) items.push(item(['D'], 'Done'));
+  if (k === 'dial') items.push(item(['O'], 'call'));
   if (k === 'link') items.push(item(['O'], 'open link'));
   if (k === 'command') items.push(item(['C'], 'copy'));
   items.push(item(['Enter'], k === 'words' ? 'write' : 'note'), item(['U'], isLater(t) ? 'back from Later' : 'Later (only here)'), item(['Z'], 'undo (5 s)'), item(['?'], 'every key'));
@@ -1381,8 +1473,8 @@ function emptyCard() {
   const kids = [h('h2', null, pendingN ? 'Sending your answers.' : 'Nothing is waiting for you.'),
     h('p', null, 'When one of your AIs asks you something, it appears here: first if it is urgent, with a line across the top. Nothing makes a sound.')];
   if (conns.length) {
-    kids.push(h('ul', { class: 'ais' }, conns.map((c) => h('li', null, iconFor(c.icon, c.name, false, c.icon_url), h('b', null, c.name),
-      h('span', { class: 'm' }, c.blocked ? 'blocked' : c.quiet ? 'quiet' : 'last asked ' + agoWords(c.last_used_at))))));
+    kids.push(h('ul', { class: 'ais' }, conns.map((c) => h('li', null, aiMark(c), h('b', null, c.name),
+      h('span', { class: 'm' }, c.blocked ? 'blocked' : c.quiet ? 'quiet' : 'last asked ' + agoWords(c.last_used_at)), aiBrandWords(c)))));
   } else if (S.conns) {
     kids.push(h('p', null, 'No AI is connected to you yet. Connect one and you get a key and the words to give it. The key lets that AI ask you things and read your answers, and nothing else; you can revoke it with one click.'));
   }
@@ -1419,16 +1511,20 @@ function historyAnswer(t) {
     const pt = t.passed_to, n = (pt && (typeof pt === 'string' ? nameOfMember(pt) : (pt.name || nameOfMember(pt.member_id)))) || 'one of your people';
     return 'Passed to ' + n;
   }
-  if (r.action === 'answer') return r.choice != null ? 'You picked ' + r.choice : r.text ? 'You wrote: ' + r.text : 'Answered';
+  if (r.action === 'answer' && s.type === 'call') return 'Called ' + (contactOf(t, s.contact) ? roleOf(contactOf(t, s.contact)) : 'them');
+  if (r.action === 'answer') return r.choice != null ? 'You picked ' + refs(t, r.choice, false) + (r.text ? ': ' + r.text : '') : r.text ? 'You wrote: ' + r.text : 'Answered';
   if (r.action === 'done') return 'Done';
   if (r.action === 'not_now') return 'Not now';
   if (r.action === 'approve') return (s.approve_label || 'Approve') + (r.approved_text && r.approved_text !== s.text ? ', with your words' : '');
   if (r.action === 'deny') return s.deny_label || 'Deny';
+  // an ask settled in the service's own app says so; one it withdrew says who did (27.2, ASKS-4)
+  if (t.state === 'withdrawn') return t.elsewhere ? 'Answered in ' + ((brandOf(t) && brandOf(t).name) || whoName(t)) : 'Withdrawn by ' + whoName(t);
+  if (t.state === 'lapsed') return 'Closed without an answer';
   return t.state || 'Answered';
 }
 function searchText(t) {
   const r = t.reply || {}, s = t.step || {};
-  return [t.title, s.text, s.command, s.url, (s.choices || []).join(' '), whoName(t), t.unlocks, r.choice, r.text, r.note, r.approved_text,
+  return [refs(t, t.title, false), refs(t, s.text, false), s.command, s.url, (s.choices || []).map((c) => refs(t, c, false)).join(' '), whoName(t), t.unlocks, r.choice, r.text, r.note, r.approved_text,
     (t.notes || []).map((n) => n.note).join(' '), historyAnswer(t), passerName(t), cardWords(t)].filter(Boolean).join(' \n ').toLowerCase();
 }
 function cardWords(t) { // the words of an ask's card blocks, for search: headline, text, facts, when and where, price
@@ -1454,13 +1550,14 @@ function renderHistory() {
     h('p', null, 'Each ask you answer is kept here with your answer and its notes, newest first.'))); return; }
   const r = t.reply || {}, s = t.step || {};
   const kids = [h('button', { class: 'linkish back', type: 'button', onclick: () => closeReading() }, '← The list'),
+    brandLine(t, null),   // the mark in its answered state, the name and the domain; History draws no dressing
     whoBlock(t, h('span', { class: 'label' }, 'Answered')),
     h('div', { class: 'ai-says' }, h('span', { class: 'label' }, 'An AI asked'), h('span', { class: 'label' }, '· ' + KIND_WORD[kindOf(t)])),
-    h('h2', { class: 'card-title' }, t.title || 'An ask')];
-  const blocks = blocksFor(t); if (blocks) kids.push(blocks);
+    h('h2', { class: 'card-title' }, refs(t, t.title, false) || 'An ask')];
+  const blocks = blocksFor(t, 0, undefined, false); if (blocks) kids.push(blocks);
   const media = mediaFor(t); if (media) kids.push(media);
   if (kindOf(t) === 'command') kids.push(h('div', { class: 'cmd' }, h('pre', null, s.command || '')));
-  else if (s.text) kids.push(h('div', { class: 'ask-words' }, h('p', null, linked(s.text))));
+  else if (s.text) kids.push(h('div', { class: 'ask-words' }, h('p', null, linked(refs(t, s.text, false)))));
   if (kindOf(t) === 'link' && s.url) kids.push(h('p', { class: 'cmd-where' }, s.url));
   if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', t.unlocks, '”')));
   kids.push(h('div', { class: 'sent-as' }, h('span', { class: 'label' }, 'Your answer · ' + when(r.at)), h('p', null, historyAnswer(t)),
@@ -1505,7 +1602,7 @@ function renderAIs() {
     h('thead', null, h('tr', null, h('th', { class: 'label' }, 'AI'), h('th', { class: 'label' }, 'Waiting'), h('th', { class: 'label' }, 'Last asked'),
       h('th', { class: 'label' }, 'Connected'), h('th', { class: 'label' }, h('span', { class: 'sr' }, 'Actions')))),
     h('tbody', null, live.map((c) => h('tr', null,
-      h('td', { class: 'name' }, iconFor(c.icon, c.name, false, c.icon_url), c.name, c.quiet ? h('span', { class: 'state' }, 'Quiet') : null, c.blocked ? h('span', { class: 'state blocked' }, 'Blocked') : null),
+      h('td', { class: 'name' }, aiMark(c), c.name, c.quiet ? h('span', { class: 'state' }, 'Quiet') : null, c.blocked ? h('span', { class: 'state blocked' }, 'Blocked') : null, aiBrandWords(c)),
       h('td', { class: 'n' }, String(c.asks_waiting ?? '')),
       h('td', { class: 'when', title: c.last_used_at ? when(c.last_used_at) : '' }, agoWords(c.last_used_at)),
       h('td', { class: 'when' }, c.made_at ? fmtDay.format(ms(c.made_at)) : ''),
@@ -1637,7 +1734,10 @@ function renderSettings() {
     h('div', null, h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openLeave() }, 'Leave ' + where + '…'))));
   fill(root, h('div', { class: 'page-in' }, kids));
 }
-function applyTheme() { const v = pref('theme', 'system'); if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v); }
+function applyTheme() { const v = pref('theme', 'system'); if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v); themeChanged(); }
+// a branded card's dressing and its colour checks belong to one mode (CARD-4, CARD-5): draw again when the mode changes
+function themeChanged() { if (!S.cred) return; S.cardSig = ''; render(); if (S.view === 'ais') renderAIs(); }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeChanged);
 
 /* ---------- A person as asker: My people, Send, Sent (OWNER_web_3; spec section 2 and 8.1; SERVICE's router_18) ----------
    Switched on by <meta name="desk-send"> once the routes are live. */
@@ -1651,6 +1751,13 @@ function saveOwner() {
   if (S.isOwner === null || !S.cred) return;
   const keep = S.remember ? 'local' : 'session', drop = S.remember ? 'session' : 'local';
   sset(keep, 'desk.owner', S.isOwner ? '1' : '0'); sdel(drop, 'desk.owner');
+}
+// A page made for oneself (own_page, SERVICE 4:08 PM CT 16 Nov) has nobody to send to: nobody can join it, so no Send there
+function noteOwnPage(v) {
+  if (typeof v !== 'boolean' || v === S.ownPage) return;
+  const was = S.ownPage; S.ownPage = v;
+  if (v && S.isOwner !== false) { S.isOwner = false; applySendSwitch(); saveOwner(); S.cardSig = ''; if (!$('#desk').hidden) render(); }
+  else if (!v && was === true && (SEND_ON || PASS_ON)) loadPeople(true);   // only a page that stopped being one's own looks again
 }
 function cachedOwner() { const v = sget('session', 'desk.owner') || sget('local', 'desk.owner'); return v === '1' ? true : v === '0' ? false : null; }
 function applySendSwitch() {
@@ -1687,7 +1794,7 @@ async function loadPeopleNow() {
     else S.people = (r.people || r.members || []).map((p) => Object.assign({ joined: p.joined === undefined ? true : p.joined }, p))
       .concat((r.waiting || []).map((w) => Object.assign({}, w, { joined: false })));
     S.peopleNote = (r && r.note) || null; S.peopleErr = null;
-    const owner = !!(r && !Array.isArray(r) && r.name) || S.people.length > 0;
+    const owner = (!!(r && !Array.isArray(r) && r.name) || S.people.length > 0) && S.ownPage !== true;
     if (owner !== S.isOwner) { S.isOwner = owner; applySendSwitch(); S.cardSig = ''; if (!$('#desk').hidden) render(); }
     if (!$('#desk').hidden) saveOwner();
     if (r && typeof r.name === 'string' && r.name) S.myName = r.name; // the sender's name as person.tools checked it on the account
@@ -2434,13 +2541,13 @@ document.addEventListener('keydown', (ev) => {
     case 'u': if (t && !t.isCall) return act(() => toggleLater(t)); return;
     case 'z': return act(() => undo());
     case 'Enter': if (t && t.isCall) return act(() => takeCall(t)); if (t && S.view === 'asks') { const f = firstField(); if (f) { ev.preventDefault(); openReading(); f.focus(); } } return;
-    case 'o': { const a = $('#open-link'); if (a && S.view === 'asks') { ev.preventDefault(); a.click(); } return; }
+    case 'o': { const a = $('#open-link') || $('#dial-link'); if (a && S.view === 'asks') { ev.preventDefault(); a.click(); } return; }
     case 'c': { const p = $('#cmd-line'); if (p && t) { ev.preventDefault(); copyText(t.step.command || '', $('.cmd-top .btn')); } return; }
     case 'r': return act(() => refresh());
     case 'm': return act(() => menuOpen(true));
     case 's': if (canSend()) return act(() => openCompose()); return;
     case 't': if (canSend()) return act(() => setView('sent')); return;
-    case 'p': if (canPass() && t && !t.isCall) return act(() => openPass(t)); return;
+    case 'p': if (canPass() && t && !t.isCall && !contactsOf(t).length) return act(() => openPass(t)); return;
     case 'i': return act(() => setView('asks'));
     case 'h': return act(() => setView('history'));
     case '/': return act(() => { setView('history'); setTimeout(() => $('#search').focus(), 0); });
@@ -2455,7 +2562,7 @@ document.addEventListener('keydown', (ev) => {
 /* ---------- the server's optional parts, from its discovery document (section 5) ---------- */
 async function loadFeatures() {
   try {
-    const r = await fetch(API + '/.well-known/' + WIRE, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+    const r = await fetch(API + '/.well-known/x-hc-draft', { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
     const d = r.ok ? await r.json() : null;
     S.features = new Set(Array.isArray(d && d.features) ? d.features : []); S.cardSig = ''; render();
   } catch (e) { /* none known: the Desk offers only what every server takes */ }

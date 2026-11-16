@@ -76,6 +76,40 @@
     },
     "icon_url": {
       "$ref": "common.json#/$defs/https_url"
+    },
+    "brand": {
+      "allOf": [
+        {
+          "$ref": "brand.json"
+        },
+        {
+          "required": [
+            "id",
+            "verified"
+          ],
+          "if": {
+            "required": [
+              "verified"
+            ],
+            "properties": {
+              "verified": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "test"
+            ],
+            "properties": {
+              "test": {
+                "const": true
+              }
+            }
+          }
+        }
+      ],
+      "description": "On a connection whose asks wear a brand: that brand, so a client can draw the mark's idle state and the quiet line (ASKS-24)."
     }
   }
 }

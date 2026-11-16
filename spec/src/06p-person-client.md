@@ -18,7 +18,8 @@ taken from a live server's answers, and its routes are in the OpenAPI file under
 
 - **The person's own AIs.** A person connects an AI by making a **connection** (26.8). Each connection is a principal of its
   own, named on every ask, with a key that does one thing: place asks on that person and follow them. Those asks reach
-  nobody else, so the server checks them for size and for values shaped like secrets and reads nothing else. Their material
+  nobody else, so the server checks them for size, for values shaped like secrets and for section 27's rules of form and of
+  names (27.3, 27.5, 27.6), and reads nothing else. Their material
   is the person's own, kept encrypted and deleted on the person's schedule.
 - **A principal with a call.** A call (section 9) reaches a person who is a member of the pool it names, as an **offer**
   (26.7).
@@ -84,7 +85,7 @@ person left, or the credential was replaced), and a client treats that answer, a
 | Shows an ask's material | `GET /v1/member/tasks/{task_id}/media` (26.5) |
 | Takes or declines a call | the seat named in the offer: `/v1/seats/{seat_token}` (26.7) |
 | Keeps the person's settings | `GET` and `PATCH /v1/member/settings` (26.8) |
-| Connects, quiets, blocks and revokes the person's AIs | `/v1/member/connections` (26.8) |
+| Connects, quiets, blocks and revokes the person's AIs, and gives one a new webhook secret | `/v1/member/connections` (26.8) |
 | Blocks and unblocks any other asker | `/v1/member/blocks` (26.8) |
 | Holds the person's receipts | `GET /v1/member/receipts` (section 15; 26.8) |
 | Sends asks to the person's own people and reads what came back | `/v1/member/people`, `/v1/member/people/asks`, `/v1/member/sent` (26.10) |
@@ -146,8 +147,11 @@ a line than a link or a command) and says so.
 | `command` | `command` (the exact line), `where` (where to run it) | `done`; `not_now`; `note` | the exact line, copyable, where to run it, and that only the person can run it |
 | `approve` | `text` (exactly what will be done), `approve_label`, `deny_label` (the ask's own words on its two answers; "Approve" and "Deny" when the asker gave none), `editable` | `approve` (with `text` when `editable` and changed); `deny`; `not_now`; `note` | what is asked, with its own words on its two answers |
 
-**[CLIENT-2]** A client MUST offer every answer in its row and no other answer, and MUST offer Not now on every ask. Not now
-is never held against the person. A server MAY accept more than the table offers; a client never relies on it. **[MEMBER-5]**
+Section 27 adds Done, Later and Not now on every ask, a choice that takes a line, keyboards and the `call` step (27.6).
+
+**[CLIENT-2]** A client MUST offer every answer in its row and no other answer, and MUST offer Not now on every ask; against a
+server that lists `branded_asks`, it MUST offer Done, Later and Not now on every ask (CARD-9). Not now is never held against
+the person. A server MAY accept more than the table offers; a client never relies on it. **[MEMBER-5]**
 A server MUST answer an action the step does not take with 400 `invalid_field` on `action`, naming the actions it takes; a
 `choice` that is not one of `choices` with 400 on `choice`; and `text` with `approve` on a step that is not `editable` with
 400.
@@ -200,37 +204,22 @@ its approval is not signed. A server that offers signed answers takes the device
 attestation at `POST /v1/member/device_key`, and a signature over the digest of exactly what was approved, and when, at
 `POST /v1/member/signatures`; the shapes of both are left for a later version (Appendix A).
 
-**Cards.** An asker may design how its asks look, as data, never as code. The **brand** belongs to the asker's principal and
-is given once: a `name`; a `mark` (one picture, optionally with pictures for the ask's states `idle`, `needs_you`,
-`answered`); `colours`, each `{"value": "#rrggbb", "means": "..."}` and used only for what it means, never as decoration; and
-`grounds` (`light`, `dark`). A name alone is a complete brand. The **layout** belongs to the ask: `card.blocks`, an ordered
-list from a fixed set (`headline`, `text`, `media`, `facts` (label and value rows), `price`, `when_where`, `choices`,
-`input`), followed by the ask's own answers.
-
-```json
-{ "card": { "blocks": [ { "headline": "Thanksgiving is Thursday." }, { "text": "Are you open?" } ] },
-  "step": { "type": "question", "text": "Are you open on Thanksgiving?", "choices": ["Open as usual", "Closed"] } }
-```
-
-A brand proves that its principal controls the domain it names (the server tells the asker how: a file it names on that
-domain, or a DNS record) before any card carries it. **[MEMBER-10]** A server MUST NOT put a `brand` on an ask until its
-domain is proved; it then carries `"brand": {"name", "mark", "colours", "grounds", "domain", "verified": true, "mark_url"}`,
-where `mark_url` serves the mark as an image with no credential.
-
-**[CLIENT-9]** A client draws the blocks in order and ignores a block it does not know. A card's `media` block stands for the
-ask's own material, drawn where the block stands, or after the other blocks when there is none. A client MUST NOT run anything
-a card carries (there are no scripts and no remote code), shows pictures only from the server, and MUST draw a brand's text
-and colours only where they meet a contrast of 4.5:1 on the ground they are drawn on, using its own colours otherwise.
-Whatever the brand, a client keeps for itself: who is asking, undo, a device's own check before a signed approval, the
-evidence marks, and every label this section names. A brand may dress a card; it may not pass for another principal, hide
-what an answer does, or remove a label.
+**Cards.** A service may give its asks a brand and lay each one out as a card, as data, never as code (section 27).
+**[MEMBER-10]** A server MUST NOT put a `brand` on an ask until its domain is proved, except a test brand on a test member
+(27.4). **[CLIENT-9]** A client draws a card's blocks in order, ignores a block it does not know, runs nothing a card carries,
+shows pictures only from the server, and keeps its controls its own (27.1). A card's `media` block stands for the ask's own
+material, drawn where the block stands, or after the other blocks when there is none. Whatever the brand, a client keeps for
+itself: who is asking, undo, a device's own check before a signed approval, the evidence marks, and every label this section
+names. A brand may dress a card; it may not pass for another principal, hide what an answer does, or remove a label.
 
 ### 26.7 Calls on the person's side
 
 **On and Off.** `POST /v1/member/on` with `{"on": true, "until": "<time>"}`, `{"on": true, "hours": <number>}` or `{"on":
 false}` answers `{"member_id", "on": "on_until" | "off", "on_until"}`. **[MEMBER-11]** On MUST end by itself: it lasts at most
 12 hours (a longer `until` or `hours` is cut to 12), and 2 hours when neither is given. `on` is a boolean. Off means no call
-reaches the person; their AIs' asks arrive either way.
+reaches the person; their AIs' asks arrive either way, and wait on the list without a sound. **[MEMBER-23]** A server MUST
+NOT ring a person's device for an ask while they are Off or inside their quiet hours; while they are On, it MAY ring it once
+for an ask marked `now`, at most once in 30 minutes. Nothing else about an ask makes a sound.
 
 **Offers.** `GET /v1/member/offers` answers the person's ring state and the calls held for them: `member_id`; `on` and
 `on_until` (as below); `quiet` and `settings` (`longer_hold`, `sounds`; 26.8); `silent` (true when alerts make no sound);
@@ -275,7 +264,8 @@ on: a first line of at most 80 characters, cut at a word. A client obeys the dev
 **Settings.** `GET /v1/member/settings` answers `{"member_id", "quiet": {"start", "end", "tz"}, "settings": {"sounds",
 "longer_hold", "material_days", "alert_words"}, "note"}`. `PATCH /v1/member/settings` takes any of `sounds` (false: no app of
 the server's makes a sound for this person), `longer_hold` (true: an offer held for this person for less than three minutes is
-held for three), `quiet_start` and `quiet_end` (whole hours 0 to 23 in `quiet.tz`; no call reaches the person between them),
+held for three), `quiet_start` and `quiet_end` (whole hours 0 to 23 in `quiet.tz`; no call reaches the person between them, and no ask
+rings),
 `tz` (the person's time zone, an IANA name such as `America/Chicago`), `material_days` (1 to 30: how long the person's AIs'
 photos and clips are kept) and `alert_words`, and answers with the whole object. An unknown field is 400 `unknown_field`.
 
@@ -287,8 +277,11 @@ person to give their AI). A connection is `{"id", "connection_id" (the same), "n
 "quiet", "blocked", "revoked_at", "lab", "urgencies", "icon_url"}`, where `lab` is true for a connection the server made
 itself for a program it runs, and in the list (`GET /v1/member/connections`, `{"connections": [...], "limit"}`) also
 `asks_waiting`. `PATCH /v1/member/connections/{id}` takes `quiet` (its asks never ring), `blocked` (it hears only "not
-available") and `urgencies` (the urgencies this AI may use). **[MEMBER-14]** A connection's key MUST be able to do nothing but
-place asks on its person, follow them (their replies and notes) and withdraw them, and `DELETE /v1/member/connections/{id}`
+available") and `urgencies` (the urgencies this AI may use). `POST /v1/member/connections/{id}/secret` (no body) makes the
+connection a new webhook secret and answers `{"webhook_secret"}`, shown once; the old secret stops at once (27.2).
+**[MEMBER-14]** A connection's key MUST be able to do nothing but
+place asks on its person, follow them (their replies and notes), withdraw them and give its own brand (`/v1/brand`,
+`/v1/brand/mark`, `/v1/brand/verify`, `/v1/brand/key`, section 27), and `DELETE /v1/member/connections/{id}`
 MUST stop the key at once and withdraw its open asks; a revoked connection stays in the list with `revoked_at`. A picture sent
 as an address is copied by the server into its own storage (an image of at most 256 KB); the connection then answers `icon:
 null` and `icon_url`, an address on the server read with the member's credential. A client draws `icon_url` from the server
@@ -419,13 +412,16 @@ computer, MUST need the member credential (403 for a computer session).
 
 Closed in 0.1, as in section 24:
 
-- **Step types:** `question`, `link`, `command`, `approve`.
+- **Step types:** `question`, `link`, `command`, `approve`; and, for a server that lists `branded_asks`, `call`.
 - **Actions on an ask:** `answer`, `done`, `not_now`, `approve`, `deny`, `note`.
-- **Ask states:** `open`, `answered`, `done`, `not_now`, `lapsed`.
+- **Ask states:** `open`, `answered`, `done`, `not_now`, `lapsed`; and, for a server that lists `branded_asks`,
+  `withdrawn`.
 - **Urgencies:** `now`, `today`, `whenever`.
 - **Note authors (`by`):** `person`, `asker`, `passer`.
-- **Card blocks:** `headline`, `text`, `media`, `facts`, `price`, `when_where`, `choices`, `input`.
-- **Brand mark states:** `idle`, `needs_you`, `answered`.
+- **Card blocks:** `headline`, `text`, `media`, `facts`, `price`, `when_where`, `choices`, `input`; and, for a server that
+  lists `branded_asks`, `quote` and `contact`.
+- **Brand mark states:** `idle`, `needs_you`, `answered`. For a server that lists `branded_asks`, section 27's registries
+  (27.11) too.
 - **Connection icons:** `home`, `chef`, `car`, `business`, `lab`, `other`, one emoji, or up to three letters; a picture is
   given as an https address, which the server copies in and serves as `icon_url` (26.8).
 - **Error codes** added to section 24's: `already_answered` (409, not fixable: the ask was answered already, or no longer
@@ -444,7 +440,12 @@ everything it shows and sends keeps these rules.
 Most of these came from building a desktop client from this section's text alone. Each place where the builder had to guess,
 probe a live server or read a server's code was a gap, and each gap was closed in the text; fifty-two were closed.
 
-- 16 Nov 2026: words in alerts, with the words never in a push (26.7). Where a client finds an asker's brand (26.6). Asks
+- 16 Nov 2026: section 27 (asks from a service, and branded cards) takes over cards: 26.6's Cards, MEMBER-10 and CLIENT-9 point
+  to it. Done, Later and Not now on every ask against a server that lists `branded_asks` (CLIENT-2). A connection's key may
+  give its own brand (MEMBER-14), and the person can give it a new webhook secret (26.8). For such a server the registries
+  gain `call`, `withdrawn`, `quote` and `contact` (26.12).
+- 16 Nov 2026: what On means for asks: a `now` ask may ring once while the person is On, never while Off or in quiet hours
+  (26.7, MEMBER-23). Words in alerts, with the words never in a push (26.7). Where a client finds an asker's brand (26.6). Asks
   between people as the receiver sees them: the sender's checked name, the one-time notice, mutes, the daily limit and asks
   passed on (26.10). The account and passkeys, and signing a computer in from a device (26.11). On's length (26.7). Notes stop
   at the answer, and `new` holds until a thread is marked read (26.5, 26.10).

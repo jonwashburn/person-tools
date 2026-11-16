@@ -54,6 +54,8 @@ export async function isOwnPanel(env, p) {
 }
 // OWNER_router_23 (TRUST 8:19 PM CT, operations 8:25): a panel made for one person's people (its principal is a person's, with no keys)
 // has its own notice: who asks, that the owner sees each person's name beside their answers, the daily limit, mute, block, leave
+// operations 3:53 PM CT 16 Nov: a panel the operator gave an owner (POST /internal/panels/{p}/owner) is joined as that person's people
+async function hasOwner(env, p) { return !!(p && await env.DB.prepare('SELECT 1 AS x FROM panel_owners WHERE panel_id = ?').bind(p.id).first().catch(() => null)); }
 export async function isPeoplePanel(env, p) {
   if (!p || p.kind !== 'private') return false;
   const r = await env.DB.prepare('SELECT 1 AS x FROM principals pr WHERE pr.id = ? AND pr.owner = \'person\' AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.principal_id = pr.id)').bind(p.principal_id).first().catch(() => null);
@@ -225,7 +227,7 @@ export async function joinInfo(env, request, code) {
   const { p } = await panelByCode(env, code);
   if (!p) throw notFixable(404, 'not_found', 'This join link is not valid.');
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE panel_id = ? AND left_at IS NULL').bind(p.id).first();
-  if (await isPeoplePanel(env, p)) {   // OWNER_router_23: the people notice, with the owner's checked name
+  if (await isPeoplePanel(env, p) || await hasOwner(env, p)) {   // OWNER_router_23: the people notice, with the owner's checked name (an owned panel too: operations 3:53 PM CT 16 Nov)
     const o = await env.DB.prepare('SELECT name FROM panel_owners WHERE panel_id = ?').bind(p.id).first().catch(() => null);
     if (!o) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: it has no owner.');
     return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, people: true, owner_name: o.name,
@@ -248,7 +250,7 @@ export async function joinPanel(env, request, code, body) {
   if (!p) throw notFixable(404, 'not_found', 'This join link is not valid.');
   if (!body || body.adult !== true) throw fixable('invalid_field', 'adult', 'Only adults may join. Confirm you are 18 or older.', true);
   if (body.notice_accepted !== true) throw fixable('invalid_field', 'notice_accepted', 'Read and accept the notice first.', true);
-  const own = await isOwnPanel(env, p), people = await isPeoplePanel(env, p);
+  const own = await isOwnPanel(env, p), people = (await isPeoplePanel(env, p)) || (await hasOwner(env, p));   // an owned panel takes the people notice (operations 3:53 PM CT 16 Nov)
   if (own && !p.asker_name) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: whoever made it has not named themselves.');
   if (people && !(await env.DB.prepare('SELECT 1 AS x FROM panel_owners WHERE panel_id = ?').bind(p.id).first().catch(() => null))) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: it has no owner.');
   const notices = people ? PEOPLE_NOTICE_IDS : own ? OWN_NOTICE_IDS : ACCEPTED_NOTICES;   // OWNER_router_23: a people panel takes only its own notice
@@ -286,11 +288,21 @@ export async function joinPanel(env, request, code, body) {
 
 // The member's own switch: On, Off, or On for a time (2 hours unless chosen; 12 at most).
 export async function setOn(env, request, memberToken, body) {
-  const m = await env.DB.prepare('SELECT * FROM members WHERE token_hash = ? AND left_at IS NULL').bind(await sha256hex(String(memberToken || ''))).first();
+  const { memberByToken } = await import('./seats.js');   // a Desk (ds_) or passkey (ps_) session acts for its membership here too
+  const m = await memberByToken(env, String(memberToken || '')).catch(() => null);
   if (!m) throw notFixable(404, 'not_found', 'This link is not valid.');
   const st = body && body.on;
   let on_state = 'off', on_until = null;
-  if (st === true || st === 'on') { on_state = 'on_until'; const h = Math.min(12, Math.max(0.25, Number(body.hours) || 2)); on_until = nowMs() + h * 3600000; }
+  if (st === true || st === 'on') {
+    on_state = 'on_until';
+    let h = Number(body.hours) || 2;
+    if (body.until !== undefined) {   // WEB 6:23 PM CT 15 Nov: SPEC 8.1's field; the same bounds as hours (15 minutes to 12 hours)
+      const t = Date.parse(String(body.until));
+      if (!Number.isFinite(t) || t <= nowMs()) throw fixable('invalid_field', 'until', 'until is a time in the future (ISO 8601), at most 12 hours away.', new Date(nowMs() + 3600000).toISOString());
+      h = (t - nowMs()) / 3600000;
+    }
+    h = Math.min(12, Math.max(0.25, h)); on_until = nowMs() + h * 3600000;
+  }
   if (st === 'always') on_state = 'on';
   await env.DB.prepare('UPDATE members SET on_state = ?, on_until = ?, missed_rings = 0 WHERE id = ?').bind(on_state, on_until, m.id).run();
   return { member_id: m.id, on: on_state, on_until: iso(on_until) };

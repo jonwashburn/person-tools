@@ -1,0 +1,11 @@
+{
+  "name": "Northside Motors",
+  "domain": "northside.example",
+  "mark": {
+    "states": {
+      "needs_you": {
+        "media": "m_mark0001"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "brand_request.json",
+  "title": "PUT /v1/brand (section 27.3)",
+  "type": "object",
+  "required": [
+    "brand"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "brand": {
+      "$ref": "brand.json"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 /* the person\'s side: the ring. The service pushes with no words in it; this worker asks our own page what is on offer and shows
-   only "A call for you: N minutes, $X" or "An unpaid test call: N minutes". An asker's words never reach a lock screen. */
+   only "A call for you: N minutes, $X" or "An unpaid test call: N minutes", or for an urgent ask "An ask is waiting" and who it is from.
+   An asker's words never reach a lock screen. */
 var STORE = "pt-member";
 self.addEventListener("install", function () { self.skipWaiting(); });
 self.addEventListener("activate", function (e) { e.waitUntil(self.clients.claim()); });
@@ -20,7 +21,18 @@ self.addEventListener("push", function (e) {
         url = "/m/" + t; tag = "pt-off-missed"; return;
       }
       if (!o) {
-        // no call waiting: perhaps an asker has said what an answer changed (P8). Tell the person, without its words.
+        // no call waiting: an urgent ask rings too (a person's, an AI's, one passed on): say an ask is waiting, never its words
+        return fetch("/x/members/" + t + "/tasks?history=0", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (td) {
+          var a = (td.open || []).filter(function (x) { return x.state === "open" && x.urgency === "now"; })[0];
+          if (!a) return null;
+          title = "An ask is waiting"; body = "From " + (a.passed_on_by ? a.from + ", passed on by " + a.passed_on_by : a.from || "one of your asks") + ". Open your page to read it.";
+          url = "/m/" + t; tag = "pt-ask-" + a.task_id;
+          // OWNER_router_25: the ask's first line, only if the person turned on "Show the ask in my alerts" (never in the push itself)
+          return fetch("/xp/members/" + t + "/tasks/" + a.task_id + "/alert", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
+            .then(function (al) { if (al && al.line) { title = body.replace(/\. Open your page to read it\.$/, ""); body = al.line; } return true; });
+        }, function () { return null; }).then(function (asked) {
+          if (asked) return;
+        // no call and no urgent ask: perhaps an asker has said what an answer changed (P8). Tell the person, without its words.
         return fetch("/x/members/" + t + "/receipts", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (rd) {
           return caches.open(STORE).then(function (c) { return c.match("/__seen").then(function (m) { return m ? m.json() : []; }).then(function (seen) {
             var fresh = (rd.receipts || []).filter(function (x) { return x.what_changed && x.receipt && seen.indexOf(x.receipt.receipt_id) < 0; });
@@ -30,6 +42,7 @@ self.addEventListener("push", function (e) {
             url = "/m/" + t; tag = "pt-changed-" + rc.receipt_id;   // the person's page leads with the line, marked NEW (a receipt opens only from that page)
             return c.put("/__seen", new Response(JSON.stringify(seen.concat(fresh.map(function (x) { return x.receipt.receipt_id; })))));
           }); });
+        });
         });
       }
       var mins = o.minutes || "?";

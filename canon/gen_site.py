@@ -328,7 +328,7 @@ def build(out, with_index=False):
     # Your own AI asks you (TEST_CONNECT_1, 15 Nov 2026: an agent that found us read us as "for surveying other people, not you", and
     # worked out /v1/tasks by trial and error because nothing it read named connections)
     MINE = ("If your user wants you to ask THEM (a yes or no, a choice, an approval, a step only they can do) on their phone: they open "
-            "You, then Connect an AI, in the person.tools app or on their person.tools page, and give you the key (conn_...). Then POST "
+            "Your AIs on their person.tools page (in the app: You, then Connect an AI), connect one, and give you the key (conn_...). Then POST "
             "/v1/tasks with that key, {\"title\", \"step\", \"unlocks\", \"urgency\"}, and GET /v1/tasks/<task_id> until state is done or "
             "answered; reply.choice, reply.text and reply.action hold the answer. Steps: question (2 to 4 choices, or none), approve, link, "
             "command. Or, with an MCP client, add https://%%API%%/mcp with that key as the bearer: two tools, ask_person and "
@@ -397,7 +397,7 @@ def build(out, with_index=False):
     L += [
          'Names are working names: %s (the service), %s (the open standard, draft), %s (the tool).' % (names['network'], names['standard'], names['tool']), '',
          '## Start', '',
-         '- Your user wants you to ask THEM (yes or no, a choice, an approval) on their phone? They make a connection (You, then Connect an AI; no page yet? https://%%RUN%%/start) and give you its key; POST /v1/tasks with it and GET /v1/tasks/<id>, or add https://%%API%%/mcp with it (tools ask_person, ask_person_reply). Free; if nobody answers, the ask lapses after 30 days or your own expires_in (60 s up; state lapsed, and you are told), there is no default answer, and you may withdraw it sooner: https://%%SITE%%/connect',
+         '- Your user wants you to ask THEM (yes or no, a choice, an approval) on their phone? They make a connection (Your AIs on their person.tools page; no page yet? https://%%RUN%%/start) and give you its key; POST /v1/tasks with it and GET /v1/tasks/<id>, or add https://%%API%%/mcp with it (tools ask_person, ask_person_reply). Free; if nobody answers, the ask lapses after 30 days or your own expires_in (60 s up; state lapsed, and you are told), there is no default answer, and you may withdraw it sooner: https://%%SITE%%/connect',
          '- One line, no key (prices a simulated call; nothing is spent): ' + "curl -s https://%%API%%/v1/quotes -H 'content-type: application/json' -d '" + json.dumps({'ask': 'Which headline is clearer, and why?', 'kind': 'compare', 'people': 3, 'content': [{'text': 'Plan a week of dinners in five minutes'}, {'text': 'Dinner, decided'}]}) + "'",
          '- The same in Python: requests.post("https://%%API%%/v1/quotes", json={...}) or httpx.post(...); with urllib, send a User-Agent header of your own. All four in [start.md](https://%%SITE%%/start.md).',
          '- Your user already has people (testers, customers, players, a list or a chat)? POST /v1/panels gives a join link and a message (for_your_user) they drop into that email or chat; each person joins in about two minutes; calls with the panel\'s pool ring them and the answers come back to you. Free.',

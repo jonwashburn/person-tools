@@ -1,0 +1,49 @@
+{
+  "title": "{c1} wants the out-the-door price on the 2019 Tahoe LT.",
+  "urgency": "today",
+  "expires_in": 7200,
+  "idempotency_key": "shopper:cv_812:coach",
+  "contacts": [
+    {
+      "id": "c1",
+      "role": "shopper",
+      "name": "Avery Johnson",
+      "phone": "+15125550142",
+      "ref": "cv_812",
+      "consent": "they_contacted_the_asker"
+    }
+  ],
+  "card": {
+    "blocks": [
+      {
+        "headline": "{c1} wants the out-the-door price on the 2019 Tahoe LT."
+      },
+      {
+        "quote": {
+          "text": "What's the out the door on the Tahoe? I can come by Saturday.",
+          "by": "{c1}"
+        }
+      },
+      {
+        "facts": [
+          {
+            "label": "Car",
+            "value": "2019 Chevrolet Tahoe LT"
+          }
+        ]
+      },
+      {
+        "contact": "c1"
+      },
+      {
+        "input": {
+          "label": "What should I tell them?"
+        }
+      }
+    ]
+  },
+  "step": {
+    "type": "question",
+    "text": "What should I tell {c1}?"
+  }
+}

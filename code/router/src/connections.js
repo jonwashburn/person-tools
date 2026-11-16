@@ -109,9 +109,12 @@ export async function adminConnection(env, request, memberId, b) {   // the oper
 
 export async function listConnections(env, request, memberByToken, token) {
   const m = await memberByToken(env, token);
-  const rows = (await env.DB.prepare(`SELECT c.*, (SELECT COUNT(*) FROM tasks t WHERE t.connection_id = c.id AND t.state = 'open') AS waiting FROM connections c
+  const rows = (await env.DB.prepare(`SELECT c.*, (SELECT COUNT(*) FROM tasks t WHERE t.connection_id = c.id AND t.state = 'open') AS waiting,
+        b.brand_json AS b_json, b.domain AS b_domain, b.verified_at AS b_verified_at, b.brand_id AS b_id FROM connections c LEFT JOIN brands b ON b.principal_id = c.principal_id
       WHERE c.revoked_at IS NULL AND (c.member_id = ? OR (c.person_name IS NOT NULL AND c.person_name = ? AND c.panel_id = ?)) ORDER BY c.created_at`).bind(m.id, m.person_name || '\u0000', m.panel_id).all()).results || [];
-  return { connections: rows.map(c => ({ ...view(c, request), asks_waiting: c.waiting || 0 })), limit: MAX_PER_PERSON };
+  const { brandView } = await import('./cards.js');   // OWNER_router_26 item 3
+  return { connections: rows.map(c => { const br = brandView({ brand_json: c.b_json, domain: c.b_domain, verified_at: c.b_verified_at, brand_id: c.b_id }, m, apiBase(request));
+    return { ...view(c, request), asks_waiting: c.waiting || 0, ...(br ? { brand: br } : {}) }; }), limit: MAX_PER_PERSON };
 }
 
 async function mine(env, m, id) {

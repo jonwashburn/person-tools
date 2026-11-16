@@ -9,7 +9,7 @@ seven days, or when you choose. Nothing you get here is ever shown to a reviewer
 
 ## 1. Make the connection (you)
 
-In the person.tools app, or on your person.tools page, open **You**, then **Connect an AI**. Give it a name (for example "My
+On your person.tools page, go to **Your AIs** (in the person.tools app: **You**, then **Connect an AI**). Give it a name (for example "My
 assistant" or "Home camera") and an icon. You get a **key** (it starts `conn_`), a **link**, and a **webhook secret** (shown once). The key does exactly one thing:
 it lets that AI ask you, and read your answers. You can revoke it with one tap; you can also quiet it or block it.
 
@@ -47,8 +47,8 @@ YOUR_WEBHOOK_SECRET_HERE. It is retried for up to 24 hours.
 Rules: one ask, one step. A question has 2 to 4 choices, or leave out "choices" and I'll reply Done, Not now, or a line.
 Other steps: {"type": "approve", "text": "exactly what you will do"} (I approve or deny; "reply.approved_text" is what I
 approved), {"type": "link", "url": "https://...", "text": "what to do there"}, or {"type": "command", "command": "...",
-"where": "where I run it"}. Urgency: "now" (first in my list, and one notification to my phone if I'm On and outside my
-quiet hours; the ask's "rang" is true once it went out), "today" or "whenever" (in my list, no notification). To retry
+"where": "where I run it"}. Urgency: "now" (first in my list, and one notification to my phone outside my quiet hours;
+the ask's "rang" is true once it went out), "today" or "whenever" (in my list, no notification). To retry
 safely, add "idempotency_key" (your own id for the ask, up to 128 characters): the same one again returns the first ask,
 never a second. The title is 3 to 120 characters, "unlocks" up to 300, the step's text up to 4,000. For a decision that only matters for a while, add "expires_in"
 (seconds, 60 to 2592000; 30 days if you leave it out): when it passes unanswered, the ask lapses and you're told (state
@@ -61,9 +61,9 @@ the answer at the link followed by `/TASK_ID`.
 ## 3. What happens next
 
 Your AI places one ask. It appears in your list under the AI's name, on your person.tools page or in the person.tools iPhone
-app (in testing now). An ask your AI marks "now" also sends one notification to your phone when you are On (your page shows On or Off
-and lets you switch), outside your quiet hours (9 PM to 8 AM unless you change them), at most one every 30 minutes, and
-not from an AI you quieted. On your page, that needs the page added to your Home Screen with notifications allowed. It plays a sound unless you turned sounds off (in
+app (in testing now). An ask your AI marks "now" also sends one notification to your phone, outside your quiet hours (9 PM to 8 AM
+unless you change them), at most one every 30 minutes, and not from an AI you quieted. (A page of your own is always On; on a
+panel someone else made, you also need to be On.) On your page, that needs the page added to your Home Screen with notifications allowed. It plays a sound unless you turned sounds off (in
 the app: You, then Sounds). Asks marked "today" or "whenever" wait in your list without a notification. You tap your answer, and
 your AI reads it from the same address. If you'd rather not be asked, revoke the connection: its key stops at once and its open asks are withdrawn.
 

@@ -28,11 +28,33 @@
       }).then(function (r) { if (r.ok) location.href = page; else { add.disabled = false; msg.textContent = "Not added: " + (r.d.message || "try again") + ". Your page is made either way."; } },
         function (e) { add.disabled = false; msg.textContent = "Not added: " + (e && e.message ? e.message : e) + ". Your page is made either way."; });
     } }, "Add a passkey (Face ID)");
-    main.replaceChildren(h("section", { class: "screen" }, h("p", { class: "label" }, "YOUR PAGE IS MADE"),
-      h("p", { class: "lede" }, "Add a passkey, so you can sign in with Face ID on your devices. Then connect your AI."), add,
-      h("a", { class: "linkbtn", href: page }, "Not now: go to my page"), msg,
-      h("p", { class: "note" }, "Keep your page's link until you add a passkey: it is how you come back.")));
+    // REACH 3:35 PM CT 16 Nov: lead with connecting your AI, and keep the page three ways (never remembered silently: WEB 3:07)
+    var remember = h("input", { type: "checkbox", id: "c-remember" });
+    remember.addEventListener("change", function () { try { if (remember.checked) localStorage.setItem(KEY, tok); else localStorage.removeItem(KEY); } catch (e) {} msg.textContent = remember.checked ? "This phone will remember your page." : "This phone will not remember your page."; });
+    var copy = h("button", { type: "button", class: "quiet small", onclick: function () {
+      var url = location.origin + page;
+      (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { msg.textContent = "Your page's link is copied."; }, function () { msg.textContent = "Copy this link: " + url; });
+    } }, "Copy my page's link");
+    var bl = document.getElementById("bar-label"); if (bl) bl.textContent = "YOUR PAGE";
+    main.replaceChildren(h("section", { class: "screen" }, h("p", { class: "label" }, "YOUR PAGE"),
+      h("p", { class: "sub" }, "Your page is made."),
+      h("p", { class: "lede" }, "Next, connect your first AI. Keep this page: without a passkey, its link is the only way back."),
+      h("button", { type: "button", class: "go", onclick: function () { location.href = page; } }, "Open my page and connect an AI"),
+      h("p", { class: "label" }, "KEEP YOUR PAGE"),
+      h("p", null, h("b", null, "Add it to your Home Screen. "), "On an iPhone: Share, then Add to Home Screen. On Android: the menu, then Add to Home screen. The icon keeps your page, and alerts need it."),
+      h("p", { class: "check" }, remember, " ", h("label", { for: "c-remember" }, "Remember my page on this phone")),
+      h("p", { class: "note" }, "Off until you tick it. Leave it off on a computer others use."),
+      copy, h("p", { class: "note" }, "Anyone with this link can open your page. Keep it to yourself."),
+      h("p", { class: "label" }, "SIGN IN ANYWHERE"),
+      h("p", null, "A passkey signs you in with Face ID on your devices, without the link."), add, msg));
   }
+  // a page this phone was told to remember (REACH 3:35): offered above the form; forgotten once, and said, when it no longer opens
+  var KEY = "pt_own_page", kept = null; try { kept = localStorage.getItem(KEY); } catch (e) {}
+  var keptBox = h("div", null);
+  if (kept && /^mt_[a-z0-9]{4,80}$/.test(kept)) fetch("/x/members/" + encodeURIComponent(kept) + "/tasks", { headers: { Accept: "application/json" } }).then(function (r) {
+    if (r.ok) keptBox.replaceChildren(h("div", { class: "block" }, h("p", { class: "sub" }, "You have a page on this phone."), h("button", { type: "button", class: "go", onclick: function () { location.href = "/m/" + encodeURIComponent(kept); } }, "Open my page")));
+    else if ([401, 404, 410].indexOf(r.status) >= 0) { try { localStorage.removeItem(KEY); } catch (e) {} keptBox.replaceChildren(h("p", { class: "note", role: "status" }, "The page this phone remembered no longer opens.")); }
+  }, function () {});
   fetch("/tester_notice_self.json").then(function (r) { return r.json(); }).then(function (notice) {   // TRUST 3:08 PM CT 16 Nov: a page of your own has its own notice
     var adult = h("input", { type: "checkbox", id: "c-adult" }), us = h("input", { type: "checkbox", id: "c-us" }), ok = h("input", { type: "checkbox", id: "c-notice" });
     var msg = h("p", { class: "note", role: "status" });
@@ -50,7 +72,7 @@
     } }, "Make my page");
     main.replaceChildren(h("section", { class: "screen" },
       h("p", { class: "label" }, "YOUR OWN PERSON.TOOLS PAGE"),
-      h("p", { class: "lede" }, "One place where your own AIs ask you things, and you answer with a tap. Nobody else can reach you here."),
+      h("p", { class: "lede" }, "One place where your own AIs ask you things, and you answer with a tap. Nobody else can reach you here."), keptBox,
       h("p", { class: "label" }, "THE NOTICE, WORD FOR WORD"),
       h("dl", { class: "notice" }, (notice.sections || []).map(function (s) { return [h("dt", null, s.label), h("dd", null, s.text)]; })),
       h("p", null, h("label", { for: "c-adult" }, adult, " I am 18 or older.")),

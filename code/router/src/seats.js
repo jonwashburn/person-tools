@@ -431,7 +431,7 @@ export async function memberFeedback(env, request, token, body) {
 export async function memberSettings(env, request, token, body) {
   const m = await memberByToken(env, token);
   const b = body || {};
-  for (const k of Object.keys(b)) if (!['quiet_start', 'quiet_end', 'tz', 'screen_reader', 'longer_to_answer', 'sounds', 'material_days'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a setting.`, null);
+  for (const k of Object.keys(b)) if (!['quiet_start', 'quiet_end', 'tz', 'screen_reader', 'longer_to_answer', 'longer_hold', 'sounds', 'material_days'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a setting.`, null);
   if (b.material_days !== undefined && !(Number.isInteger(b.material_days) && b.material_days >= 1 && b.material_days <= 30)) throw fixable('invalid_field', 'material_days', 'material_days is how many days your AIs\' photos and clips are kept: 1 to 30.', 7);
   if (b.sounds !== undefined && typeof b.sounds !== 'boolean') throw fixable('invalid_field', 'sounds', 'sounds is true or false.', false);
   const sounds = b.sounds === undefined ? (m.sounds === 0 ? 0 : 1) : (b.sounds ? 1 : 0);
@@ -441,7 +441,7 @@ export async function memberSettings(env, request, token, body) {
   let tz = m.tz;
   if (b.tz !== undefined) { try { new Intl.DateTimeFormat('en-US', { timeZone: String(b.tz) }); tz = String(b.tz); } catch { throw fixable('invalid_field', 'tz', 'tz is a time zone name such as America/Chicago.', 'America/Chicago'); } }
   let slow = m.slow_hold || 0;
-  if (b.screen_reader !== undefined || b.longer_to_answer !== undefined) slow = (b.screen_reader === true || b.longer_to_answer === true) ? 1 : 0;
+  if (b.screen_reader !== undefined || b.longer_to_answer !== undefined || b.longer_hold !== undefined) slow = (b.screen_reader === true || b.longer_to_answer === true || b.longer_hold === true) ? 1 : 0;   // longer_hold: the standard's name (WEB 2:48)
   const days = b.material_days !== undefined ? b.material_days : (m.material_days || 7);
   await env.DB.prepare('UPDATE members SET quiet_start = ?, quiet_end = ?, tz = ?, slow_hold = ?, sounds = ?, material_days = ? WHERE id = ?').bind(qs, qe, tz, slow, sounds, days, m.id).run();
   // OWNER_router_6: sounds is the person's setting: every membership with the same name on the same principal's panels follows

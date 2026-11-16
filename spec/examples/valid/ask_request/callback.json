@@ -1,0 +1,37 @@
+{
+  "title": "Call {c1} back about the 2021 Civic.",
+  "urgency": "today",
+  "expires_in": 14400,
+  "idempotency_key": "callback:cv_301",
+  "contacts": [
+    {
+      "id": "c1",
+      "role": "shopper",
+      "name": "Sam Ortiz",
+      "phone": "+15125550188",
+      "ref": "cv_301",
+      "consent": "they_contacted_the_asker"
+    }
+  ],
+  "card": {
+    "blocks": [
+      {
+        "headline": "Call {c1} back about the 2021 Civic."
+      },
+      {
+        "quote": {
+          "text": "Call me after 3, I want to ask about the trade.",
+          "by": "{c1}"
+        }
+      },
+      {
+        "contact": "c1"
+      }
+    ]
+  },
+  "step": {
+    "type": "call",
+    "contact": "c1",
+    "text": "Call {c1} back about the 2021 Civic."
+  }
+}

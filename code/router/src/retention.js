@@ -86,6 +86,7 @@ export async function retention(env, now, until = Infinity) {
       if (r.meta.changes === 1 && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'lapsed' }); } catch { } }
     }
     out.tasks_lapsed = due.length;
+    try { const cr = await (await import('./contacts.js')).stripClosed(env, null); out.contacts_cleared = (cr && cr.meta && cr.meta.changes) || 0; } catch { }   // OWNER_router_29
     out.tasks = (await env.DB.prepare('DELETE FROM tasks WHERE (state = \'lapsed\' AND lapsed_at < ?) OR (state NOT IN (\'open\', \'lapsed\') AND COALESCE(answered_at, created_at) < ?)').bind(now - 30 * DAY, now - 180 * DAY).run()).meta.changes;
   } catch { }
   // 10. held-call records: 13 months after the decision

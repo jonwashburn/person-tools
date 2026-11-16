@@ -154,9 +154,11 @@ export async function startPage(env, request, b, ipHash, teamHeader) {
   // TRUST 3:08 PM CT 16 Nov: a page of your own accepts its own notice (SELF_NOTICE_IDS); the general ids stay accepted only until the page
   // that sends self-1 is live everywhere (step 2 takes them out)
   const SELF_NOTICE_IDS = ['tester-notice-self-1'];
-  if (b.notice_accepted !== true || !(SELF_NOTICE_IDS.includes(b.notice_id) || ACCEPTED_NOTICES.includes(b.notice_id))) throw fixable('invalid_field', 'notice_id', 'Read the current notice and accept it.', SELF_NOTICE_IDS[0]);
+  if (b.notice_accepted !== true || !SELF_NOTICE_IDS.includes(b.notice_id)) throw fixable('invalid_field', 'notice_id', 'Read the notice for a page of your own (tester-notice-self-1) and accept it.', SELF_NOTICE_IDS[0]);   // step 2 (the page sends self-1 since 4:22 PM CT 16 Nov)
   const now = nowMs();
-  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals WHERE created_ip_hash = ? AND owner = \'person\' AND name = \'your own page\' AND created_at > ?').bind(ipHash, now - DAY).first();
+  // 3:3x PM CT 16 Nov: our own checks' pages (made with the team header; their member is not real) never count toward a stranger's five:
+  // every page through run.person.tools reaches us from the relay's address, and 36 test pages a day had filled that address's five
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals p WHERE p.created_ip_hash = ? AND p.owner = \'person\' AND p.name = \'your own page\' AND p.created_at > ? AND EXISTS (SELECT 1 FROM panels pn JOIN members m ON m.panel_id = pn.id WHERE pn.principal_id = p.id AND m.is_real = 1)').bind(ipHash, now - DAY).first();
   if (n && n.n >= 5 && !teamHeader) throw notFixable(429, 'rate_limited', 'At most five pages a day from one address. Use the page you made.', { retry_after_seconds: 3600 });
   const tz = typeof b.tz === 'string' && b.tz.length < 60 ? b.tz : 'America/Chicago';
   const qs = Number.isInteger(b.quiet_start) && b.quiet_start >= 0 && b.quiet_start < 24 ? b.quiet_start : 21;

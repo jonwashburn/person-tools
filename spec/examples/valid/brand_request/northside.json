@@ -1,0 +1,28 @@
+{
+  "brand": {
+    "name": "Northside Motors",
+    "domain": "northside.example",
+    "mark": {
+      "states": {
+        "needs_you": {
+          "glyph": "disc",
+          "colour": "#e8590c"
+        },
+        "idle": {
+          "glyph": "ring",
+          "colour": "#8f8f8f"
+        }
+      }
+    },
+    "colours": {
+      "ink": "#0d0d0d",
+      "ink_soft": "#5d5d5d",
+      "rule": "#e6e6e6"
+    },
+    "grounds": {
+      "light": "#ffffff"
+    },
+    "corners": "round",
+    "quiet_line": "Nothing needs you."
+  }
+}

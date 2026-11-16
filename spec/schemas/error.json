@@ -113,6 +113,34 @@
           }
         }
       }
+    },
+    "ratio": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]{2}$",
+      "description": "contrast_too_low: the ratio measured (27.3)."
+    },
+    "floor": {
+      "enum": [
+        "4.5",
+        "3"
+      ],
+      "description": "contrast_too_low: the floor it missed (27.3)."
+    },
+    "ground": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "contrast_too_low: the ground it was measured on (27.3)."
+    },
+    "allowed": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "now",
+          "today",
+          "whenever"
+        ]
+      },
+      "description": "An urgency the person did not allow: the ones allowed (27.2)."
     }
   },
   "additionalProperties": false,

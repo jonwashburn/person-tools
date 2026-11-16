@@ -33,21 +33,35 @@ export async function proof(env) {
   // a live key the owner made for a proof (label standin-*) rings only the team's bots on a private panel: never a real call
   const realPool = `(c.panel_id IN (SELECT id FROM panels WHERE kind = 'private') OR (c.pool_ref IS NOT NULL AND c.simulated = 0))
       AND c.key_id NOT IN (SELECT id FROM keys WHERE label LIKE 'standin%')`;
-  const rc = await env.DB.prepare(`SELECT SUM(CASE WHEN ${OURS_P} THEN 1 ELSE 0 END) AS ours, SUM(CASE WHEN ${OUTSIDER_P} THEN 1 ELSE 0 END) AS outsiders
-      FROM calls c JOIN principals p ON p.id = c.principal_id WHERE ${realPool} AND ${answered}`).first();
-  const outside = await env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM principals p JOIN calls c ON c.principal_id = p.id WHERE ${OUTSIDER_P}`).first();
+  // the slow API (4:2x PM CT 16 Nov): these five reads go out at once
   // keyless callers: our own checks send the team header, which marks their keyless calls 'anon:team:'
-  const keyless = await env.DB.prepare(`SELECT COUNT(DISTINCT key_id) AS n FROM idempotency
-      WHERE op = 'call' AND status = 201 AND key_id LIKE 'anon:%' AND key_id NOT LIKE 'anon:team:%' AND key_id NOT IN ${OUR_ANON} AND created_at > ?`).bind(now - 7 * DAY).first();
-  let asked = { n: 0 };
-  try {
-    asked = await env.DB.prepare(`SELECT COUNT(DISTINCT s.asker) AS n FROM stranger_requests s LEFT JOIN principals p ON p.id = s.principal_id WHERE ${ASKED_OUTSIDE}`).first();
-  } catch { }
-  const ours = (await env.DB.prepare(`SELECT c.id, c.kind, c.outcomes_json,
+  const [rc, outside, keyless, asked0, oursR] = await Promise.all([
+    env.DB.prepare(`SELECT SUM(CASE WHEN ${OURS_P} THEN 1 ELSE 0 END) AS ours, SUM(CASE WHEN ${OUTSIDER_P} THEN 1 ELSE 0 END) AS outsiders
+      FROM calls c JOIN principals p ON p.id = c.principal_id WHERE ${realPool} AND ${answered}`).first(),
+    env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM principals p JOIN calls c ON c.principal_id = p.id WHERE ${OUTSIDER_P}`).first(),
+    env.DB.prepare(`SELECT COUNT(DISTINCT key_id) AS n FROM idempotency
+      WHERE op = 'call' AND status = 201 AND key_id LIKE 'anon:%' AND key_id NOT LIKE 'anon:team:%' AND key_id NOT IN ${OUR_ANON} AND created_at > ?`).bind(now - 7 * DAY).first(),
+    env.DB.prepare(`SELECT COUNT(DISTINCT s.asker) AS n FROM stranger_requests s LEFT JOIN principals p ON p.id = s.principal_id WHERE ${ASKED_OUTSIDE}`).first().catch(() => ({ n: 0 })),
+    env.DB.prepare(`SELECT c.id, c.kind, c.outcomes_json,
         (SELECT MIN(r.created_at) FROM responses r WHERE r.call_id = c.id AND r.simulated = 0) AS first_at,
         (SELECT COUNT(*) FROM seats s WHERE s.call_id = c.id AND s.state = 'answered') AS people
       FROM calls c JOIN principals p ON p.id = c.principal_id WHERE ${OURS_P} AND ${realPool} AND ${answered}
-      ORDER BY c.created_at DESC LIMIT 20`).all()).results || [];
+      ORDER BY c.created_at DESC LIMIT 20`).all(),
+  ]);
+  const asked = asked0 || { n: 0 }, ours = (oursR && oursR.results) || [];
+  // started before the per-call lines are read, awaited where the answer names them
+  const paaP = import('./people.js').then((P) => P.personAsksAnswered(env));
+  const opaP = (async () => { try {
+      const r = await env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM tasks k JOIN connections cn ON cn.id = k.connection_id JOIN members m ON m.id = k.answered_by
+          JOIN panels pn ON pn.id = cn.panel_id JOIN principals p ON p.id = pn.principal_id
+          WHERE k.state IN ('done', 'answered') AND m.is_real = 1 AND m.panel_id = cn.panel_id AND p.owner = 'person' AND p.test_run IS NULL
+            AND (p.created_ip_hash IS NULL OR p.created_ip_hash NOT IN ${OUR_ADDRESSES})`).first();
+      return (r && r.n) || 0; } catch { return 0; } })();
+  const rtaP = (async () => { try {
+      const t = await env.DB.prepare(`SELECT COUNT(*) AS ours FROM tasks k JOIN principals p ON p.id = k.principal_id JOIN members m ON m.id = k.answered_by
+          JOIN panels pn ON pn.id = k.panel_id JOIN principals pp ON pp.id = pn.principal_id
+          WHERE k.state IN ('done', 'answered') AND ${OURS_P} AND m.is_real = 1 AND pp.class = 'real'`).first();
+      return { ours: (t && t.ours) || 0, outsiders: 0 }; } catch { return { ours: 0, outsiders: 0 }; } })();
   const shown = [];
   for (const c of ours) {
     const lines = (() => { try { return JSON.parse(c.outcomes_json || '[]').filter(o => o.status === 'delivered'); } catch { return []; } })();
@@ -75,23 +89,14 @@ export async function proof(env) {
     keyless_outside_callers_last_7_days: (keyless && keyless.n) || 0,
     outsiders_who_asked_for_real_people: (asked && asked.n) || 0,
     // OWNER_router_18 item 6: asks one person sends their own people are neither calls nor an AI's tasks; counted apart, never as outsiders
-    person_asks_answered: await (await import('./people.js')).personAsksAnswered(env),   // real receivers and senders only, no test run's panel
+    person_asks_answered: await paaP,   // real receivers and senders only, no test run's panel
     // goal 4 (operations 2:13 PM CT 16 Nov): an outsider makes a page, connects an AI and answers its ask. A page counts once its own AI's
     // ask was answered by its real person; pages made from our own addresses, by a test run, or by the team are never counted
-    outside_principals_with_an_answered_ask: await (async () => { try {
-      const r = await env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM tasks k JOIN connections cn ON cn.id = k.connection_id JOIN members m ON m.id = k.answered_by
-          JOIN panels pn ON pn.id = cn.panel_id JOIN principals p ON p.id = pn.principal_id
-          WHERE k.state IN ('done', 'answered') AND m.is_real = 1 AND m.panel_id = cn.panel_id AND p.owner = 'person' AND p.test_run IS NULL
-            AND (p.created_ip_hash IS NULL OR p.created_ip_hash NOT IN ${OUR_ADDRESSES})`).first();
-      return (r && r.n) || 0; } catch { return 0; } })(),
+    outside_principals_with_an_answered_ask: await opaP,
     // the CEO (OWNER_all_8 item 1): a task counts only when a real person answered it: the member who answered is a person
     // (not a headless test member) on a panel the operator made; tasks are placed only by the operator's own keys, so
     // outsiders' answered tasks are 0 by construction
-    real_tasks_answered: await (async () => { try {
-      const t = await env.DB.prepare(`SELECT COUNT(*) AS ours FROM tasks k JOIN principals p ON p.id = k.principal_id JOIN members m ON m.id = k.answered_by
-          JOIN panels pn ON pn.id = k.panel_id JOIN principals pp ON pp.id = pn.principal_id
-          WHERE k.state IN ('done', 'answered') AND ${OURS_P} AND m.is_real = 1 AND pp.class = 'real'`).first();
-      return { ours: (t && t.ours) || 0, outsiders: 0 }; } catch { return { ours: 0, outsiders: 0 }; } })(),
+    real_tasks_answered: await rtaP,
     ours: shown,
     counted_at: iso(now),
     // OWNER_router_27 item 2 (the CEO's ruling, 2:31 PM CT 16 Nov): the record, said plainly

@@ -42,7 +42,7 @@ QUOTE_LINES = ["to_people", "pool_fee", "router_fee", "rail_fee", "reserve", "ta
 CATEGORIES = ["credentials", "accounts", "paid_engagement", "impersonation", "third_party_contact", "personal_data",
               "off_platform", "sexual", "minors", "ban_evasion", "deception", "physical_world", "outside_material",
               "sensitive_data", "unpaid_screener", "voice_misuse", "call_terms", "violent", "medical", "grief"]
-FEATURES = ["keyless", "url_content", "media_upload", "outcome", "voice", "panels", "person_client"]   # person_client: section 26
+FEATURES = ["keyless", "url_content", "media_upload", "outcome", "voice", "panels", "person_client", "branded_asks"]   # person_client: section 26; branded_asks: section 27
 LIMIT_DEFAULTS = {"max_people": 50, "max_deadline_minutes": 10080, "max_wait_seconds": 20, "stop_minimum_usd": "0.00"}
 ERROR_CODES = {
     "invalid_json": (400, True), "missing_field": (400, True), "invalid_field": (400, True),
