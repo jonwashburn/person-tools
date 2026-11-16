@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_mute.json",
+  "title": "A new mute (section 26.10)",
+  "type": "object",
+  "required": [
+    "mute_id",
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "mute_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

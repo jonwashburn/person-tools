@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_feedback.json",
+  "title": "Feedback stored (section 26.8)",
+  "type": "object",
+  "required": [
+    "stored"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "stored": {
+      "const": true
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

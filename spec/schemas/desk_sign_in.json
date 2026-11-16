@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desk_sign_in.json",
+  "title": "A sign-in code for a computer: POST /v1/desk/sign_in (section 26.11)",
+  "type": "object",
+  "required": [
+    "code",
+    "qr",
+    "poll",
+    "number",
+    "expires_in"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "qr": {
+      "type": "string",
+      "minLength": 1
+    },
+    "poll": {
+      "type": "string",
+      "minLength": 1
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 99
+    },
+    "expires_in": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

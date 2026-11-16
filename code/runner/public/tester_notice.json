@@ -1,5 +1,5 @@
 {
- "id": "tester-notice-6",
+ "id": "tester-notice-8",
  "in_force": "for invited testers during the build, from 14 Nov 2026",
  "owner": "runner renders it verbatim; the .md beside it is generated from this file",
  "title": "Before you join: an unpaid test of a new service",
@@ -23,7 +23,7 @@
   },
   {
    "label": "What is shown in public",
-   "text": "For calls the person.tools team's own programs make, a public page of real calls shows when each was answered, what kind of call it was, how many people answered, and the one line the asker wrote about what it changed. Never your name, and never your words."
+   "text": "For calls the person.tools team's own programs make, a public page of real calls shows when each was answered, what kind of call it was, how many people answered, and the one line the asker wrote about what it changed. Never your name, and never your words, unless you say yes to that quote."
   },
   {
    "label": "Your answers and AI training",
@@ -31,7 +31,7 @@
   },
   {
    "label": "When you are rung",
-   "text": "Only when you turn On. You start Off. No calls between 9 PM and 8 AM your time unless you change it. Two missed calls turn you Off again."
+   "text": "Only when you turn On. You start Off. No calls between 9 PM and 8 AM your time unless you change it. Two missed calls turn you Off again. An ask's alert says only who is asking, never what they wrote, unless you turn on “Show the ask in my alerts” in your settings; then it may show the ask's first line, up to 80 characters. Your phone's own preview setting still decides what shows on a locked screen."
   },
   {
    "label": "Stop, leave, delete",
@@ -59,6 +59,6 @@
   "the adult statement"
  ],
  "names_from": "canon/names.json: replace person.tools with names.network",
- "changed": "tester-notice-6 (14 Nov 2026): adds 'What is shown in public' for the public proof page of real calls (site /proof, router GET /v1/proof, live 4:54 PM CT): counts, kind, time and the asker's outcome line for our own calls; never a person's name or words. Nothing promised before is weaker.",
- "previous_id": "tester-notice-5"
+ "changed": "tester-notice-8 (16 Nov 2026, 1:53 PM CT, the CEO's ruling of 1:52 PM CT, OWNER_router_25): 'When you are rung' now says an ask's alert shows only who is asking, unless the person turns on showing its first line (up to 80 characters); the phone's own preview setting still decides. Nothing else changed; members accept it again.",
+ "previous_id": "tester-notice-7"
 }

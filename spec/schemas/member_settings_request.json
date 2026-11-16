@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_settings_request.json",
+  "title": "A change to the settings: PATCH /v1/member/settings (section 26.8)",
+  "type": "object",
+  "required": [],
+  "additionalProperties": false,
+  "properties": {
+    "sounds": {
+      "type": "boolean"
+    },
+    "longer_hold": {
+      "type": "boolean"
+    },
+    "quiet_start": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    },
+    "quiet_end": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    },
+    "tz": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "material_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30
+    },
+    "alert_words": {
+      "type": "boolean"
+    }
+  },
+  "minProperties": 1
+}

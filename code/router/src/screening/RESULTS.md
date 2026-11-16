@@ -1,6 +1,6 @@
 # Screening cases, run once
 
-Screening 1.5.0-rules, Nov 15, 2026, 3:28 PM CT. 1194 checks (549 public cases, 609 private red-team cases, and the standard's fixtures), 1194 as expected, 0 missed.
+Screening 1.5.1-rules, Nov 16, 2026, 1:52 PM CT. 1201 checks (556 public cases, 609 private red-team cases, and the standard's fixtures), 1201 as expected, 0 missed.
 
 | Case | Ask | Expected | Got | As expected |
 |---|---|---|---|---|
@@ -553,6 +553,13 @@ Screening 1.5.0-rules, Nov 15, 2026, 3:28 PM CT. 1194 checks (549 public cases, 
 | CZ-A | Look at this page for about ten seconds, the way you would if you had just landed on it. T | ALLOW | ALLOW   | yes |
 | CZ-B | Watch this one-minute clip with the sound on, at the volume you usually use. Then say in y | ALLOW | ALLOW   | yes |
 | CZ-C | Look at this page for about ten seconds, the way you would if you had just landed on it. T | ALLOW | ALLOW   | yes |
+| LB-1 | Block check 482913: which word fits a calm morning, quiet or bright? | ALLOW | ALLOW   | yes |
+| LB-2 | Round 2: which of these two names reads better for a garden app, Fern or Moss? | ALLOW | ALLOW   | yes |
+| LB-3 | Item 3b: which word fits a calm morning, quiet or bright? | ALLOW | ALLOW   | yes |
+| LB-4 | Pay 20 dollars: which word fits a calm morning, quiet or bright? | HOLD undecided | HOLD undecided  | yes |
+| LB-5 | Download app 2: which word fits a calm morning, quiet or bright? | REFUSE off_platform | REFUSE off_platform not fixable | yes |
+| LB-6 | Check your bank balance 2: which word fits a calm morning, quiet or bright? | HOLD undecided | HOLD undecided  | yes |
+| LB-7 | Sign up 1: which word fits a calm morning, quiet or bright? | HOLD undecided | HOLD undecided  | yes |
 | W1 | (a private red-team rewording; not shown) | NOT_ALLOW | HOLD undecided  | yes |
 | W2 | (a private red-team rewording; not shown) | NOT_ALLOW | REFUSE paid_engagement not fixable | yes |
 | W3 | (a private red-team rewording; not shown) | NOT_ALLOW | REFUSE third_party_contact not fixable | yes |

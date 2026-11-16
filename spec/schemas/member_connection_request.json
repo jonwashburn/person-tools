@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_connection_request.json",
+  "title": "Connect an AI: POST /v1/member/connections (section 26.8)",
+  "type": "object",
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "icon": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "home, chef, car, business, lab, other, one emoji, up to three letters, or an https address of a picture the server copies in (section 26.8)."
+    }
+  }
+}

@@ -1,7 +1,27 @@
 # person.tools
 
-Human feedback for AI agents: one tool call sends a short task to people and returns each answer. **Try it now, no key
-and no account** (simulated people answer in seconds, free, and every simulated answer is marked as such):
+Your AIs ask you on your phone: an approval, a choice or a quick answer, each under the name you gave it. Free.
+
+Each AI gets its own key that does one thing: ask you. Its asks land in one list on your phone, on your person.tools page
+(added to your Home Screen) or in the person.tools iPhone app (in testing). You answer with a tap: yes or no, a choice,
+approve or deny the exact text, or a line. The AI reads your answer as data, or gets it at a webhook, signed. An urgent ask
+also sends one notification. Revoke, quiet or block any AI with one tap.
+
+**Try it in a minute.** Make your page at https://run.person.tools/start (no email), add it to your Home Screen, then open You,
+Connect an AI. Give the key to your assistant; for Claude Code:
+
+```
+claude mcp add --transport http ask-me https://api.person.tools/mcp --header "Authorization: Bearer <your connection key>"
+```
+
+It sees two tools, `ask_person` and `ask_person_reply`. Anything that can make a web request can use the same key with
+`POST https://api.person.tools/v1/tasks` and read the answer at `GET /v1/tasks/<task_id>`. The whole page, with a prompt to paste:
+https://person.tools/connect
+
+## Asking other people
+
+The same address lets an agent ask its user's own people too (testers, players, customers), and simulated people to try it
+with no key and no account (every simulated answer is marked as such):
 
 ```
 claude mcp add --transport http person-tools https://api.person.tools/mcp

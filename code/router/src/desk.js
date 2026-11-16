@@ -3,7 +3,7 @@
 // sees where the computer is and taps the number their computer shows (a wrong tap kills the code), then approves; the Desk's poll gets a
 // ds_ session once. A ds_ session acts as that one membership on /v1/member/*, ends after 30 days unused, and is listed and revoked from
 // the phone. Codes are single use, live 60 seconds, five a minute per address; the QR carries only the code; ds_ never travels in an address.
-import { rid, nowMs, iso, sha256hex } from './util.js';
+import { rid, nowMs, iso, sha256hex, teamCheck } from './util.js';
 import { fixable, notFixable } from './spec.js';
 
 const CODE_MS = 60000, SESSION_UNUSED_MS = 30 * 86400000;
@@ -19,12 +19,14 @@ function whereOf(request) {
 export async function startDesk(env, request, ipHash) {
   const now = nowMs();
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM desk_codes WHERE ip_hash = ? AND created_at > ?').bind(ipHash, now - 60000).first();
-  if (n && n.n >= 5) throw notFixable(429, 'rate_limited', 'At most five sign-in codes a minute from one address.', { retry_after_seconds: 60 });
+  // the team's own checks (the team header) share this server's one address: they are not held to it (a 1:15 PM CT 16 Nov baseline lost
+  // its code to another lane's checks in the same minute); everyone else is
+  if (n && n.n >= 5 && !teamCheck(env, request)) throw notFixable(429, 'rate_limited', 'At most five sign-in codes a minute from one address.', { retry_after_seconds: 60 });
   const code = rid('dc', 24), poll = rid('dp', 32), number = 10 + (crypto.getRandomValues(new Uint8Array(1))[0] % 90);
   await env.DB.batch([env.DB.prepare('DELETE FROM desk_codes WHERE expires_at < ?').bind(now - 3600000),
     env.DB.prepare('INSERT INTO desk_codes (code_hash, poll_hash, number, ip_hash, where_text, created_at, expires_at) VALUES (?,?,?,?,?,?,?)')
       .bind(await sha256hex(code), await sha256hex(poll), number, ipHash, whereOf(request), now, now + CODE_MS)]);
-  return { code, poll, number, expires_in: 60, note: 'Show the code as a QR and the number beside it. Keep poll in memory only: GET /v1/desk/sign_in/{poll} gives the session once it is approved.' };
+  return { code, qr: code, poll, number, expires_in: 60, note: 'Draw qr (the code itself, nothing else) as the QR and show number beside it. Keep poll in memory only: GET /v1/desk/sign_in/{poll} gives the session once it is approved.' };
 }
 async function codeRow(env, code) {
   const r = await env.DB.prepare('SELECT * FROM desk_codes WHERE code_hash = ?').bind(await sha256hex(String(code || ''))).first();
@@ -79,4 +81,10 @@ export async function revokeDesk(env, m, id) {
   const r = await env.DB.prepare('UPDATE desk_sessions SET revoked_at = ? WHERE id = ? AND member_id = ? AND revoked_at IS NULL').bind(nowMs(), String(id || ''), m.id).run();
   if (r.meta.changes !== 1) throw notFixable(404, 'not_found', 'No computer of yours has that id.');
   return { id, signed_out: true };
+}
+
+// WEB 4:00: the Desk signs itself out (POST /v1/desk/sign_out with its own Bearer ds_)
+export async function signOutDesk(env, tok) {
+  const r = await env.DB.prepare('UPDATE desk_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL').bind(nowMs(), await sha256hex(tok)).run();
+  return { signed_out: r.meta.changes === 1 };
 }

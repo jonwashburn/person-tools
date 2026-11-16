@@ -1,0 +1,15 @@
+{
+  "member_id": "mb_robin01",
+  "quiet": {
+    "start": 22,
+    "end": 7,
+    "tz": "America/Chicago"
+  },
+  "settings": {
+    "longer_hold": false,
+    "sounds": false,
+    "material_days": 0,
+    "alert_words": false
+  },
+  "note": "These settings are private: no asker sees them, and they never decide who is asked first."
+}

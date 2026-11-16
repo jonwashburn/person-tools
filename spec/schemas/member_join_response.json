@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_join_response.json",
+  "title": "A new membership (section 26.9)",
+  "type": "object",
+  "required": [
+    "member_id",
+    "member_token",
+    "page"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "member_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "member_token": {
+      "type": "string",
+      "minLength": 1
+    },
+    "page": {
+      "$ref": "common.json#/$defs/https_url"
+    },
+    "panel": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "on": {
+      "enum": [
+        "on_until",
+        "off",
+        true,
+        false
+      ]
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

@@ -136,6 +136,75 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/tool_args.send_outcome/no_key.json` | send_outcome without idempotency_key |
 | `valid/tool_args.panel/make.json` | make a panel |
 | `valid/tool_args.panel/make_no_key.json` | make a panel without idempotency_key |
+| `valid/member_task/question_choices.json` | 26.5, a question with four choices (live, Robot chef) |
+| `valid/member_task/answered_with_note.json` | 26.5, an answered choice after a note (live) |
+| `valid/member_task/approve_edited.json` | 26.5 and 26.6, an editable approval approved with changed words, unsigned (live), with a card |
+| `valid/member_task/command.json` | 26.5, a command only the person can run (live) |
+| `valid/member_task/photo.json` | 26.5, a question with a photo (live) |
+| `valid/member_task/from_a_person.json` | 26.10, an ask from a person, with their note (live shape) |
+| `valid/member_task/passed_on.json` | 26.10, an AI's ask passed on: the passer's private line, no connection id (live shape) |
+| `valid/member_task/link_sign_in.json` | 26.10, a link that opens a sign-in page, with its real domain |
+| `valid/member_task/branded.json` | 26.6, an ask whose asker's brand proved its domain (section 26's own example) |
+| `valid/member_tasks/list.json` | 26.5, open, groups, history and passed_on (live shape) |
+| `valid/member_tasks/notice.json` | 26.10, the one-time notice before any ask from a person |
+| `valid/member_answer_request/choice_with_note.json` | 26.5, a choice with a note |
+| `valid/member_answer_request/approve_edited.json` | 26.5, approve with changed words |
+| `valid/member_answer_request/note_alone.json` | 26.5, a note alone: the ask stays open |
+| `valid/member_answer_request/not_now.json` | 26.5, Not now |
+| `valid/member_answer_response/answered.json` | 26.5, the answer (live) |
+| `valid/member_answer_response/note.json` | 26.5, a note alone (live) |
+| `valid/member_settings/live.json` | 26.8, the settings answer (live) |
+| `valid/member_settings_request/sounds_off.json` | 26.8 |
+| `valid/member_settings_request/quiet_hours.json` | 26.8 |
+| `valid/member_settings_request/alert_words_on.json` | 26.7 and 26.8, words in alerts |
+| `valid/member_on_request/hours.json` | 26.7 |
+| `valid/member_on_request/until.json` | 26.7 |
+| `valid/member_on_request/off.json` | 26.7 |
+| `valid/member_on/on_until.json` | 26.7 (live) |
+| `valid/member_on/off.json` | 26.7 (live) |
+| `valid/member_offers/one_offer.json` | 26.7, one unpaid test call offered (live) |
+| `valid/member_seat/answer_call.json` | 26.7, the seat a client reads before acceptance (live) |
+| `valid/member_connection/live.json` | 26.8, a connection (live, after it was made) |
+| `valid/member_connections/two.json` | 26.8, the list with asks waiting (live shape) |
+| `valid/member_connection_request/lab_icon.json` | 26.8 |
+| `valid/member_connection_request/emoji.json` | 26.8, one emoji as the icon |
+| `valid/member_connection_change/quiet.json` | 26.8 |
+| `valid/member_connection_change/urgencies.json` | 26.8, this AI may not use now |
+| `valid/member_connection_created/shown_once.json` | 26.8, a new connection with its key, link, webhook secret and how (live shape) |
+| `valid/member_connection_revoked/revoked.json` | 26.8 (live) |
+| `valid/member_block_request/by_task.json` | 26.8 |
+| `valid/member_block_request/by_call.json` | 26.8 |
+| `valid/member_block/new.json` | 26.8 (live) |
+| `valid/member_blocks/one.json` | 26.8 |
+| `valid/member_blocks/none.json` | 26.8 (live) |
+| `valid/member_block_removed/removed.json` | 26.8 (live) |
+| `valid/member_mute_request/by_task.json` | 26.10 |
+| `valid/member_mute_request/passer.json` | 26.10 |
+| `valid/member_mute_request/panel_owner.json` | 26.10 |
+| `valid/member_mute/new.json` | 26.10 (live) |
+| `valid/member_mutes/one.json` | 26.10 (live shape) |
+| `valid/member_mute_removed/removed.json` | 26.10 (live) |
+| `valid/member_limits/default.json` | 26.10 (live) |
+| `valid/member_limits_request/five.json` | 26.10 |
+| `valid/member_people/live.json` | 26.10, joined and waiting (live shape) |
+| `valid/member_people_link_request/label.json` | 26.10 |
+| `valid/member_people_link/shown_once.json` | 26.10 (live shape) |
+| `valid/member_people_asks_request/question.json` | 26.10 (the live check's body) |
+| `valid/member_people_asks/sent.json` | 26.10 (live) |
+| `valid/member_sent/live.json` | 26.10, a sent thread and a passed one (live shapes) |
+| `valid/member_sent_read_request/one.json` | 26.10 |
+| `valid/member_sent_read/one.json` | 26.10 (live) |
+| `valid/member_join/people_panel.json` | 26.9, a person's panel, with the owner's line (live shape) |
+| `valid/member_join_request/with_owner_line.json` | 26.9 |
+| `valid/member_join_response/new.json` | 26.9 (reference shape) |
+| `valid/member_feedback_request/text.json` | 26.8 |
+| `valid/member_feedback/stored.json` | 26.8 (live) |
+| `valid/member_leave_request/confirm.json` | 26.8 |
+| `valid/member_leave/left.json` | 26.8 (reference shape) |
+| `valid/member_account/two_memberships.json` | 26.11, one person, two memberships on one panel with one name (reference shape) |
+| `valid/desk_sign_in/code.json` | 26.11 (live shape) |
+| `valid/desk_sign_in_poll/waiting.json` | 26.11, 202 (live) |
+| `valid/desk_sign_in_poll/approved.json` | 26.11, 200 once (reference shape) |
 
 ## Invalid (each for exactly one reason)
 
@@ -286,3 +355,51 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `invalid/tool_args.panel/missing_name.json` | name is required |
 | `invalid/tool_args.panel/name_number.json` | name is a string |
 | `invalid/tool_args.panel/not_an_object.json` | the arguments are an object |
+| `invalid/member_task/one_choice.json` | a question with choices has 2 to 4 |
+| `invalid/member_task/urgency_soon.json` | urgency is now, today or whenever |
+| `invalid/member_task/brand_unverified.json` | a brand is on an ask only once verified (MEMBER-10) |
+| `invalid/member_tasks/missing_open.json` | open is required |
+| `invalid/member_answer_request/action_skip.json` | skip is not an action |
+| `invalid/member_answer_request/note_too_long.json` | a note is at most 2,000 characters |
+| `invalid/member_answer_response/state_maybe.json` | maybe is not a state |
+| `invalid/member_settings/material_days_zero.json` | material_days is 1 to 30 |
+| `invalid/member_settings_request/unknown_field.json` | an unknown field (26.8) |
+| `invalid/member_settings_request/empty.json` | a change names at least one setting |
+| `invalid/member_on_request/on_string.json` | on is a boolean |
+| `invalid/member_on/on_boolean.json` | on comes back as on_until or off |
+| `invalid/member_offers/offer_without_seat_url.json` | an offer carries seat_url |
+| `invalid/member_seat/pay_as_number.json` | money is a string (CONV-1) |
+| `invalid/member_connection/name_one_letter.json` | a name is 2 to 40 characters |
+| `invalid/member_connections/missing_list.json` | connections is required |
+| `invalid/member_connection_request/missing_name.json` | name is required |
+| `invalid/member_connection_change/empty.json` | a change names at least one field |
+| `invalid/member_connection_created/without_key.json` | the key is shown once, so it is there |
+| `invalid/member_connection_revoked/revoked_false.json` | revoked is true |
+| `invalid/member_block_request/both.json` | one of call_id or task_id, not both |
+| `invalid/member_block/no_name.json` | name is required |
+| `invalid/member_blocks/not_a_list.json` | blocks is a list |
+| `invalid/member_block_removed/removed_false.json` | removed is true |
+| `invalid/member_mute_request/passer_alone.json` | passer goes with task_id |
+| `invalid/member_mute/no_id.json` | mute_id is required |
+| `invalid/member_mutes/missing_list.json` | mutes is required |
+| `invalid/member_mute_removed/missing_id.json` | mute_id is required |
+| `invalid/member_limits/over_100.json` | the limit is 0 to 100 |
+| `invalid/member_limits_request/half.json` | the limit is a whole number |
+| `invalid/member_people/state_maybe.json` | a joined person's state is joined |
+| `invalid/member_people_link_request/missing_label.json` | label is required |
+| `invalid/member_people_link/http_link.json` | a join link is https |
+| `invalid/member_people_asks_request/nobody.json` | to names at least one person |
+| `invalid/member_people_asks/no_sent.json` | sent is required |
+| `invalid/member_sent/thread_without_to.json` | a thread names who it went to |
+| `invalid/member_sent_read_request/too_many.json` | at most 80 at a time |
+| `invalid/member_sent_read/as_text.json` | read is a count |
+| `invalid/member_join/not_adult.json` | every person is an adult (section 16) |
+| `invalid/member_join_request/adult_false.json` | adult is true |
+| `invalid/member_join_response/no_token.json` | member_token is required |
+| `invalid/member_feedback_request/too_long.json` | at most 2,000 characters |
+| `invalid/member_feedback/not_stored.json` | stored is true |
+| `invalid/member_leave_request/confirm_false.json` | confirm is true |
+| `invalid/member_leave/left_false.json` | left is true |
+| `invalid/member_account/membership_no_panel.json` | a membership names its panel |
+| `invalid/desk_sign_in/number_100.json` | the number has two digits |
+| `invalid/desk_sign_in_poll/session_without_member.json` | the session comes with the membership it acts for |

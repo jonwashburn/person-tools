@@ -1,0 +1,11 @@
+{
+  "from": "Robin",
+  "sent": [
+    {
+      "to": "mb_sam01",
+      "name": "Sam",
+      "task_id": "tk_tea01"
+    }
+  ],
+  "read": "GET /v1/member/sent shows each answer and its thread."
+}

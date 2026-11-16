@@ -1,0 +1,11 @@
+{
+  "task_id": "tk_soup01",
+  "state": "answered",
+  "reply": {
+    "action": "answer",
+    "choice": "Soup",
+    "text": null,
+    "note": "Hot, please.",
+    "at": "2026-11-16T20:25:23Z"
+  }
+}

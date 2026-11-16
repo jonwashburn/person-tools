@@ -1,0 +1,45 @@
+{
+  "person_id": "pe_robin01",
+  "handle": null,
+  "made_at": "2026-11-16T20:24:01Z",
+  "memberships": [
+    {
+      "member_id": "mb_robin01",
+      "panel": "Robin's panel",
+      "asked_by": "Robin's AIs",
+      "name_on_panel": "robin",
+      "on": false,
+      "joined_at": "2026-11-16T20:24:01Z"
+    },
+    {
+      "member_id": "mb_robin02",
+      "panel": "Robin's panel",
+      "asked_by": "Robin's AIs",
+      "name_on_panel": "robin",
+      "on": true,
+      "joined_at": "2026-11-16T20:25:22Z"
+    }
+  ],
+  "passkeys": [
+    {
+      "id": "pk_8f3a2c1d9e…",
+      "name": "MacBook",
+      "made_at": "2026-11-16T20:24:01Z",
+      "last_used_at": "2026-11-16T20:25:23Z",
+      "synced": true
+    }
+  ],
+  "devices": [
+    {
+      "member_id": "mb_robin01",
+      "apple_push": true,
+      "web_push": false
+    },
+    {
+      "member_id": "mb_robin02",
+      "apple_push": false,
+      "web_push": false
+    }
+  ],
+  "open_case": "Losing every device: a member is vouched for again by the panel's owner; nothing recovers an account automatically yet."
+}

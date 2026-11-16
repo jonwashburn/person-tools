@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_answer_request.json",
+  "title": "An answer or a note: POST /v1/member/tasks/{task_id} (section 26.5)",
+  "type": "object",
+  "required": [
+    "action"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "answer",
+        "done",
+        "not_now",
+        "approve",
+        "deny",
+        "note"
+      ]
+    },
+    "choice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  }
+}

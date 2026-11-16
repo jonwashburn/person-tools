@@ -8,6 +8,11 @@
 // refused, and the AI is told only "not available").
 import { rid, nowMs, iso, sha256hex, apiBase } from './util.js';
 import { fixable, notFixable } from './spec.js';
+// an AI's name passes the asker-name check with the operator's lists (no bank, fraud or support desk, government, known company, us)
+async function aiName(env, name) {
+  const { checkAskerName } = await import('./panels.js'); const { screenTerms } = await import('./private_terms.js');
+  try { await checkAskerName(name, await screenTerms(env)); } catch (e) { if (e && e.body) { e.body.field = 'name'; e.body.message = String(e.body.message || '').replace(/^asker_name/, 'name'); } throw e; }
+}
 
 const MAX_PER_PERSON = 20;
 const ICON_RX = /^[\p{Extended_Pictographic}\p{Emoji_Component}‍️]{1,8}$|^[A-Za-z0-9]{1,3}$/u;   // one emoji, or up to three letters
@@ -70,6 +75,7 @@ async function make(env, request, m, b, lab) {
   for (const k of Object.keys(b || {})) if (!['name', 'icon', 'urgencies'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a connection; send name, icon and urgencies.`, null);
   const urg = b.urgencies === undefined ? null : urgencies(b.urgencies);
   const name = str(b.name, 'name', 2, 40, 'Home camera');
+  await aiName(env, name);   // TRUST 6:47 (OWNER_router_18): the name is shown "From <name>", also to people an ask is passed to
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM connections WHERE member_id = ? AND revoked_at IS NULL').bind(m.id).first();
   if (n && n.n >= MAX_PER_PERSON) throw fixable('invalid_field', 'name', `At most ${MAX_PER_PERSON} AIs connected at once; revoke one you no longer use.`, null);
   const id = rid('cn_'), pr = rid('pr_'), kid = rid('k_'), key = rid('conn_', 32), now = nowMs();
@@ -87,7 +93,14 @@ async function make(env, request, m, b, lab) {
     note: 'The key, the link and the webhook secret are shown once: give them to your AI. They only ask you; revoke them here with one tap.' };
 }
 
-export async function createConnection(env, request, memberByToken, token, b) { const m = await memberByToken(env, token); return make(env, request, m, b || {}, false); }
+export async function createConnection(env, request, memberByToken, token, b) {
+  const m = await memberByToken(env, token);
+  // TRUST 6:56 (OWNER_router_23): a panel someone made for their own people takes only that person's asks: no AI connects from it
+  const o = await env.DB.prepare('SELECT 1 AS x FROM panel_owners WHERE panel_id = ?').bind(m.panel_id).first().catch(() => null);
+  if (o && !(await env.DB.prepare('SELECT 1 AS x FROM owner_members WHERE member_id = ? AND panel_id = ?').bind(m.id, m.panel_id).first().catch(() => null)))
+    throw notFixable(403, 'forbidden', 'This panel is for asks from the person whose link you joined. Connect your own AIs from your own page.');
+  return make(env, request, m, b || {}, false);
+}
 export async function adminConnection(env, request, memberId, b) {   // the operator, for a lab program (one connection per program)
   const m = await env.DB.prepare('SELECT * FROM members WHERE id = ? AND left_at IS NULL').bind(String(memberId || '')).first();
   if (!m) throw notFixable(404, 'not_found', 'No such member.');
@@ -114,6 +127,7 @@ export async function changeConnection(env, request, memberByToken, token, id, b
   const urg = b.urgencies === undefined ? c.urgencies : urgencies(b.urgencies);
   for (const k of ['quiet', 'blocked']) if (b[k] !== undefined && typeof b[k] !== 'boolean') throw fixable('invalid_field', k, `${k} is true or false.`, true);
   const name = b.name === undefined ? c.name : str(b.name, 'name', 2, 40, 'Home camera');
+  if (b.name !== undefined) await aiName(env, name);
   const ic = b.icon === undefined ? c.icon : await icon(env, b.icon, c.id);
   const quiet = b.quiet === undefined ? c.quiet : (b.quiet ? 1 : 0), blocked = b.blocked === undefined ? c.blocked : (b.blocked ? 1 : 0);
   await env.DB.batch([

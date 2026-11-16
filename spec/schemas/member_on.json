@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_on.json",
+  "title": "The person's On state (section 26.7)",
+  "type": "object",
+  "required": [
+    "member_id",
+    "on",
+    "on_until"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "member_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "on": {
+      "enum": [
+        "on_until",
+        "off"
+      ]
+    },
+    "on_until": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

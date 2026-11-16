@@ -9354,6 +9354,115 @@
     "people": 3
    },
    "note": "customer zero's call C (market/CUSTOMER_ZERO.md, 15 Nov 2026); our own real call"
+  },
+  {
+   "id": "LB-1",
+   "expect": "ALLOW",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Block check 482913: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-2",
+   "expect": "ALLOW",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Round 2: which of these two names reads better for a garden app, Fern or Moss?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-3",
+   "expect": "ALLOW",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Item 3b: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-4",
+   "expect": "HOLD",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Pay 20 dollars: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "rule": "undecided",
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-5",
+   "expect": "REFUSE",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Download app 2: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "rule": "off_platform",
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-6",
+   "expect": "HOLD",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Check your bank balance 2: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "rule": "undecided",
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "LB-7",
+   "expect": "HOLD",
+   "ctx": {
+    "pool_real": true,
+    "principal_is_ours": true
+   },
+   "call": {
+    "ask": "Sign up 1: which word fits a calm morning, quiet or bright?",
+    "experience": {
+     "kind": "answer"
+    }
+   },
+   "rule": "undecided",
+   "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
   }
  ]
 }

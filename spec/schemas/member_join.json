@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_join.json",
+  "title": "A panel, before joining: GET /v1/join/{code} (section 26.9)",
+  "type": "object",
+  "required": [
+    "panel",
+    "asker",
+    "notice_id",
+    "notice_url",
+    "attestations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "panel": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "members": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "anonymous": {
+          "type": "boolean"
+        }
+      }
+    },
+    "own": {
+      "type": "boolean"
+    },
+    "asker": {
+      "type": "string",
+      "minLength": 1
+    },
+    "principal_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "object",
+      "required": [
+        "name",
+        "line"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shown": {
+          "type": "string"
+        }
+      }
+    },
+    "notice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accepted_notice_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "notice_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attestations": {
+      "type": "object",
+      "required": [
+        "send"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "send": {
+          "type": "object",
+          "required": [
+            "adult"
+          ],
+          "properties": {
+            "adult": {
+              "const": true
+            }
+          }
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "means": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

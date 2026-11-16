@@ -65,7 +65,7 @@ async function ipHashOf(env, request) {
   return (await sha256hex('ip:' + (request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.SEAT_SECRET || ''))).slice(0, 24);
 }
 
-async function mintTestKey(env, request, caps = { call: 5000, day: 20000 }) {
+async function mintTestKey(env, request, caps = { call: 5000, day: 20000 }, testRun = undefined) {
   const ipHash = await ipHashOf(env, request);
   const now = nowMs();
   // a stranger's limit counts strangers' keys: keys our own checks made with the team header ('Team check principal') are
@@ -74,13 +74,15 @@ async function mintTestKey(env, request, caps = { call: 5000, day: 20000 }) {
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals WHERE created_ip_hash = ? AND created_at > ? AND name NOT LIKE \'Team check principal %\'').bind(ipHash, now - 3600000).first();
   if (n.n >= 100 && !teamCheck(env, request)) throw notFixable(429, 'rate_limited', 'At most 100 test keys an hour from one address. Reuse a key you made.', { retry_after_seconds: 600 });
   const pr = rid('pr_'); const kid = rid('k_'); const key = rid('test_', 32);
+  const { ourServer, FROM_OUR_ADDRESS } = await import('./util.js'); const fromUs = !teamCheck(env, request) && (await ourServer(env, ipHash));   // OWNER_router_21: our servers only
   await env.DB.batch([
     // OWNER_router_5: ours when our own checks made it (the team header); the owner column decides counting only
-    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'test', (teamCheck(env, request) ? 'Team check principal ' : 'Test principal ') + pr, 0, ipHash, now, teamCheck(env, request) ? 'team' : 'outside'),
+    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner, owner_note, test_run) VALUES (?,?,?,?,?,?,?,?,?)').bind(pr, 'test', (teamCheck(env, request) ? 'Team check principal ' : 'Test principal ') + pr, 0, ipHash, now,
+      teamCheck(env, request) || fromUs ? 'team' : 'outside', !teamCheck(env, request) && fromUs ? FROM_OUR_ADDRESS : null, testRun || null),   // OWNER_router_16: our address is ours, header or not; a test_run is never counted
     env.DB.prepare('INSERT INTO keys (id, principal_id, key_hash, class, label, cap_call_cents, cap_day_cents, team, created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(kid, pr, await sha256hex(key), 'test', 'self-made test key', caps.call, caps.day, 0, now),
     ...posting(env.DB, 'grant:' + pr, [{ ...acct.testGrant(), cents: -PRICE.test_grant_cents }, { ...acct.avail(pr), cents: PRICE.test_grant_cents }], null, 'test money for a new test principal', now),
   ]);
-  return { key, class: 'test', principal_id: pr, balance_usd: fmt(PRICE.test_grant_cents), test_money: true,
+  return { key, class: 'test', principal_id: pr, ...(testRun ? { test_run: testRun } : {}), balance_usd: fmt(PRICE.test_grant_cents), test_money: true,
     caps: { per_call_usd: fmt(caps.call), per_day_usd: fmt(caps.day) }, pools: ['simulated'], reaches: ['simulated'], mcp: apiBase(request) + '/mcp',
     note: 'Keep this key; it is shown once. It reaches simulated people (every simulated answer is marked simulated) and the people who join a panel you make with it (POST /v1/panels gives the join link). Send it as "Authorization: Bearer <key>".',
     first_call: { ask: 'Listen once. Then tell me what you felt, in your own words.', kind: 'listen', content: SAMPLE_ID, people: 3, max_total_usd: '0.00' } };
@@ -95,7 +97,9 @@ async function adminKey(env, request, b) {
   const principalId = b.principal_id || pr;
   const st = [];
   // OWNER_router_5: the admin route's principals are ours, except the front page's demo for a visitor
-  if (!b.principal_id) st.push(env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(principalId, cls, String(b.principal_name || (team ? `the ${BUILD.names.network} team (test)` : 'principal')).slice(0, 80), team, b.ip_hash || null, now, b.owner === 'visitor' ? 'visitor' : 'team'));
+  const { ourServer, FROM_OUR_ADDRESS } = await import('./util.js'); const visitorFromUs = b.owner === 'visitor' && (await ourServer(env, b.ip_hash));   // OWNER_router_16, 21
+  if (!b.principal_id) st.push(env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner, owner_note) VALUES (?,?,?,?,?,?,?,?)').bind(principalId, cls, String(b.principal_name || (team ? `the ${BUILD.names.network} team (test)` : 'principal')).slice(0, 80), team, b.ip_hash || null, now,
+    b.owner === 'visitor' && !visitorFromUs ? 'visitor' : 'team', visitorFromUs ? FROM_OUR_ADDRESS : null));
   st.push(env.DB.prepare('INSERT INTO keys (id, principal_id, key_hash, class, label, cap_call_cents, cap_day_cents, team, created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(kid, principalId, await sha256hex(key), cls, String(b.label || '').slice(0, 60), Number.isInteger(b.cap_call_cents) && b.cap_call_cents >= 0 ? b.cap_call_cents : 5000, Number.isInteger(b.cap_day_cents) && b.cap_day_cents >= 0 ? b.cap_day_cents : 20000, team, now));
   if (!b.principal_id) st.push(...posting(env.DB, 'grant:' + principalId, [{ ...acct.testGrant(), cents: -PRICE.test_grant_cents }, { ...acct.avail(principalId), cents: PRICE.test_grant_cents }], null, 'test money', now));
   await env.DB.batch(st);
@@ -111,7 +115,7 @@ function discovery(request) {
     mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'],
     kinds: ['listen', 'watch', 'view', 'play', 'compare', 'answer'],
     pools: ['simulated', 'panel'],   // 'self' (the front page's demo pool, fixed asks only) is accepted but not listed (chief 04:21)
-    features: ['keyless', 'url_content', 'outcome', 'panels'],
+    features: ['keyless', 'url_content', 'outcome', 'panels', 'person_client'],   // person_client: the member interface of the standard's section 26 (WEB 2:57 PM CT 16 Nov: schema and suite list it)
     profiles: [BUILD.wire_prefix + '/fair-call/0.1'],   // DISC-3: its checks (F01-F04) pass and are held by the baseline
     screening_policy: siteBase(request) + '/policy',
     test_keys: base + '/v1/keys',
@@ -181,7 +185,7 @@ export async function handle(request, env, ctx) {
   const url = new URL(request.url);
   let path = memberPath(request, route(url.pathname));
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, [VH]: VERSION, 'Access-Control-Max-Age': '86400' } });
-  if (ctx && typeof ctx.waitUntil === 'function' && env.DB && teamCheck(env, request)) ctx.waitUntil(rememberTeamAddress(env, request).catch(() => {}));
+  // OWNER_router_21: no address is learned from traffic any more (rememberTeamAddress is kept, unused; its old rows stay for the record)
   if (ctx && typeof ctx.waitUntil === 'function' && env.DB && !path.startsWith('/internal/')) ctx.waitUntil(retentionFromTraffic(env).catch(e => console.log('retention from traffic', String(e && e.message || e))));
   if ((path === '/_build.txt' || /^\/schemas\/[a-z_]+\.json$/.test(path)) && env.ASSETS) return env.ASSETS.fetch(request);   // the standard's schemas, which /openapi.json refers to
   // TRUST 3:28 AM CT (trust/checks/indexable.py): the status and the discovery file are public; the rest is not
@@ -203,7 +207,8 @@ export async function handle(request, env, ctx) {
     // OWNER_router_14: a ds_ session (the Desk, signed in by the phone) acts for its one membership; never for the desk routes themselves
     if (path.startsWith('/v1/member-desk/')) {
       const rest = path.slice('/v1/member-desk/'.length);
-      if (rest.startsWith('desk/')) throw notFixable(403, 'forbidden', 'A computer signed in by the phone cannot sign in other computers or list them: use the phone.');
+      // WEB 4:00: the Desk may read its list of signed-in computers; signing computers in or out of others stays with the phone
+      if (rest.startsWith('desk/') && !(rest === 'desk/sessions' && request.method === 'GET')) throw notFixable(403, 'forbidden', 'A computer signed in by the phone cannot sign in other computers or sign them out: use the phone.');
       const { deskMember } = await import('./desk.js'); const tokD = /^Bearer\s+(ds_[a-z0-9]{20,80})$/i.exec((request.headers.get('authorization') || '').trim())[1];
       const mid = await deskMember(env, tokD);
       const { SESSION_MEMBERS } = await import('./seats.js'); const now = Date.now();
@@ -213,7 +218,16 @@ export async function handle(request, env, ctx) {
     }
     const want = request.headers.get(VH);
     if (want && want.trim() !== VERSION) throw fixable('version_unsupported', VH, `Version ${want} is not served here; this server serves ${VERSION}.`, VERSION, { versions: [VERSION] });
-    if (!path.startsWith('/internal/')) { try { await settle(env, request, { limit: 8 }); } catch (e) { console.log('settle', String(e && e.stack || e)); } }
+    // WEB 4:07 PM CT: a person's own list routes (the Desk refreshes them) settle in the background, not before they answer
+    const bgSettle = /^\/v1\/members\/mt_[a-z0-9]+\/(tasks|settings|connections|blocks|desk|device_key|offers)(\/|$)|^\/v1\/(account|admin)(\/|$)/.test(path) && ctx && typeof ctx.waitUntil === 'function';   // offers settles its own panel first
+    // WEB 12:36 PM CT 16 Nov: the person's people routes (people, sent, mutes, limits) settle in the background too
+    const bgPeople = /^\/v1\/members\/mt_[a-z0-9]+\/(people|sent|mutes|limits)(\/|$)/.test(path) && ctx && typeof ctx.waitUntil === 'function';
+    // TRUST 3:04 / REACH 3:06 PM CT 16 Nov: the public counts and the service's description need nothing settled first: they reply, then settle
+    const bgRead = /^\/v1\/(proof|status)$|^\/\.well-known\/|^\/openapi\.(json|yaml)$|^\/$/.test(path) && ctx && typeof ctx.waitUntil === 'function';
+    if (!path.startsWith('/internal/')) {
+      if (bgSettle || bgPeople || bgRead) ctx.waitUntil(settle(env, request, { limit: 8 }).catch((e) => console.log('settle', String(e && e.stack || e))));
+      else { try { await settle(env, request, { limit: 8 }); } catch (e) { console.log('settle', String(e && e.stack || e)); } }
+    }
 
     if (path === '/mcp') { const a = await authKey(env, request);   // a person's own AI (conn_ key) sees only its two tools (REACH 2:09)
       if (a.key && a.key.connection) { const { personMcp } = await import('./mcp_person.js'); return withHeaders(await personMcp(env, request, a.key)); }
@@ -321,7 +335,10 @@ export async function handle(request, env, ctx) {
     // ---- keys and balance
     if (path === '/v1/keys' && request.method === 'POST') {
       const b = await body(request);
-      for (const k of Object.keys(b)) if (!['class', 'caps'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send {"class":"test"} and, if you like, caps.`, null);
+      for (const k of Object.keys(b)) if (!['class', 'caps', 'test_run'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send {"class":"test"} and, if you like, caps and test_run.`, null);
+      // OWNER_router_16 (the CEO, 5:25 PM CT 15 Nov): a harness or probe marks its own keys as tests; /v1/proof never counts them
+      if (b.test_run !== undefined && (typeof b.test_run !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9 ._:\/-]{0,59}$/.test(b.test_run)))
+        throw fixable('invalid_field', 'test_run', 'test_run is a label for your test harness or probe (1 to 60 letters, digits, spaces and . _ : / -); /v1/proof never counts a key that carries one.', 'reach-harness-set-a');
       if (b.class !== undefined && b.class !== 'test') throw fixable('invalid_field', 'class', 'Only test keys are made here. Keys that reach real people come from the operator.', 'test');
       let caps = { call: 5000, day: 20000 };
       if (b.caps !== undefined) {
@@ -332,7 +349,7 @@ export async function handle(request, env, ctx) {
         if (Number.isNaN(pd) || pd > 20000) throw fixable('invalid_field', 'caps.per_day_usd', 'per_day_usd is dollars, at most 200.00 for a test key.', '20.00');
         caps = { call: pc, day: pd };
       }
-      return json(await mintTestKey(env, request, caps), 201);
+      return json(await mintTestKey(env, request, caps, b.test_run), 201);
     }
     if ((path === '/v1/balance' || path === '/v1/me') && request.method === 'GET') {
       const k = needKey(await authKey(env, request));
@@ -426,8 +443,14 @@ export async function handle(request, env, ctx) {
       if (m0[3] && request.method === 'POST') return json(await D.signAnswer(env, mm, { ...(await body(request)), call_id: m0[3] }));
     }
     // OWNER_router_14: the Desk signs in with the phone (a QR, a number to match, one approval); a ds_ session acts for that one membership
+    if (path === '/v1/desk/sign_out' && request.method === 'POST') { const tk = /^Bearer\s+(ds_[a-z0-9]{20,80})$/i.exec((request.headers.get('authorization') || '').trim()); if (!tk) throw fixable('unauthorized', 'Authorization', 'Send the Desk\'s own session ("Bearer ds_...").', 'Bearer ds_...', {}, 401); const { signOutDesk } = await import('./desk.js'); return json(await signOutDesk(env, tk[1])); }
     if (path === '/v1/desk/sign_in' && request.method === 'POST') { const { startDesk } = await import('./desk.js'); return json(await startDesk(env, request, await ipHashOf(env, request)), 201); }
     if ((m0 = /^\/v1\/desk\/sign_in\/(dp[a-z0-9]{20,64})$/.exec(path)) && request.method === 'GET') { const { pollDesk } = await import('./desk.js'); const r = await pollDesk(env, m0[1]); return json(r.body, r.status); }
+    // a private relay in its own file, kept out of the public tree (TRUST 5:53 PM CT 15 Nov): an optional import, so the public tree
+    // builds without it. It is asked only about paths with a six-letter segment starting with l, returns null
+    // for any that are not its own, and those paths are 404 when it is absent; no other request goes near it
+    if (/\/l[a-z]{5}(?:\/|$)/.test(path)) { let PR = null; try { const v = ''; PR = await import(`./lr${v}.js`); } catch { }
+      if (PR && typeof PR.handle === 'function') { const r = await PR.handle(env, request, path, url, async (e, t) => (await import('./seats.js')).memberByToken(e, t)); if (r) return r; } }
     if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/desk\/(preview|approve|sessions)(?:\/(dk_[a-z0-9]+))?$/.exec(path))) {
       const { memberByToken } = await import('./seats.js'); const D = await import('./desk.js'); const mm = await memberByToken(env, m0[1]);
       if (m0[2] === 'preview' && request.method === 'POST' && !m0[3]) return json(await D.previewDesk(env, mm, await body(request)));
@@ -464,6 +487,44 @@ export async function handle(request, env, ctx) {
       if (!m[2] && request.method === 'POST') { const r = await T.createTask(env, request, a.key, await body(request)); return json(r.body, r.status); }
       if (m[2] && request.method === 'GET') return json(await T.getTask(env, request, a.key, m[2]));
     }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/offers\/(s_[a-z0-9]+)\/open_failed$/.exec(path)) && request.method === 'POST') {   // OWNER_router_22
+      const { memberByToken } = await import('./seats.js'); const { openFailed } = await import('./calls.js'); return json(await openFailed(env, await memberByToken(env, m[1]), m[2], await body(request)), 201);
+    }
+    // OWNER_router_25: "Show the ask in my alerts" (alert_words) is taken beside the person's other settings and kept with their ask
+    // settings; GET /v1/member/tasks/{id}/alert gives who is asking, and the ask's first line only while it is on
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/settings$/.exec(path)) && ['GET', 'POST', 'PATCH'].includes(request.method)) {
+      const S = await import('./seats.js'); const PP = await import('./people.js'); const mm = await S.memberByToken(env, m[1]);
+      const allowed = await PP.alertWordsAllowed(env, mm);   // until TRUST's attack holds and it is opened: test members only, and nobody else sees it
+      if (request.method === 'GET') { const r = await S.memberSettingsRead(env, request, m[1]); if (allowed) r.settings = { ...(r.settings || {}), alert_words: await PP.alertWordsOf(env, mm.id) }; return json(r); }
+      const b = await body(request); let aw;
+      if (b && Object.prototype.hasOwnProperty.call(b, 'alert_words')) {
+        if (typeof b.alert_words !== 'boolean') throw fixable('invalid_field', 'alert_words', 'alert_words is true or false: show an ask\'s first line in your own alerts (off unless you turn it on).', false);
+        if (!allowed) throw fixable('invalid_field', 'alert_words', 'This setting is not open yet.', null, {}, 403);
+        aw = b.alert_words; delete b.alert_words;
+      }
+      const r = Object.keys(b || {}).length || aw === undefined ? await S.memberSettings(env, request, m[1], b) : await S.memberSettingsRead(env, request, m[1]);
+      if (aw !== undefined) await PP.setAlertWords(env, mm, aw);
+      if (allowed) r.settings = { ...(r.settings || {}), alert_words: aw !== undefined ? aw : await PP.alertWordsOf(env, mm.id) };
+      return json(r);
+    }
+    if (path === '/internal/alert_words_open' && request.method === 'POST') {   // OWNER_router_25: open the setting to everyone once TRUST's attack holds
+      const atok = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!env.ADMIN_TOKEN || atok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+      const b = await body(request); if (!['all', 'test'].includes(b && b.to)) throw fixable('invalid_field', 'to', 'to is "all" (everyone may turn it on) or "test" (test members only).', 'all');
+      await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('alert_words_open', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(b.to).run();
+      return json({ alert_words_open: b.to });
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/tasks\/(tk_[a-z0-9]+)\/alert$/.exec(path)) && request.method === 'GET') {
+      const { memberByToken } = await import('./seats.js'); const mm = await memberByToken(env, m[1]);
+      return json(await (await import('./people.js')).taskAlertLine(env, mm, m[2]));
+    }
+    if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/leave$/.exec(path)) && request.method === 'POST') {   // TRUST 12:31 PM CT 16 Nov: the one-tap leave deletes everything kept for them
+      const { memberByToken, memberLeave } = await import('./seats.js'); const mm = await memberByToken(env, m[1]);
+      const r = await memberLeave(env, request, m[1], await body(request));
+      const extra = await (await import('./people.js')).leaveCleanup(env, mm.id);   // the timer runs it again before the row goes
+      if (r && r.deleted && typeof r.deleted === 'object') Object.assign(r.deleted, extra);
+      return json(r);
+    }
     if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/(offers|receipts|on|leave|settings|push|device|apns|feedback)$/.exec(path))) {
       if (m[2] === 'feedback' && request.method === 'POST') { const { memberFeedback } = await import('./seats.js'); return json(await memberFeedback(env, request, m[1], await body(request)), 201); }
       if (m[2] === 'push' && request.method === 'POST') return json(await memberPush(env, request, m[1], await body(request)));
@@ -475,8 +536,25 @@ export async function handle(request, env, ctx) {
       if (m[2] === 'receipts' && request.method === 'GET') return json(await memberReceipts(env, request, m[1]));
       if (m[2] === 'on' && request.method === 'POST') return json(await setOn(env, request, m[1], await body(request)));
     }
-    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') return json(await joinPanel(env, request, m[1], await body(request)), 201);
-    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'GET') return json(await joinInfo(env, request, m[1]));
+    // OWNER_router_18: the join page says the owner's line before anyone joins; a join that showed it is told already
+    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') { const jb = await body(request); const jr = await joinPanel(env, request, m[1], jb); try { await (await import('./people.js')).afterJoin(env, jr, jb); } catch { } return json(jr, 201); }
+    if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'GET') return json(await (await import('./people.js')).withOwnerLine(env, m[1], await joinInfo(env, request, m[1])));
+    // OWNER_router_18: a person sends asks to their own people, reads what came back, passes an ask on; mutes; the one-time notice; the daily cap
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/(people|people\/asks|people\/links|people\/notice|sent|sent\/read|mutes|limits|mutes\/(mu_[a-z0-9]+)|sent\/(tk_[a-z0-9]+)\/notes|tasks\/(tk_[a-z0-9]+)\/pass)$/.exec(path))) {
+      const { memberByToken } = await import('./seats.js'); const PP = await import('./people.js'); const mm = await memberByToken(env, m0[1]); const r = m0[2], M = request.method;
+      if (r === 'people' && M === 'GET') return json(await PP.listPeople(env, request, mm));
+      if (r === 'people/asks' && M === 'POST') { const x = await PP.sendAsks(env, request, mm, await body(request)); return json(x.body, x.status); }
+      if (r === 'people/links' && M === 'POST') return json(await PP.newLink(env, request, mm, await body(request)), 201);
+      if (r === 'people/notice' && M === 'POST') return json(await PP.readNotice(env, mm));
+      if (r === 'sent' && M === 'GET') return json(await PP.listSent(env, request, mm));
+      if (r === 'sent/read' && M === 'POST') return json(await PP.markRead(env, mm, await body(request)));
+      if (r === 'mutes' && M === 'GET') return json(await PP.listMutes(env, mm));
+      if (r === 'mutes' && M === 'POST') return json(await PP.addMute(env, mm, await body(request)), 201);
+      if (r === 'limits' && (M === 'GET' || M === 'POST')) return json(await PP.limits(env, mm, M === 'POST' ? await body(request) : null));
+      if (m0[3] && M === 'DELETE') return json(await PP.removeMute(env, mm, m0[3]));
+      if (m0[4] && M === 'POST') return json(await PP.sentNote(env, request, mm, m0[4], await body(request)), 201);
+      if (m0[5] && M === 'POST') return json(await PP.passTask(env, request, mm, m0[5], await body(request)));
+    }
 
     // ---- panels
     if (path === '/v1/panels' && request.method === 'GET') { const k = needKey(await authKey(env, request)); return json(await listPanels(env, request, k)); }
@@ -641,6 +719,33 @@ export async function handle(request, env, ctx) {
         if (!why) throw fixable('missing_field', 'why', 'why is one line: how this principal came to be.', 'the app builder\'s simulator check from the laptop');
         const r = await env.DB.prepare('UPDATE principals SET owner = ?, owner_note = ? WHERE id = ?').bind(b.owner, why, m[1]).run();
         return json({ principal_id: m[1], owner: b.owner, why, changed: r.meta.changes === 1 });
+      }
+      if ((m = /^\/internal\/seats\/(s_[a-z0-9]+)\/reoffer$/.exec(path)) && request.method === 'POST') {   // OWNER_router_22: operations re-offers a seat
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { reofferSeat } = await import('./calls.js'); return json(await reofferSeat(env, m[1], await body(request)));
+      }
+      if (path === '/internal/team_server' && request.method === 'POST') {   // OWNER_router_21: enrol THIS caller's address as one of our servers
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        if (request.headers.get('cf-worker')) throw notFixable(403, 'forbidden', 'A Cloudflare function\'s address is shared with everyone\'s: call this from the server itself.');
+        const b = await body(request); for (const k of Object.keys(b)) if (k !== 'name') throw fixable('unknown_field', k, 'Send {"name": "<the server>"}.', null);
+        const nm = typeof b.name === 'string' ? b.name.trim() : '';
+        if (!/^[a-z][a-z0-9-]{1,39}$/.test(nm)) throw fixable('invalid_field', 'name', 'name is the server\'s short name: 2 to 40 lowercase letters, digits, hyphens.', 'build-box');
+        const h = await ipHashOf(env, request);
+        await env.DB.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').bind('team_server_ip:' + h, nm + '; enrolled from the server at ' + nowMs()).run();
+        return json({ name: nm, enrolled: true, address_hash_prefix: h.slice(0, 10), note: 'Keys, pages and asks made from this address are ours, with or without the team header; the address itself is never stored.' }, 201);
+      }
+      if (path === '/internal/team_servers' && request.method === 'GET') {   // OWNER_router_21: the list (names and hash prefixes only)
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const rows = (await env.DB.prepare('SELECT k, v FROM meta WHERE k LIKE \'team_server_ip:%\' ORDER BY k').all()).results || [];
+        return json({ servers: rows.map(r => ({ name: String(r.v || '').split(';')[0], address_hash_prefix: r.k.slice(15, 25), how: String(r.v || '').split(';').slice(1).join(';').trim() })) });
+      }
+      if (path === '/internal/panels/people' && request.method === 'POST') {   // OWNER_router_23: a panel for one person's people, with their links moved to it
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { makePeoplePanel } = await import('./people.js'); return json(await makePeoplePanel(env, await body(request)), 201);
+      }
+      if ((m = /^\/internal\/panels\/(p_[a-z0-9]+)\/owner$/.exec(path)) && request.method === 'POST') {   // OWNER_router_18: the operator makes a panel a person's own
+        if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');
+        const { setOwner } = await import('./people.js'); return json(await setOwner(env, m[1], await body(request)));
       }
       if (path === '/internal/proof_audit' && request.method === 'GET') {   // OWNER_router_5 items 4 and 5: what /v1/proof counts as outside, and why
         if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');

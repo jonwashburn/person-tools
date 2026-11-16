@@ -1,0 +1,8 @@
+{
+  "member_id": "mb_sam01",
+  "member_token": "mt_example_token",
+  "page": "https://run.example.com/m/mt_example_token",
+  "panel": "Robin's people",
+  "on": "off",
+  "note": "You are Off until you switch On. Keep this link: it is how you see calls and your receipts, and how you leave."
+}

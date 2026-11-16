@@ -151,7 +151,10 @@ export async function startPage(env, request, b, ipHash, teamHeader) {
   for (const k of Object.keys(b || {})) if (!['adult', 'us_resident', 'notice_accepted', 'notice_id', 'tz', 'quiet_start', 'quiet_end'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here.`, null);
   if (!b || b.adult !== true) throw fixable('invalid_field', 'adult', 'Only adults may make a page. Confirm you are 18 or older.', true);
   if (b.us_resident !== true) throw fixable('invalid_field', 'us_resident', 'For now only adults living in the United States may make a page.', true);
-  if (b.notice_accepted !== true || !ACCEPTED_NOTICES.includes(b.notice_id)) throw fixable('invalid_field', 'notice_id', 'Read the current notice and accept it.', ACCEPTED_NOTICES[0]);
+  // TRUST 3:08 PM CT 16 Nov: a page of your own accepts its own notice (SELF_NOTICE_IDS); the general ids stay accepted only until the page
+  // that sends self-1 is live everywhere (step 2 takes them out)
+  const SELF_NOTICE_IDS = ['tester-notice-self-1'];
+  if (b.notice_accepted !== true || !(SELF_NOTICE_IDS.includes(b.notice_id) || ACCEPTED_NOTICES.includes(b.notice_id))) throw fixable('invalid_field', 'notice_id', 'Read the current notice and accept it.', SELF_NOTICE_IDS[0]);
   const now = nowMs();
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM principals WHERE created_ip_hash = ? AND owner = \'person\' AND name = \'your own page\' AND created_at > ?').bind(ipHash, now - DAY).first();
   if (n && n.n >= 5 && !teamHeader) throw notFixable(429, 'rate_limited', 'At most five pages a day from one address. Use the page you made.', { retry_after_seconds: 3600 });
@@ -159,8 +162,9 @@ export async function startPage(env, request, b, ipHash, teamHeader) {
   const qs = Number.isInteger(b.quiet_start) && b.quiet_start >= 0 && b.quiet_start < 24 ? b.quiet_start : 21;
   const qe = Number.isInteger(b.quiet_end) && b.quiet_end >= 0 && b.quiet_end < 24 ? b.quiet_end : 8;
   const pr = rid('pr_'), pn = rid('p_'), mb = rid('mb_'), tok = rid('mt_', 32);
+  const { ourServer, FROM_OUR_ADDRESS } = await import('./util.js'); const fromUs = !teamHeader && (await ourServer(env, ipHash));   // OWNER_router_21
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'test', 'your own page', 0, ipHash, now, 'person'),
+    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner, owner_note) VALUES (?,?,?,?,?,?,?,?)').bind(pr, 'test', 'your own page', 0, ipHash, now, fromUs ? 'team' : 'person', fromUs ? FROM_OUR_ADDRESS : null),   // OWNER_router_16
     env.DB.prepare('INSERT INTO panels (id, principal_id, name, kind, join_code_hash, created_at, asker_name) VALUES (?,?,?,?,?,?,?)').bind(pn, pr, 'own page', 'private', 'self:' + rid('x', 24), now, null),
     env.DB.prepare('INSERT INTO members (id, panel_id, token_hash, alias, is_real, tz, quiet_start, quiet_end, on_state, adult_at, notice_id, notice_at, us_resident_at, created_at, person_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
       .bind(mb, pn, await sha256hex(tok), '', teamHeader ? 0 : 1, tz, qs, qe, 'on', now, b.notice_id, now, now, now, 'you'),

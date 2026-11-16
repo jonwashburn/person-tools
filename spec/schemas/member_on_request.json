@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_on_request.json",
+  "title": "On or Off: POST /v1/member/on (section 26.7)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "on"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "on": {
+          "const": true
+        },
+        "until": {
+          "$ref": "common.json#/$defs/time"
+        },
+        "hours": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "on"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "on": {
+          "const": false
+        }
+      }
+    }
+  ]
+}

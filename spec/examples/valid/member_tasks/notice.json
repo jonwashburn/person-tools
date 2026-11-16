@@ -1,0 +1,14 @@
+{
+  "open": [],
+  "groups": [],
+  "history": [],
+  "notice": {
+    "text": "Robin can send you tasks and questions here; you can mute or leave at any time.",
+    "from": "Robin",
+    "read": "/v1/member/people/notice",
+    "mute": {
+      "panel_owner": true
+    },
+    "leave": "/v1/member/leave"
+  }
+}

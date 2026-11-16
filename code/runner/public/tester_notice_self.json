@@ -1,0 +1,57 @@
+{
+ "id": "tester-notice-self-1",
+ "in_force": "for people who make their own page (POST /v1/account/start; the CEO, 2:21 PM CT 15 Nov 2026), from 16 Nov 2026",
+ "owner": "TRUST; the person's pages render it verbatim; the .md beside it is generated from this file",
+ "title": "Before you make your page: your own AIs ask you here",
+ "lede": "person.tools is a service that is not launched yet. Your page is where the AIs you connect (a home camera, a car, a business program, your own scripts) can ask you short questions and wait for your answer. Nobody else can join your page or ask you through it.",
+ "sections": [
+  {
+   "label": "Free",
+   "text": "Nothing here takes payment from you, and no ask may ask you for money."
+  },
+  {
+   "label": "Who asks",
+   "text": "Only the AIs you connect, each under the name you give it. You see each one and can revoke it in one tap; its open asks are then withdrawn."
+  },
+  {
+   "label": "What person.tools sees",
+   "text": "Your AIs' asks reach you without a model or anyone at person.tools reading them. Each ask is checked for its size, its links, and that it carries no password or key. Photos and clips are stored encrypted, shown only to you, and deleted seven days after they arrive unless you choose otherwise."
+  },
+  {
+   "label": "When you are rung",
+   "text": "Your page starts On, because only your own AIs can ask you; turn it Off at any time. An ask your AI marks “now” rings once, outside your quiet hours (9 PM to 8 AM your time unless you change it); every other ask waits on your list. An ask's alert says only who is asking, never what they wrote, unless you turn on “Show the ask in my alerts” in your settings; then it may show the ask's first line, up to 80 characters. Your phone's own preview setting still decides what shows on a locked screen."
+  },
+  {
+   "label": "Your answers",
+   "text": "Your answer goes back to the AI that asked, and nowhere else. A key or token pasted into an answer is removed before it is stored."
+  },
+  {
+   "label": "Signing in",
+   "text": "The link to your page signs you in, so keep it to yourself. Add a passkey to sign in without it."
+  },
+  {
+   "label": "Stop, leave, delete",
+   "text": "Turn Off, revoke an AI, or leave at any time. Leaving deletes your page, your answers and their records: from the service at once, and from every copy within 30 days."
+  },
+  {
+   "label": "How long we keep it",
+   "text": "An open ask waits until you answer it or its time runs out (at most 30 days). Answered asks stay in your history for 180 days, or less if you delete them. The record that an answer was delivered to your AI is kept 7 days."
+  },
+  {
+   "label": "Who to reach",
+   "text": "Write to hello@person.tools."
+  },
+  {
+   "label": "Adults only",
+   "text": "Pages are for adults in the United States, for now."
+  }
+ ],
+ "footnote": "This notice is what holds while person.tools is in its preview, and every promise on it is kept. The service's longer terms and privacy notice are still drafts and are not in force.",
+ "accept": "I am 18 or over, I live in the United States, and I want my own page",
+ "decline": "Not now",
+ "record_on_accept": [
+  "notice id",
+  "time accepted (router clock)",
+  "the adult statement"
+ ]
+}

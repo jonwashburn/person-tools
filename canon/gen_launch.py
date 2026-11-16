@@ -80,7 +80,7 @@ w('ANNOUNCEMENT.md', _re.sub(r'\{([a-z_]+)\}', _r, tpl))
 print('wrote launch/ANNOUNCEMENT.md')
 
 # The public repository's README (round-3 order 1; D38): the same hosts as the rest of the kit, switched by zone_active
-vals.update({'public_repo': names.get('public_repo', 'OWNER/REPO'), 'code_licence': names.get('code_licence') or 'The code carries no licence yet: until the owner adds a LICENSE file, all rights are reserved.'})
+vals.update({'run_host': HOSTS['run'], 'public_repo': names.get('public_repo', 'OWNER/REPO'), 'code_licence': names.get('code_licence') or 'The code carries no licence yet: until the owner adds a LICENSE file, all rights are reserved.'})
 tpl = open(os.path.join(ROOT, 'canon', 'launch_templates', 'public_readme.md')).read()
 w('PUBLIC_README.md', _re.sub(r'\{([a-z_]+)\}', _r, tpl))
 print('wrote launch/PUBLIC_README.md')

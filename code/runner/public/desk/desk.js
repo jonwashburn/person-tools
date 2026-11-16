@@ -9,11 +9,15 @@ const UNDO_MS = 5000;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 // Passkey sign-in is shown only once TRUST has said the session road holds (SERVICE, 3:27 PM CT, 15 Nov).
 const PASSKEY_ON = (document.querySelector('meta[name="desk-passkey"]') || {}).content === 'on';
+// The QR road (SERVICE's router_14) is switched on when SERVICE says it is live.
+const QR_ON = (document.querySelector('meta[name="desk-qr"]') || {}).content === 'on' && typeof window.qrcode === 'function';
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
 
 /* ---------- small helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+// replaceChildren(null) writes the word "null": every pane is filled through this, which drops empty children
+function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false)); return el; }
 function h(tag, attrs, ...kids) {
   const e = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -58,6 +62,14 @@ function age(iso) {
   if (s < 86400) return Math.floor(s / 3600) + 'h';
   return Math.floor(s / 86400) + 'd';
 }
+function leftWords(iso) {
+  // An ask that closes within the hour shows its time left; later ones show nothing (router_15).
+  const t = ms(iso); if (!t) return null;
+  const s = (t - Date.now()) / 1000;
+  if (s <= 0 || s > 3600) return null;
+  if (s < 60) return 'under a minute left';
+  const m = Math.ceil(s / 60); return m + (m === 1 ? ' minute left' : ' minutes left');
+}
 function agoWords(iso) {
   const t = ms(iso); if (!t) return 'never';
   const s = Math.max(0, (Date.now() - t) / 1000);
@@ -73,14 +85,17 @@ function authHeaders() {
   if (S.member && /^ps_/.test(S.cred || '')) h0['X-Person-Member'] = S.member;
   return h0;
 }
+let inflight = new AbortController(); // signing out cancels every request still on its way
 async function api(method, path, body, opts = {}) {
+  if (!S.cred) throw { status: 0, code: 'signed_out', message: 'Signed out.' };
   const headers = authHeaders();
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   let r;
   try {
     r = await fetch(API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-      cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: !!opts.keepalive });
+      cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: !!opts.keepalive, signal: opts.keepalive ? undefined : inflight.signal });
   } catch (e) {
+    if (e && e.name === 'AbortError') throw { status: 0, code: 'signed_out', message: 'Signed out.' };
     throw { status: 0, code: 'unreached', message: 'The Desk could not reach person.tools. Check this computer\'s connection.' };
   }
   let data = null;
@@ -89,7 +104,8 @@ async function api(method, path, body, opts = {}) {
   return data;
 }
 async function apiBlob(path) {
-  const r = await fetch(API + path, { headers: authHeaders(), cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  if (!S.cred) throw { status: 0 };
+  const r = await fetch(API + path, { headers: authHeaders(), cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', signal: inflight.signal });
   if (!r.ok) throw { status: r.status };
   return r.blob();
 }
@@ -102,10 +118,15 @@ const S = {
   sort: pref('sort', 'fair'), filter: null,
   pending: new Map(),      // task_id -> {task, body, label, until, timer}
   sentLocal: new Map(),    // task_id -> task with reply, answered here this session
+  closed: new Map(),       // task_id -> when this Desk saw it close (answered, already answered, gone); a list fetched
+                           // before that moment may still hold it, so it stays out for a minute
   drafts: new Map(),       // task_id -> {text, note, approve}
   failed: new Map(),       // task_id -> {message}
   gone: null,              // a line about an ask that left the list while selected
   later: {},               // task_id -> when marked Later (kept on this computer)
+  seen2: new Set(),        // task ids opened on this computer
+  blockedCalls: new Set(), // calls whose caller was blocked here (the service may still list the offer)
+  people: null, sent: null, ssel: null, sentSeen: new Set(), compose: null, pendingSend: null, // a person as asker
   media: new Map(),        // task_id -> {url, type} | {error}
   lastOk: 0, lastErr: null, pollTimer: null, pollDelay: POLL_MS, loading: false,
   shownOnce: null,         // a new connection's key and link, shown once, never stored
@@ -115,11 +136,22 @@ const S = {
 const URG = { now: 0, today: 1, whenever: 2 };
 const urg = (t) => (t.urgency in URG ? URG[t.urgency] : 1);
 const tms = (t) => ms(t.created_at);
-const whoKey = (t) => (t.connection && t.connection.id) || ('from:' + (t.from || ''));
+const passerName = (t) => { const pb = t.passed_on_by || t.passed_by; return pb ? (typeof pb === 'string' ? pb : (pb.name || pb.alias || '')) : ''; };
+// An ask passed on to this person groups apart from their own AIs, even when the names match ("Home camera via <passer>")
+const whoKey = (t) => (passerName(t) ? 'via:' + passerName(t) + ':' : '') + ((t.connection && t.connection.id) || ('from:' + (t.from || '')));
+const whoLabel = (t) => whoName(t) + (passerName(t) ? ' via ' + passerName(t) : '');
 const whoName = (t) => t.from || (t.connection && t.connection.name) || 'An AI';
 function draft(id) { if (!S.drafts.has(id)) S.drafts.set(id, { text: '', note: '', approve: null }); return S.drafts.get(id); }
 const isLater = (t) => Object.prototype.hasOwnProperty.call(S.later, t.task_id);
 function laterKey() { return 'desk.later.' + (S.memberId || 'x'); }
+// New since you last looked: the ids of asks opened on this computer (ids only, nothing an AI wrote).
+function seenKey() { return 'desk.seen.' + (S.memberId || 'x'); }
+function loadSeen() { try { S.seen2 = new Set(JSON.parse(sget('local', seenKey()) || '[]')); } catch (e) { S.seen2 = new Set(); } }
+function markSeen(id) {
+  if (!id || !S.memberId || S.seen2.has(id)) return;
+  S.seen2.add(id); const arr = [...S.seen2].slice(-2000); sset('local', seenKey(), JSON.stringify(arr));
+}
+const isNew = (t) => S.memberId && !t.isCall && !S.seen2.has(t.task_id);
 function loadLater() { try { S.later = JSON.parse(sget('local', laterKey()) || '{}') || {}; } catch (e) { S.later = {}; } }
 function saveLater() { sset('local', laterKey(), JSON.stringify(S.later)); }
 
@@ -145,13 +177,23 @@ function quickRank(t) {
   if (k === 'call') return 4;
   return 6;
 }
+// Two choices take the arrows: ← the first, → the second, unless they read as a yes and a no in the other order. Then yes
+// keeps → and Y, and no keeps ← and N, as on every other card ("Yes / No" must never put "No" on Y).
+const YES_RE = /^(yes|yeah|yep|sure|ok|okay|of course|do it|go ahead|approve|accept|agree|confirm|i can|i will|i'll)\b/i;
+const NO_RE = /^(no|nope|not|don'?t|skip|decline|deny|cancel|can'?t|cannot|won'?t|i can'?t|i won'?t)\b/i;
+function twoChoices(choices) {
+  const [a, b] = choices;
+  return b !== undefined && YES_RE.test(String(a).trim()) && NO_RE.test(String(b).trim()) ? [b, a] : [a, b];
+}
 function yesNo(t) {
   const s = t.step || {}, k = kindOf(t);
   if (k === 'call') return t.offer.state === 'offered'
     ? { no: { label: 'Decline', body: { action: 'call_not_now', local: true } }, yes: { label: 'Take this call', call: true } }
     : { no: null, yes: { label: 'Open the call again', call: true } };
-  if (k === 'choice') return { no: { label: s.choices[0], body: { action: 'answer', choice: s.choices[0] } },
-    yes: s.choices[1] !== undefined ? { label: s.choices[1], body: { action: 'answer', choice: s.choices[1] } } : null };
+  if (k === 'choice') {
+    const [no, yes] = s.choices.length > 2 ? s.choices : twoChoices(s.choices);
+    return { no: { label: no, body: { action: 'answer', choice: no } }, yes: yes !== undefined ? { label: yes, body: { action: 'answer', choice: yes } } : null };
+  }
   if (k === 'approve') return { no: { label: s.deny_label || 'Deny', body: { action: 'deny' } },
     yes: { label: s.approve_label || 'Approve', body: { action: 'approve' } } };
   if (k === 'words' || k === 'link' || k === 'command') return { no: { label: 'Not now', body: { action: 'not_now' } },
@@ -177,14 +219,30 @@ function svgIcon(name) {
   for (const d of ICONS[name]) { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); s.append(p); }
   return s;
 }
-function iconFor(icon, name, big) {
+// An AI's own picture, which the server copied into its own storage (icon_url, section 26.8): fetched from the server with the
+// credential, shown from memory. Any other address is never loaded.
+const iconImgs = new Map();
+function iconPicture(url) {
+  if (!url || typeof url !== 'string' || url.indexOf(API + '/') !== 0) return null;
+  const e = iconImgs.get(url);
+  if (e) return e.src || null;
+  iconImgs.set(url, { loading: true });
+  apiBlob(url.slice(API.length)).then((b) => {
+    if (!/^image\//.test(b.type || '')) throw { status: 415 };
+    iconImgs.set(url, { src: URL.createObjectURL(b) }); S.cardSig = ''; render(); if (S.view === 'ais') renderAIs();
+  }).catch(() => iconImgs.set(url, { failed: true }));
+  return null;
+}
+function iconFor(icon, name, big, iconUrl) {
   const cls = 'ic' + (big ? ' big' : '');
+  const pic = iconPicture(iconUrl);
+  if (pic) return h('span', { class: cls + ' pic', 'aria-hidden': 'true' }, h('img', { src: pic, alt: '' }));
   if (icon && ICONS[icon]) return h('span', { class: cls, 'aria-hidden': 'true' }, svgIcon(icon));
   if (icon && !/^https?:/i.test(icon) && [...icon].length <= 3) return h('span', { class: cls + ' emoji', 'aria-hidden': 'true' }, icon);
   const letter = (String(name || '?').trim().match(/[\p{L}\p{N}]/u) || ['?'])[0].toUpperCase();
   return h('span', { class: cls, 'aria-hidden': 'true' }, letter);
 }
-const taskIcon = (t, big) => iconFor(t.connection && t.connection.icon, whoName(t), big);
+const taskIcon = (t, big) => iconFor(t.connection && t.connection.icon, whoName(t), big, t.connection && t.connection.icon_url);
 
 /* ---------- order: Fair, By AI, Quickest, Oldest, Newest ---------- */
 function fair(list) {
@@ -218,8 +276,11 @@ function callItems() {
   });
 }
 function visibleOpen() {
-  return S.open.concat(callItems()).filter((t) => !S.pending.has(t.task_id) || S.pending.get(t.task_id).body.action === 'note');
+  const now = Date.now();
+  return S.open.concat(callItems()).filter((t) => (!S.pending.has(t.task_id) || S.pending.get(t.task_id).body.action === 'note') && !S.closed.has(t.task_id)
+    && !(t.expires_at && ms(t.expires_at) && ms(t.expires_at) <= now && !S.pending.has(t.task_id)));
 }
+function markClosed(id) { S.closed.set(id, Date.now()); }
 function ordered() {
   let list = visibleOpen();
   if (S.filter) list = list.filter((t) => whoKey(t) === S.filter);
@@ -243,12 +304,18 @@ function parseLink(s) {
   const m = String(s || '').trim().match(/(?:^|\/m\/|^\s*)(mt_[A-Za-z0-9_-]{8,200})/);
   return m ? m[1] : null;
 }
+function endedWords() {
+  if (/^ps_/.test(S.cred || '')) return 'Your passkey sign-in has ended. Sign in again.';
+  if (/^ds_/.test(S.cred || '')) return 'This computer was signed out (from your phone, or after 30 days unused). Scan a new code to sign in again.';
+  return 'This page link stopped working (you may have left the panel, or the link was changed). Paste your current link.';
+}
 function scrubAddress() {
   // A credential never lives in the address bar. If one arrived there, remove it without using it.
   if (/mt_[A-Za-z0-9_-]{6,}/.test(location.href)) history.replaceState(null, '', location.pathname);
 }
 async function trySignIn(cred, remember) {
-  S.cred = cred;
+  S.cred = cred; S.people = null; S.peopleErr = null; S.isOwner = null;
+  if (SEND_ON || PASS_ON) S.peopleEarly = loadPeople(); // in parallel with the asks: the top bar is whole sooner
   const data = await api('GET', '/v1/member/tasks');
   S.remember = !!remember;
   const keep = remember ? 'local' : 'session', drop = remember ? 'session' : 'local';
@@ -261,20 +328,28 @@ function showSignIn(msg) {
   $('#signin-pick').hidden = true;
   const err = $('#signin-error');
   if (msg) { err.textContent = msg; err.hidden = false; } else { err.hidden = true; }
-  setTimeout(() => { const pk = $('#signin-passkey'); (pk && !pk.hidden ? pk : $('#signin-link')).focus(); }, 0);
+  setTimeout(() => { if ($('#qr-box').hidden) $('#signin-link').focus(); }, 0);
+  if (QR_ON && !QRS.poll) qrNew();
 }
 function signOut(msg) {
+  inflight.abort(); inflight = new AbortController();
   for (const p of S.pending.values()) clearTimeout(p.timer);
   for (const m of S.media.values()) if (m.url) URL.revokeObjectURL(m.url);
+  for (const e of iconImgs.values()) if (e.src) URL.revokeObjectURL(e.src); iconImgs.clear();
   clearTimeout(S.pollTimer);
   if (/^ps_/.test(S.cred || '')) fetch(API + '/v1/account/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + S.cred }, credentials: 'omit', keepalive: true }).catch(() => {});
+  if (/^ds_/.test(S.cred || '')) fetch(API + '/v1/desk/sign_out', { method: 'POST', headers: { 'Authorization': 'Bearer ' + S.cred }, credentials: 'omit', keepalive: true }).catch(() => {});
   sdel('local', 'desk.cred'); sdel('session', 'desk.cred'); sdel('local', 'desk.member'); sdel('session', 'desk.member');
-  sdel('local', 'desk.member_label'); sdel('session', 'desk.member_label');
-  try { for (const k of Object.keys(localStorage)) if (k.startsWith('desk.later.')) localStorage.removeItem(k); } catch (e) { /* blocked */ }
-  Object.assign(S, { cred: null, member: null, memberLabel: null, memberId: null, account: undefined, passkeyMsg: null, open: [], history: [], conns: null, blocks: null, offers: [], settings: null, sel: null, hsel: null,
-    filter: null, later: {}, lastOk: 0, lastErr: null, shownOnce: null, cardSig: '' });
-  S.pending.clear(); S.sentLocal.clear(); S.drafts.clear(); S.failed.clear(); S.media.clear();
+  sdel('local', 'desk.member_label'); sdel('session', 'desk.member_label'); sdel('local', 'desk.owner'); sdel('session', 'desk.owner');
+  sdel('local', 'desk.mems'); sdel('session', 'desk.mems'); S.mems = []; applyPagesSwitch();
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith('desk.later.') || k.startsWith('desk.seen.') || k.startsWith('desk.sentseen.')) localStorage.removeItem(k); } catch (e) { /* blocked */ }
+  if (S.pendingSend) { clearTimeout(S.pendingSend.timer); S.pendingSend = null; }
+  Object.assign(S, { cred: null, member: null, memberLabel: null, memberId: null, account: undefined, passkeyMsg: null, historyDeep: null, historyNote: null, leaving: null, isOwner: null, peopleEarly: null, noticeAckAt: 0, lookAgain: false, firstLook: false, firstSlow: false, peopleP: null, onPending: undefined, onBusy: false, onChangedAt: 0,
+    people: null, sent: null, ssel: null, sentSeen: new Set(), compose: null, ring: null, notice: null, answersToRead: [], limits: null, invite: null, open: [], history: [], conns: null, blocks: null, mutes: null, offers: [], settings: null, sel: null, hsel: null,
+    filter: null, later: {}, seen2: new Set(), blockedCalls: new Set(), lastOk: 0, lastErr: null, shownOnce: null, cardSig: '' });
+  S.pending.clear(); S.sentLocal.clear(); S.drafts.clear(); S.failed.clear(); S.media.clear(); S.closed.clear();
   $('#undo').hidden = true; $('#signin-link').value = ''; document.title = 'Desk · person.tools'; setFavicon(0, false);
+  for (const el of $$('.send-only')) el.hidden = true; document.documentElement.classList.remove('send-on'); // the next person may own no panel
   showSignIn(msg);
 }
 $('#signin-form').addEventListener('submit', async (ev) => {
@@ -321,37 +396,70 @@ function memberLabel(m) {
   const who = m.asked_by || m.asker || '';
   return [p || '', who ? 'asked by ' + who : ''].filter(Boolean).join(' · ') || m.member_id;
 }
+function memberLabels(mems) {
+  // One person's pages may share a panel and a name (P22): then when each joined tells them apart, never the name alone.
+  const base = mems.map(memberLabel);
+  return mems.map((m, i) => {
+    if (base.filter((b) => b === base[i]).length < 2) return base[i];
+    const j = ms(m.joined_at);
+    return base[i] + (j ? ' · joined ' + fmtDay.format(j) + ', ' + fmtClock.format(j) : ' · ' + m.member_id.slice(-4));
+  });
+}
+async function countOpen(session, memberId) {
+  const r = await fetch(API + '/v1/member/tasks?history=0', { headers: { 'Authorization': 'Bearer ' + session, 'X-Person-Member': memberId },
+    cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  if (!r.ok) throw { status: r.status };
+  const d = await r.json(); return Array.isArray(d && d.open) ? d.open.length : 0;
+}
 async function passkeySignIn(btn) {
-  const remember = $('#signin-remember').checked;
-  if (!window.PublicKeyCredential) { showSignIn('This browser cannot use passkeys. Paste your page link instead.'); return; }
-  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Waiting for your passkey…';
+  const remember = $('#signin-remember').checked, status = $('#passkey-status'), cancel = $('#passkey-cancel');
+  const say = (t, bad) => { status.textContent = t; status.classList.toggle('error', !!bad); };
+  if (!window.PublicKeyCredential) { say('This browser cannot use passkeys. Use your page link above.', true); return; }
+  btn.disabled = true; cancel.hidden = false; $('#signin-pick').hidden = true;
+  say('Your browser is asking for your passkey. Look for its window (Touch ID, your phone, or a security key).');
+  const ctl = new AbortController(); S.passkeyAbort = ctl;
+  const limit = setTimeout(() => ctl.abort(), 60000);
   try {
     const o = await plain('POST', '/v1/account/login/options', {});
-    const pk = Object.assign({}, o.publicKey); pk.challenge = b64u.dec(pk.challenge);
+    const pk = Object.assign({}, o.publicKey, { timeout: 60000 }); pk.challenge = b64u.dec(pk.challenge);
     if (Array.isArray(pk.allowCredentials)) pk.allowCredentials = pk.allowCredentials.map((c) => Object.assign({}, c, { id: b64u.dec(c.id) }));
-    const c = await navigator.credentials.get({ publicKey: pk });
+    const c = await navigator.credentials.get({ publicKey: pk, signal: ctl.signal });
+    say('Checking your passkey…');
     const out = await plain('POST', '/v1/account/login', { challenge_id: o.challenge_id, credential: { id: c.id, rawId: b64u.enc(c.rawId), type: c.type,
       response: { clientDataJSON: b64u.enc(c.response.clientDataJSON), authenticatorData: b64u.enc(c.response.authenticatorData),
         signature: b64u.enc(c.response.signature), userHandle: c.response.userHandle ? b64u.enc(c.response.userHandle) : null } } });
     const session = out.session;
     if (!session) throw { message: 'person.tools did not give a session.' };
     const mems = membershipsOf(await plain('GET', '/v1/account', undefined, session));
-    if (!mems.length) { showSignIn('Your passkey works, but no page is linked to it yet. Sign in once with your page link, then add a passkey from your page.'); return; }
+    if (!mems.length) { say('Your passkey works, but no page is linked to it yet. Sign in once with your page link above.', true); return; }
+    const labels = memberLabels(mems);
     const go = async (m) => {
-      S.member = m.member_id; S.memberLabel = memberLabel(m); sset(remember ? 'local' : 'session', 'desk.member_label', S.memberLabel);
-      try { start(await trySignIn(session, remember)); }
-      catch (e) { S.cred = null; S.member = null; showSignIn(e.message); }
+      S.member = m.member_id; S.memberLabel = labels[mems.indexOf(m)];
+      S.mems = mems.map((x, i) => ({ id: x.member_id, label: labels[i] })); // for Menu, Switch page
+      sset(remember ? 'local' : 'session', 'desk.mems', JSON.stringify(S.mems)); sdel(remember ? 'session' : 'local', 'desk.mems'); sset(remember ? 'local' : 'session', 'desk.member_label', S.memberLabel);
+      try { say('Opening your Desk…'); start(await trySignIn(session, remember)); }
+      catch (e) { S.cred = null; S.member = null; say('Not signed in: ' + e.message, true); }
     };
     if (mems.length === 1) { await go(mems[0]); return; }
     // Several pages: the person picks one; never chosen by name on their behalf.
     const pick = $('#signin-pick');
-    pick.replaceChildren(h('p', { class: 'label', id: 'pick-h' }, 'Your passkey opens more than one page. Which one?'),
-      ...mems.map((m) => h('button', { class: 'btn', type: 'button', onclick: () => { pick.hidden = true; go(m); } }, memberLabel(m))));
-    pick.setAttribute('role', 'group'); pick.setAttribute('aria-labelledby', 'pick-h'); pick.hidden = false;
-    const first = pick.querySelector('button'); if (first) first.focus();
+    fill(pick, h('p', { class: 'label', id: 'pick-h' }, 'Your passkey opens more than one page. Which one?'),
+      ...mems.map((m, i) => h('button', { class: 'btn pick-page', type: 'button', onclick: () => { pick.hidden = true; go(m); } },
+        h('span', null, labels[i]), h('span', { class: 'pick-n', 'data-mb': m.member_id }, 'counting open asks…'))));
+    pick.setAttribute('role', 'group'); pick.setAttribute('aria-labelledby', 'pick-h'); pick.hidden = false; say('');
+    const first = pick.querySelector('button'); if (first) first.focus({ preventScroll: true });
+    pick.scrollIntoView({ block: 'nearest' }); // every page in view, not only the first
+    for (const m of mems) countOpen(session, m.member_id).then((n) => {
+      const el = pick.querySelector('.pick-n[data-mb="' + m.member_id + '"]');
+      if (el) el.textContent = n ? n + (n === 1 ? ' ask open' : ' asks open') : 'nothing open';
+    }).catch(() => { const el = pick.querySelector('.pick-n[data-mb="' + m.member_id + '"]'); if (el) el.textContent = ''; });
   } catch (e) {
-    showSignIn(e && e.name === 'NotAllowedError' ? 'No passkey was used. Try again, or paste your page link.' : 'Not signed in: ' + ((e && e.message) || e));
-  } finally { btn.disabled = false; btn.textContent = old; }
+    const n = e && e.name;
+    say(n === 'AbortError' || n === 'NotAllowedError'
+      ? 'No passkey was used. If you have not added one yet, sign in with your page link above; then, in Settings, choose "Add a passkey" for next time.'
+      : e && e.status ? 'Not signed in: ' + e.message
+      : 'This browser could not use a passkey here' + (e && e.message ? ' (it said: ' + e.message + ')' : '') + '. Use your page link above.', true);
+  } finally { clearTimeout(limit); S.passkeyAbort = null; btn.disabled = false; cancel.hidden = true; }
 }
 /* Adding a passkey from the Desk: paste the link once, then never again. The passkey lives in the person's own device or
    password manager; person.tools keeps only its public half. */
@@ -385,14 +493,86 @@ function passkeyRow() {
   return h('div', { class: 'set' }, h('div', { class: 'k' }, 'Passkey', h('p', { class: 'help' }, 'Sign in without the link.')), h('div', null, body));
 }
 
-if (PASSKEY_ON && window.PublicKeyCredential) {
-  // With a passkey there is no link to find: it leads, and the page link is the other way in.
-  const b = $('#signin-passkey'), o = $('#signin-or'), form = $('#signin-form');
-  b.hidden = false; o.hidden = false; b.classList.add('btn-you');
-  form.querySelector('button[type=submit]').classList.remove('btn-you');
-  form.parentNode.insertBefore(b, form); form.parentNode.insertBefore($('#signin-pick'), form); form.parentNode.insertBefore(o, form);
-  b.addEventListener('click', () => passkeySignIn(b));
+/* ---------- the sign-in's order: the QR first when it works, then a passkey, then the page link ---------- */
+const HAS_PASSKEY = PASSKEY_ON && !!window.PublicKeyCredential;
+function layoutSignIn(qrShown) {
+  // The page link leads (the QR above it once it works); a passkey is a plain way below, for accounts that have one.
+  $('#qr-box').hidden = !qrShown; $('#qr-or').hidden = !qrShown;
+  $('#passkey-way').hidden = !HAS_PASSKEY;
+  $('#signin-form button[type=submit]').classList.toggle('btn-you', !qrShown);
+  // When the code appears it leads: an empty link field that took the focus while the code loaded gives it up
+  const f = $('#signin-link'); if (qrShown && document.activeElement === f && !f.value) f.blur();
 }
+if (HAS_PASSKEY) {
+  $('#signin-passkey').addEventListener('click', (ev) => passkeySignIn(ev.currentTarget));
+  $('#passkey-cancel').addEventListener('click', () => { if (S.passkeyAbort) S.passkeyAbort.abort(); });
+}
+layoutSignIn(false);
+
+const QRS = { poll: null, until: 0, timer: null, tick: null, shown: false, fails: 0 };
+function drawQR(text) {
+  const q = window.qrcode(0, 'M'); q.addData(String(text)); q.make();
+  const n = q.getModuleCount(), m = 4, size = n + 2 * m, NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size); svg.setAttribute('shape-rendering', 'crispEdges'); svg.setAttribute('aria-hidden', 'true');
+  const bg = document.createElementNS(NS, 'rect'); bg.setAttribute('width', size); bg.setAttribute('height', size); bg.setAttribute('fill', '#ffffff'); svg.append(bg);
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += 'M' + (c + m) + ' ' + (r + m) + 'h1v1h-1z';
+  const path = document.createElementNS(NS, 'path'); path.setAttribute('d', d); path.setAttribute('fill', '#1d1d1b'); svg.append(path);
+  fill($('#qr-code'), svg);
+}
+const qrText = (r) => r.qr || r.url || r.code; // SERVICE names what the phone scans; the Desk draws exactly that
+// TRUST (3:50 PM CT): the Desk shows a two-digit number; the phone offers three and the person picks the one on this screen.
+const qrNumber = (r) => { const v = r.number ?? r.match ?? r.pick ?? r.digits ?? r.check; return v === undefined || v === null ? null : String(v); };
+function qrStop() { clearTimeout(QRS.timer); clearInterval(QRS.tick); QRS.poll = null; }
+function qrTick() {
+  const left = Math.max(0, Math.ceil((QRS.until - Date.now()) / 1000));
+  $('#qr-timer').textContent = left ? 'The code and the number change in ' + left + ' s.' : 'Making a new code…';
+}
+async function qrNew() {
+  if (!QR_ON || $('#signin').hidden) return;
+  clearTimeout(QRS.timer);
+  try {
+    const r = await plain('POST', '/v1/desk/sign_in', {});
+    if (!r.poll || !qrText(r)) throw { message: 'no code' };
+    QRS.poll = r.poll; QRS.until = Date.now() + (Number(r.expires_in) || 60) * 1000; QRS.fails = 0;
+    drawQR(qrText(r)); $('#qr-status').textContent = '';
+    const num = qrNumber(r);
+    $('#qr-digits').textContent = num || ''; $('#qr-number').hidden = !num; $('#qr-pick-step').hidden = !num;
+    if (!QRS.shown) { QRS.shown = true; layoutSignIn(true); }
+    clearInterval(QRS.tick); qrTick(); QRS.tick = setInterval(qrTick, 1000);
+    QRS.timer = setTimeout(qrPoll, 1500);
+  } catch (e) {
+    QRS.fails++;
+    if (!QRS.shown) { layoutSignIn(false); if (QRS.fails < 3) QRS.timer = setTimeout(qrNew, 15000); return; } // show only what works
+    $('#qr-status').textContent = 'A new code could not be made just now; trying again.';
+    QRS.timer = setTimeout(qrNew, 10000);
+  }
+}
+async function qrPoll() {
+  if ($('#signin').hidden || !QRS.poll) return;
+  if (Date.now() >= QRS.until) { qrNew(); return; }
+  if (document.hidden) { QRS.timer = setTimeout(qrPoll, 3000); return; }
+  let r;
+  try { r = await fetch(API + '/v1/desk/sign_in/' + enc(QRS.poll), { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' }); }
+  catch (e) { QRS.timer = setTimeout(qrPoll, 4000); return; }
+  if (r.status === 202) { QRS.timer = setTimeout(qrPoll, 2000); return; }
+  if (r.status === 429) { QRS.timer = setTimeout(qrPoll, 6000); return; }
+  if (r.ok) {
+    let d = {}; try { d = await r.json(); } catch (e) { d = {}; }
+    if (d.session) {
+      qrStop(); $('#qr-status').textContent = 'Confirmed on your phone. Opening your Desk…';
+      S.member = null; S.memberLabel = null;
+      try { start(await trySignIn(d.session, $('#signin-remember').checked)); }
+      catch (e) { S.cred = null; showSignIn(e.message); }
+      return;
+    }
+    QRS.timer = setTimeout(qrPoll, 2000); return;
+  }
+  // the code ended: used, run out, or stopped because a wrong number was picked on a phone. A fresh one, and say so.
+  qrNew().then(() => { if (QRS.poll) $('#qr-status').textContent = 'The last code was stopped or ran out; this is a new one. Pick the number shown here.'; });
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && QR_ON && !$('#signin').hidden && Date.now() >= QRS.until) qrNew(); });
 
 /* ---------- loading and looking again ---------- */
 function absorb(data) {
@@ -400,38 +580,47 @@ function absorb(data) {
   const prevSel = S.sel;
   S.open = open;
   S.history = Array.isArray(data && data.history) ? data.history : [];
+  // router_18: accept once before a person's asks show; a look that left before the OK must not bring it back
+  S.notice = (data && data.notice && !(S.noticeAckAt && Date.now() - S.noticeAckAt < 60000)) ? data.notice : null;
+  S.answersToRead = Array.isArray(data && data.answers_to_read) ? data.answers_to_read : [];
   for (const id of S.sentLocal.keys()) if (S.history.some((t) => t.task_id === id)) S.sentLocal.delete(id);
+  for (const [id, at] of S.closed) if (Date.now() - at > 60000) S.closed.delete(id);
   // Later and drafts only for asks still open
   const ids = new Set(open.map((t) => t.task_id).concat(callItems().map((t) => t.task_id)));
   let changed = false;
   for (const id of Object.keys(S.later)) if (!ids.has(id) && !S.pending.has(id)) { delete S.later[id]; changed = true; }
   if (changed) saveLater();
-  if (prevSel && !ids.has(prevSel) && !S.pending.has(prevSel) && !S.failed.has(prevSel)) {
+  if (prevSel && !ids.has(prevSel) && !S.pending.has(prevSel) && !S.failed.has(prevSel) && !S.closed.has(prevSel)) {
     const order = lastOrder; const i = order.indexOf(prevSel);
     S.gone = 'That ask left your list: its AI withdrew it, or you answered it on another device.';
     S.sel = null;
     const next = flatOrder();
     if (next.length) S.sel = (order.slice(i + 1).find((id) => next.some((t) => t.task_id === id))) || next[0].task_id;
   }
-  S.lastOk = Date.now(); S.lastErr = null;
+  S.lastOk = Date.now(); S.lastErr = null; S.firstLook = false;
 }
 let lastOrder = [];
 async function refresh(quiet) {
   if (!S.cred || S.loading) return;
   S.loading = true;
   try {
+    if (SEND_ON && S.isOwner !== false) loadSent(); // beside the asks, not after them; a person who owns no panel has sent nothing
+    const lookedAt = Date.now();
     const [data, offers] = await Promise.all([api('GET', '/v1/member/tasks'), api('GET', '/v1/member/offers').catch(() => null)]);
-    if (offers && Array.isArray(offers.offers)) S.offers = offers.offers;
+    if (offers && Array.isArray(offers.offers)) S.offers = offers.offers.filter((o) => !S.blockedCalls.has(o.call_id)); // a call whose caller was blocked here stays gone
+    if (offers) noteRing(offers, lookedAt);
     absorb(data);
     for (const c of callItems()) if (!S.seats.has(c.offer.seat_id)) loadSeat(c); // the ring card is whole before it is opened
+    if ((SEND_ON || PASS_ON) && S.isOwner === null) loadPeople(); // not known yet (the first look failed): look again
     S.pollDelay = POLL_MS;
     if (!S.memberId && !S.settings) loadSettings();
   } catch (e) {
-    if (e.status === 401 || e.status === 403 || e.status === 404) { S.loading = false; signOut('This page link stopped working (you may have left the panel, or the link was changed). Paste your current link.'); return; }
+    if (e.status === 401 || e.status === 403 || e.status === 404) { S.loading = false; signOut(endedWords()); return; }
     S.lastErr = e.message; S.pollDelay = Math.min(S.pollDelay * 2, 120000);
   } finally { S.loading = false; }
   render();
   schedule();
+  if (S.lookAgain) { S.lookAgain = false; setTimeout(() => refresh(true), 0); } // something changed while this look was out
   if (S.view === 'ais' && !quiet) loadConns();
 }
 function schedule() {
@@ -443,7 +632,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 async function loadSettings() {
   try {
     const s = await api('GET', '/v1/member/settings');
-    S.settings = s; if (s && s.member_id && s.member_id !== S.memberId) { S.memberId = s.member_id; loadLater(); render(); }
+    S.settings = s; if (s && s.member_id && s.member_id !== S.memberId) { S.memberId = s.member_id; loadLater(); loadSeen(); loadSentSeen(); S.cardSig = ''; render(); }
     if (S.view === 'settings') renderSettings();
   } catch (e) { /* the Desk works without it */ }
 }
@@ -459,6 +648,19 @@ async function unblock(b) {
   catch (e) { S.aiMsg = { bad: true, text: e.message }; }
   loadBlocks();
 }
+// Muted people (8.1.1 P25): their asks still show and never ring; Unmute undoes it
+async function loadMutes() {
+  if (S.mutesLoading) return; S.mutesLoading = true;
+  try { const m = await api('GET', '/v1/member/mutes'); S.mutes = Array.isArray(m && m.mutes) ? m.mutes : []; }
+  catch (e) { S.mutes = []; } // an operator without asks between people answers 404: no list
+  S.mutesLoading = false;
+  if (S.view === 'ais') renderAIs();
+}
+async function unmute(m) {
+  try { await api('DELETE', '/v1/member/mutes/' + enc(m.mute_id)); S.aiMsg = { text: (m.name || 'They') + ' is unmuted: their asks can ring you again.' }; }
+  catch (e) { S.aiMsg = { bad: true, text: e.message }; }
+  loadMutes();
+}
 async function loadConns() {
   try { const c = await api('GET', '/v1/member/connections'); S.conns = Array.isArray(c && c.connections) ? c.connections : []; S.connLimit = c && c.limit; }
   catch (e) { S.connsErr = e.message; if (S.conns === null) S.conns = []; }
@@ -468,6 +670,7 @@ async function loadConns() {
 
 /* ---------- answering: nothing leaves this computer for five seconds ---------- */
 function labelFor(t, body) {
+  if (body.action === 'pass') return 'Pass on to ' + (nameOfMember(body.to) || 'one of your people') + (body.note ? ', with your line' : '');
   if (body.action === 'call_not_now') return 'Decline this call';
   if (body.action === 'note') return 'Note: ' + body.note;
   if (body.action === 'answer') return body.choice != null ? body.choice : '“' + (body.text || '') + '”';
@@ -493,9 +696,12 @@ function answer(t, body) {
   p.timer = setTimeout(() => flush(t.task_id), UNDO_MS);
   S.pending.set(t.task_id, p);
   if (body.action !== 'note') {
+    // The press shows where the eye is: the chosen button turns gold with a line under it; then the next ask comes up.
     const i = order.indexOf(t.task_id);
     const rest = order.filter((id) => id !== t.task_id && !S.pending.has(id));
-    S.sel = order.slice(i + 1).find((id) => rest.includes(id)) || rest[rest.length - 1] || null;
+    const next = order.slice(i + 1).find((id) => rest.includes(id)) || rest[rest.length - 1] || null;
+    clearTimeout(S.advanceTimer);
+    S.advanceTimer = setTimeout(() => { if (S.sel === t.task_id && S.pending.has(t.task_id)) { S.sel = next; render(); } }, 550);
   }
   render();
   showUndo();
@@ -520,16 +726,21 @@ async function flush(id, keepalive) {
     render(); return;
   }
   try {
-    const res = await api('POST', '/v1/member/tasks/' + enc(id), p.body, { keepalive });
+    const res = p.body.action === 'pass'
+      ? await api('POST', '/v1/member/tasks/' + enc(id) + '/pass', { to: p.body.to, ...(p.body.note ? { note: p.body.note } : {}) }, { keepalive })
+      : await api('POST', '/v1/member/tasks/' + enc(id), p.body, { keepalive });
+    if (p.body.action === 'pass' && res && res.passed_to) p.passedTo = res.passed_to;
     if (p.body.action === 'note') {
       const live = S.open.find((x) => x.task_id === id);
       if (live) live.notes = Array.isArray(res && res.notes) ? res.notes : (live.notes || []).concat([{ at: new Date().toISOString(), note: p.body.note, by: 'person' }]);
       draft(id).note = '';
     } else {
-      S.open = S.open.filter((x) => x.task_id !== id);
+      S.open = S.open.filter((x) => x.task_id !== id); markClosed(id);
       const reply = Object.assign({ at: new Date().toISOString(), choice: null, text: null, note: null }, p.body,
         p.body.action === 'approve' ? { approved_text: p.body.text || t.step.text } : {});
-      S.sentLocal.set(id, Object.assign({}, t, { state: (res && res.state) || 'answered', reply }));
+      S.sentLocal.set(id, Object.assign({}, t, { state: p.body.action === 'pass' ? 'passed' : (res && res.state) || 'answered', reply,
+        passed_to: p.body.action === 'pass' ? (p.passedTo || { member_id: p.body.to, name: nameOfMember(p.body.to) }) : undefined }));
+      if (p.body.action === 'pass' && SEND_ON) setTimeout(loadSent, 1500);
       S.drafts.delete(id);
       if (S.later[id]) { delete S.later[id]; saveLater(); }
     }
@@ -537,10 +748,10 @@ async function flush(id, keepalive) {
   } catch (e) {
     if (p.body.local) return;
     if (e.status === 409) {
-      S.open = S.open.filter((x) => x.task_id !== id); S.drafts.delete(id);
+      S.open = S.open.filter((x) => x.task_id !== id); S.drafts.delete(id); markClosed(id);
       showSent(p, 'Already answered on another device. Nothing changed.');
     } else if (e.status === 404 || e.status === 410) {
-      S.open = S.open.filter((x) => x.task_id !== id);
+      S.open = S.open.filter((x) => x.task_id !== id); markClosed(id);
       showSent(p, 'Not sent: this ask is gone (its AI withdrew it, or was revoked).', true);
     } else {
       S.failed.set(id, { message: e.message, body: p.body });
@@ -553,6 +764,8 @@ async function flush(id, keepalive) {
   setTimeout(() => refresh(true), 1200);
 }
 function undo() {
+  clearTimeout(S.advanceTimer);
+  if (S.pendingSend) return undoSend();
   const last = [...S.pending.values()].sort((a, b) => b.until - a.until)[0];
   if (!last) return false;
   clearTimeout(last.timer); S.pending.delete(last.task.task_id);
@@ -573,7 +786,7 @@ function showUndo() {
   const ps = [...S.pending.values()].sort((a, b) => b.until - a.until);
   if (!ps.length) { box.hidden = true; return; }
   const p = ps[0];
-  box.className = 'undo'; box.replaceChildren();
+  box.className = 'undo'; fill(box);
   const secs = h('span', { class: 'u-secs' });
   const bar = h('div', { class: 'u-bar' });
   box.append(h('div', { class: 'u-row' },
@@ -594,7 +807,7 @@ function showSent(p, msg, bad) {
   if (S.pending.size) { showUndo(); if (!bad) return; }
   const box = $('#undo');
   clearInterval(undoTick); clearTimeout(sentTimer);
-  box.className = 'undo ' + (bad ? 'failed' : 'sent'); box.replaceChildren();
+  box.className = 'undo ' + (bad ? 'failed' : 'sent'); fill(box);
   box.append(h('div', { class: 'u-row' }, h('span', { class: 'u-what' }, msg || [p.body.action === 'note' ? 'Note sent to ' : 'Sent to ', h('b', null, whoName(p.task)), ': ', p.label])));
   box.hidden = false;
   sr(typeof msg === 'string' ? msg : 'Sent to ' + whoName(p.task) + '.');
@@ -604,8 +817,11 @@ function showSent(p, msg, bad) {
 function takeCall(t) {
   const u = safeUrl(t.offer.seat_url);
   if (!u) { flashCard('This call has no page to open. Take it on your phone.'); return; }
-  const w = window.open(u.href, '_blank', 'noopener,noreferrer');
-  sr(w === null ? 'The call opened in a new tab.' : 'The call opened in a new tab.');
+  // With noopener the browser returns null whether or not the tab opened, so the card also keeps a plain link to it
+  window.open(u.href, '_blank', 'noopener,noreferrer');
+  (S.callOpened || (S.callOpened = {}))[t.task_id] = Date.now();
+  S.cardSig = ''; if (S.view === 'asks') renderCard();
+  sr('The call opens in a new tab. If no tab opened, the card has a link to it.');
 }
 async function loadSeat(t) {
   const o = t.offer, id = o.seat_id;
@@ -625,7 +841,7 @@ function blockAsker(t) {
     try {
       if (own) await api('PATCH', '/v1/member/connections/' + enc(t.connection.id), { blocked: true });
       else await api('POST', '/v1/member/blocks', t.isCall ? { call_id: t.offer.call_id } : { task_id: t.task_id });
-      if (t.isCall) S.offers = S.offers.filter((o) => o.call_id !== t.offer.call_id); // the service may still list it
+      if (t.isCall) { S.blockedCalls.add(t.offer.call_id); S.offers = S.offers.filter((o) => o.call_id !== t.offer.call_id); } // the service may still list it
       showSent({ task: t, body: { action: 'block' }, label: '' }, name + ' is blocked.');
       S.blocks = null; S.conns = null;
     } catch (e) { showSent({ task: t, body: {}, label: '' }, 'Not blocked: ' + e.message, true); }
@@ -675,14 +891,14 @@ function setFavicon(n, urgent) {
 function renderChecked() {
   const el = $('#checked');
   if (S.lastErr) { el.textContent = 'Not reached · trying again'; el.title = S.lastErr; el.classList.add('bad'); }
-  else if (S.lastOk) { el.textContent = 'Checked ' + fmtClock.format(S.lastOk); el.title = 'Looks again every 15 seconds while this tab is open.'; el.classList.remove('bad'); }
+  else if (S.lastOk) { fill(el, h('span', { class: 'checked-every' }, 'Looks every 15 s · '), 'last ' + fmtClock.format(S.lastOk)); el.title = 'The list updates by itself while this tab is open.'; el.classList.remove('bad'); }
 }
 function renderBanner() {
   const b = $('#banner');
   const now = visibleOpen().filter((t) => urg(t) === 0 && !isLater(t) && !t.isCall);
   if (!now.length || S.view !== 'asks') { b.hidden = true; return; }
   const first = fair(now)[0];
-  b.replaceChildren(h('span', { class: 'label' }, 'Now'),
+  fill(b, h('span', { class: 'label' }, 'Now'),
     h('span', null, now.length === 1 ? (first.isCall ? ['A call for you: ', String(first.offer.minutes || '?'), ' minutes', first.offer.pay && first.offer.pay.unpaid_test ? ', unpaid test' : '', '. ', whoName(first)] : [whoName(first), ': ', first.title])
       : [String(now.length), ' need you now. First: ', whoName(first), ': ', first.title]),
     ...(S.sel === first.task_id ? [] : [h('button', { class: 'btn', type: 'button', onclick: () => { S.sel = first.task_id; render(); focusCard(); } }, 'Show')]));
@@ -699,8 +915,8 @@ function renderChips() {
   t ? (t.connection && ICONS[t.connection.icon] ? svgIcon(t.connection.icon) : null) : null, label, h('b', null, String(n)));
   const kids = [chip(null, 'All', list.length, null)];
   [...groups.entries()].sort((a, b) => b[1].n - a[1].n || whoName(a[1].t).localeCompare(whoName(b[1].t)))
-    .forEach(([k, g]) => kids.push(chip(k, whoName(g.t), g.n, g.t)));
-  wrap.replaceChildren(...(list.length ? kids : []));
+    .forEach(([k, g]) => kids.push(chip(k, whoLabel(g.t), g.n, g.t)));
+  fill(wrap, ...(list.length ? kids : []));
   wrap.hidden = !list.length;
   $('#view-asks .list-head').hidden = !list.length;
   $('#sort').value = S.sort;
@@ -720,15 +936,18 @@ function rowFor(t, opts = {}) {
   if (!opts.history && last && last.by === 'asker') flags.push(h('span', { class: 'flag replied' }, 'Replied'));
   else if (!opts.history && (last && last.by === 'person' || (p && p.body.action === 'note'))) flags.push(h('span', { class: 'flag noted' }, 'Note sent'));
   if (!opts.history && S.failed.has(t.task_id)) flags.push(h('span', { class: 'flag now' }, 'Not sent'));
+  const left = !opts.history && !t.isCall && leftWords(t.expires_at);
+  if (left) flags.push(h('span', { class: 'flag closing', title: 'Closes at ' + when(t.expires_at) }, left.replace(' left', '').replace(' minutes', ' min').replace(' minute', ' min')));
   const sub = opts.history
     ? [h('span', { class: 'from' }, whoName(t)), h('span', { class: 'kind' }, '· ' + historyAnswer(t))]
-    : [...flags, h('span', { class: 'from' }, whoName(t)), h('span', { class: 'kind' }, '· ' + KIND_WORD[k])];
+    : [...flags, h('span', { class: 'from' + (t.sender ? ' person' : '') }, whoLabel(t)), h('span', { class: 'kind' }, '· ' + KIND_WORD[k])];
   const selected = opts.history ? S.hsel === t.task_id : S.sel === t.task_id;
-  return h('li', { class: 'item' + (selected ? ' sel' : ''), role: 'option', id: (opts.history ? 'h-' : 'o-') + t.task_id,
+  const fresh = !opts.history && isNew(t);
+  return h('li', { class: 'item' + (selected ? ' sel' : '') + (fresh ? ' new' : ''), role: 'option', id: (opts.history ? 'h-' : 'o-') + t.task_id,
     'aria-selected': selected ? 'true' : 'false', dataset: { id: t.task_id },
     onclick: () => { if (opts.history) { S.hsel = t.task_id; renderHistory(); } else { S.sel = t.task_id; render(); } openReading(); } },
   t.isCall ? iconFor(null, t.from) : taskIcon(t), h('span', { class: 't' }, t.title || (t.step && t.step.text) || 'An ask'),
-  h('span', { class: 'age', title: when(opts.history && t.reply ? t.reply.at : t.created_at) }, age(opts.history && t.reply ? t.reply.at : t.created_at)),
+  h('span', { class: 'age', title: when(opts.history && t.reply ? t.reply.at : t.created_at) }, fresh ? h('span', { class: 'dot', 'aria-label': 'new', title: 'New since you last looked on this computer' }) : null, age(opts.history && t.reply ? t.reply.at : t.created_at)),
   h('span', { class: 'sub' }, sub));
 }
 function renderList() {
@@ -738,14 +957,16 @@ function renderList() {
   lastOrder = flat.map((t) => t.task_id);
   if (S.sel && !lastOrder.includes(S.sel) && !S.pending.has(S.sel) && !S.failed.has(S.sel)) S.sel = null;
   if (!S.sel && flat.length) S.sel = flat[0].task_id;
-  const kids = [];
+  const kids = SEND_ON ? sendNewsRows() : [];
   for (const g of groups) {
     if (g.head) kids.push(h('li', { class: 'group-h' + (g.later ? ' later-h' : ''), role: 'presentation' },
       g.later ? null : taskIcon(g.items[0]), g.later ? 'Later · kept on this computer' : g.head, h('span', { class: 'n' }, String(g.items.length))));
     for (const t of g.items) kids.push(rowFor(t));
   }
-  if (!flat.length) kids.push(h('li', { class: 'list-empty', role: 'presentation' }, S.filter ? 'Nothing from this AI.' : 'No open asks.'));
-  ol.replaceChildren(...kids);
+  if (!flat.length) kids.push(h('li', { class: 'list-empty', role: 'presentation' }, S.firstLook ? (S.lastErr ? 'Not reached yet; trying again.' : 'Loading your asks…')
+    : S.filter ? 'Nothing from this AI.' : 'No open asks.'));
+  if (SEND_ON && sendNewsRows().length && flat.length) kids.splice(sendNewsRows().length, 0, h('li', { class: 'group-h people-h', role: 'presentation' }, 'Asks for you'));
+  fill(ol, ...kids);
   ol.setAttribute('aria-activedescendant', S.sel ? 'o-' + S.sel : '');
   const selEl = S.sel && document.getElementById('o-' + S.sel);
   if (selEl) selEl.scrollIntoView({ block: 'nearest' });
@@ -753,22 +974,25 @@ function renderList() {
 
 /* ---------- rendering: the card ---------- */
 function cardSignature(t) {
-  if (!t) return 'empty:' + (S.conns ? S.conns.length : '-') + ':' + S.lastOk + ':' + S.history.length;
+  if (!t) return 'empty:' + (S.firstLook ? 'L' + (S.lastErr ? 'E' : '') + (S.firstSlow ? 'S' : '') : '') + (S.conns ? S.conns.length : '-') + ':' + S.lastOk + ':' + S.history.length + ':' + JSON.stringify(S.notice || null);
   const p = S.pending.get(t.task_id);
-  if (t.isCall) { const st = S.seats.get(t.offer.seat_id); return JSON.stringify([t.task_id, t.offer.state, t.offer.held_until, st ? (st.loading ? 'l' : st.error || 'ok') : '', !!S.pending.get(t.task_id)]); }
+  if (t.isCall) { const st = S.seats.get(t.offer.seat_id); return JSON.stringify([t.task_id, t.offer.state, t.offer.held_until, t.offer.card || null, st ? (st.loading ? 'l' : st.error || 'ok') : '', !!S.pending.get(t.task_id)]); }
   const m = S.media.get(t.task_id);
-  return JSON.stringify([t.task_id, t.notes, t.step, t.card, t.title, t.unlocks, t.urgency, !!(p), p && p.body.note, S.failed.get(t.task_id), isLater(t), S.gone, m ? (m.url || m.error || 'loading') : '']);
+  return JSON.stringify([JSON.stringify(S.notice || null), t.task_id, t.notes, t.step, t.card, t.title, t.unlocks, t.urgency, !!(p), p && p.body.note, S.failed.get(t.task_id), isLater(t), S.gone, m ? (m.url || m.error || 'loading') : '', leftWords(t.expires_at)]);
 }
+let seenTimer = null;
 function renderCard(force) {
   const pane = $('#card');
   const t = selectedTask();
+  clearTimeout(seenTimer);
+  if (t && isNew(t) && !document.hidden) seenTimer = setTimeout(() => { markSeen(t.task_id); renderList(); renderChips(); }, 1200);
   const sig = cardSignature(t);
   if (!force && sig === S.cardSig && pane.firstChild) return;
   // keep focus and caret across a redraw
   const ae = document.activeElement;
   const keep = ae && pane.contains(ae) && ae.dataset && ae.dataset.field ? { f: ae.dataset.field, s: ae.selectionStart, e: ae.selectionEnd } : null;
   S.cardSig = sig;
-  pane.replaceChildren(t ? cardFor(t) : emptyCard());
+  fill(pane, ...[noticeCard(), t ? cardFor(t) : emptyCard()].filter(Boolean));
   pane.scrollTop = keep ? pane.scrollTop : 0;
   if (keep) { const f = pane.querySelector('[data-field="' + keep.f + '"]'); if (f) { f.focus(); try { f.setSelectionRange(keep.s, keep.e); } catch (e) { /* not a text field */ } } }
 }
@@ -779,11 +1003,19 @@ function flashCard(msg) {
 }
 function whoBlock(t, extra) {
   const yours = t.connection && t.connection.yours;
+  if (t.sender && !t.passed_on_by) return h('div', { class: 'who' }, iconFor(null, t.sender.name || whoName(t), true),
+    h('div', null, h('div', { class: 'name person' }, t.sender.name || whoName(t)), h('div', { class: 'basis' }, t.sender.behind || 'A person whose panel you joined')),
+    h('div', { class: 'meta' }, extra || h('span', { class: 'label' }, t.urgency === 'now' ? 'Now' : t.urgency === 'today' ? 'Today' : 'Whenever'), h('span', { class: 'when' }, 'Asked ' + when(t.created_at))));
+  const pb = t.passed_by || t.passed_on_by; const pbName = pb && (typeof pb === 'string' ? pb : (pb.name || pb.alias));
+  if (pbName) return h('div', { class: 'who' }, taskIcon(t, true),
+    h('div', null, h('div', { class: 'name' }, whoName(t)), h('div', { class: 'basis' }, 'Passed on to you by ' + pbName + (t.pass_note ? ': “' + t.pass_note + '”' : ''))),
+    h('div', { class: 'meta' }, extra || h('span', { class: 'label' }, t.urgency === 'now' ? 'Now' : t.urgency === 'today' ? 'Today' : 'Whenever'), h('span', { class: 'when' }, 'Asked ' + when(t.created_at))));
   return h('div', { class: 'who' }, taskIcon(t, true),
     h('div', null, h('div', { class: 'name' }, whoName(t)),
       h('div', { class: 'basis' }, yours ? 'Your AI · you connected it' : 'Named by the asker; not checked by person.tools')),
     h('div', { class: 'meta' }, extra || h('span', { class: 'label' }, t.urgency === 'now' ? 'Now' : t.urgency === 'today' ? 'Today' : 'Whenever'),
-      h('span', { class: 'when' }, 'Asked ' + when(t.created_at))));
+      h('span', { class: 'when' }, 'Asked ' + when(t.created_at)),
+      !extra && leftWords(t.expires_at) ? h('span', { class: 'when closing' }, 'Closes at ' + fmtClock.format(ms(t.expires_at)) + ' · ' + leftWords(t.expires_at)) : null));
 }
 function blocksFor(t) {
   const blocks = t.card && Array.isArray(t.card.blocks) ? t.card.blocks : [];
@@ -795,9 +1027,84 @@ function blocksFor(t) {
     else if (Array.isArray(b.facts)) out.push(h('dl', { class: 'b-facts' }, b.facts.filter((f) => f && f.label !== undefined).map((f) => [h('dt', null, String(f.label)), h('dd', null, String(f.value ?? ''))])));
     else if (b.price !== undefined) out.push(h('p', { class: 'b-price' }, typeof b.price === 'object' ? [b.price.amount, ' ', b.price.currency || '', b.price.label ? ' · ' + b.price.label : ''] : String(b.price)));
     else if (b.when_where !== undefined) out.push(h('p', { class: 'b-when' }, typeof b.when_where === 'object' ? [b.when_where.when || '', b.when_where.when && b.when_where.where ? ' · ' : '', b.when_where.where || ''] : String(b.when_where)));
+    else if (b.quote && typeof b.quote === 'object') out.push(h('blockquote', { class: 'b-quote' }, h('p', null, '\u201c' + String(b.quote.text || '') + '\u201d'), b.quote.by ? h('p', { class: 'b-by' }, String(b.quote.by)) : null));
     // media, choices and input blocks are drawn by the Desk from the ask itself; any other block is ignored (8.1)
   }
   return out.length ? h('div', { class: 'blocks' }, out) : null;
+}
+
+/* ---------- branded asks (section 27: CARD-1 to CARD-10) ----------
+   The brand dresses the card; every control stays the Desk's own (CARD-1). The mark is drawn by the Desk in one slot at the
+   card's top edge (CARD-3); the dressing goes only on the brand's own ground for this mode (CARD-4); every brand colour is
+   checked on the ground it is drawn on, words 4.5:1 and a glyph 3:1, and the Desk's own ink stands in where one fails (CARD-5). */
+const HEXC = /^#[0-9a-f]{6}$/i;
+function lum(hex) {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function contrast(a, b) { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function darkNow() { const th = document.documentElement.getAttribute('data-theme'); return th ? th === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; }
+function token(name, light, dark) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return HEXC.test(v) ? v.toLowerCase() : (darkNow() ? dark : light); }
+function brandOf(t) { const b = t && t.brand; return b && typeof b === 'object' && typeof b.name === 'string' && b.name ? b : null; }
+function brandLook(b) {
+  const g = b.grounds && typeof b.grounds === 'object' ? b.grounds[darkNow() ? 'dark' : 'light'] : null;
+  if (!HEXC.test(g || '')) return null;                                               // no ground for this mode: the Desk's own card
+  if (contrast(token('--ink', '#1d1d1b', '#faf8f3'), g) < 4.5) return null;            // the Desk's own words and controls must read on it
+  const c = b.colours && typeof b.colours === 'object' && !Array.isArray(b.colours) ? b.colours : {};
+  const words = (v) => HEXC.test(v || '') && contrast(v, g) >= 4.5 ? v : null;
+  return { ground: g, ink: words(c.ink), inkSoft: words(c.ink_soft), rule: HEXC.test(c.rule || '') ? c.rule : null, round: b.corners === 'round' };
+}
+const markPics = new Map();
+function markPicture(url) {   // a mark's picture, served by the server with no credential; any other address is never loaded
+  if (!url || typeof url !== 'string' || url.indexOf(API + '/') !== 0) return null;
+  const e = markPics.get(url); if (e) return e.src || null;
+  markPics.set(url, { loading: true });
+  fetch(url, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' }).then((r) => r.ok ? r.blob() : Promise.reject(r.status))
+    .then((bl) => { if (!/^image\/(png|jpeg|webp)$/.test(bl.type || '')) throw 415; markPics.set(url, { src: URL.createObjectURL(bl) }); S.cardSig = ''; render(); if (S.view === 'ais') renderAIs(); })
+    .catch(() => markPics.set(url, { failed: true }));
+  return null;
+}
+function brandMark(b, state, ground) {
+  const st = b.mark && b.mark.states && typeof b.mark.states === 'object' ? b.mark.states : {};
+  const m = st[state] || st.idle || st.needs_you;
+  if (!m || typeof m !== 'object') return null;
+  if (m.media || m.url) { const src = markPicture(m.url); return src ? h('img', { class: 'b-mark', src, alt: '' }) : null; }
+  if (!['disc', 'ring', 'square', 'frame'].includes(m.glyph)) return null;
+  const g = ground || token('--paper', '#faf8f3', '#141413');
+  const colour = HEXC.test(m.colour || '') && contrast(m.colour, g) >= 3 ? m.colour : 'currentColor';   // the Desk's ink, same shape
+  const NS = 'http://www.w3.org/2000/svg', sw = 3;   // a 20-unit mark; an outline is 15% of it
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('class', 'b-mark'); svg.setAttribute('aria-hidden', 'true');
+  const round = m.glyph === 'disc' || m.glyph === 'ring', outline = m.glyph === 'ring' || m.glyph === 'frame';
+  const el = document.createElementNS(NS, round ? 'circle' : 'rect');
+  if (round) { el.setAttribute('cx', '10'); el.setAttribute('cy', '10'); el.setAttribute('r', String(outline ? 10 - sw / 2 : 10)); }
+  else { const o = outline ? sw / 2 : 0; el.setAttribute('x', String(o)); el.setAttribute('y', String(o)); el.setAttribute('width', String(20 - 2 * o)); el.setAttribute('height', String(20 - 2 * o)); }
+  if (outline) { el.setAttribute('fill', 'none'); el.setAttribute('stroke', colour); el.setAttribute('stroke-width', String(sw)); } else el.setAttribute('fill', colour);
+  svg.appendChild(el); return svg;
+}
+function brandLine(t, look) {   // the mark, the brand's name and its domain (CARD-3, CARD-6); a test brand says so (CARD-7)
+  const b = brandOf(t); if (!b) return null;
+  const mark = brandMark(b, !t.state || t.state === 'open' ? 'needs_you' : 'answered', look && look.ground);
+  return h('div', { class: 'brand-line' }, mark ? h('span', { class: 'b-slot' }, mark) : null, h('b', { class: 'b-name' }, b.name),
+    b.domain ? h('span', { class: 'b-domain' }, String(b.domain)) : null,
+    b.test === true || b.verified === false ? h('span', { class: 'flag test-brand' }, 'Test brand, not verified') : null);
+}
+function dress(card, look) {   // CSSOM, not a style attribute: the page's policy allows no inline style
+  if (!look) return card;
+  card.classList.add('branded'); if (look.round) card.classList.add('round');
+  card.style.setProperty('--b-ground', look.ground);
+  if (look.ink) card.style.setProperty('--b-ink', look.ink);
+  if (look.inkSoft) card.style.setProperty('--b-ink-soft', look.inkSoft);
+  if (look.rule) card.style.setProperty('--b-rule', look.rule);
+  return card;
+}
+// Done is on every ask (CARD-9); an approval takes it where the server says it offers branded asks (discovery)
+const doneOk = (t) => { const k = kindOf(t); return k === 'choice' || k === 'words' || k === 'link' || k === 'command' || (k === 'approve' && S.features.has('branded_asks')); };
+// A choice that takes a line (CARD-10): choosing it opens the line, labelled by the asker, and sends the choice with the words
+const lineFor = (t, c) => { const lf = t.step && t.step.line_for; return lf && typeof lf === 'object' && typeof lf[c] === 'string' ? lf[c] : null; };
+function choose(t, c) {
+  if (!lineFor(t, c)) return answer(t, { action: 'answer', choice: c });
+  const d = draft(t.task_id); d.lineFor = c; S.cardSig = ''; renderCard(true);
+  setTimeout(() => { const f = $('#f-line'); if (f) f.focus(); }, 0);
 }
 function mediaFor(t) {
   if (!t.media) return null;
@@ -869,7 +1176,9 @@ function callCard(t) {
     h('div', { class: 'ai-says' }, h('span', { class: 'label' }, 'An AI is asking'), h('span', { class: 'label' }, '· A call: ' + kind),
       unpaid ? h('span', { class: 'flag now' }, 'Unpaid test') : null),
     h('h2', { class: 'card-title', id: 'card-title' }, o.ask || 'A call')];
-  const facts = [['Time', (o.minutes || (sd && sd.minutes) || '?') + ' minutes'],
+  const callBlocks = blocksFor({ card: o.card || (sd && sd.card) || null });
+  if (callBlocks) kids.push(callBlocks);
+  const facts = [['Your time', 'about ' + (o.minutes || (sd && sd.minutes) || '?') + ' minutes'],
     ['Pay', unpaid ? 'Unpaid test: nobody is paid' : (o.pay && o.pay.per_person_usd ? '$' + o.pay.per_person_usd : 'Shown on the call')]];
   if (sd) {
     facts.push(['Content', sd.content_rating || 'not given']);
@@ -883,8 +1192,13 @@ function callCard(t) {
   else if (seat && seat.error) kids.push(h('p', { class: 'error' }, 'The call\'s details could not be read: ' + seat.error));
   const yn = yesNo(t), ans = [];
   if (yn.no) ans.push(ansBtn('Decline', '←', () => answer(t, yn.no.body)));
-  ans.push(ansBtn(o.state === 'offered' ? 'Take this call and ' + verb : 'Open the call again', '→', () => takeCall(t), 'btn-you'));
+  const unchecked = /not checked/i.test(t.basis || '');
+  ans.push(ansBtn(o.state === 'offered' ? 'Take this call and ' + verb : 'Open the call again', '→', () => takeCall(t), unchecked ? '' : 'btn-you'));
+  if (unchecked) kids.push(h('p', { class: 'note-state' }, 'person.tools has not checked who "' + t.from + '" is: the name is the asker\'s own. Take the call only if you know them.'));
   kids.push(h('div', { class: 'answers', role: 'group', 'aria-label': 'This call' }, ans));
+  const opened = S.callOpened && S.callOpened[t.task_id], href = opened && safeUrl(o.seat_url);
+  if (href) kids.push(h('p', { class: 'help call-opened' }, 'Opened in a new tab at ' + fmtClock.format(opened) + '. No new tab? ',
+    h('a', { href: href.href, target: '_blank', rel: 'noopener noreferrer' }, 'Open the call page'), '.'));
   kids.push(h('p', { class: 'footnote' }, 'The call opens in a new tab on run.person.tools. Nothing starts until you press play there, and Stop is on every screen. ',
     o.state === 'offered' ? 'Decline is free and leaves no mark; this call is then not offered to you again. If you do nothing, the hold simply ends.' : ''));
   kids.push(h('div', { class: 'legend', 'aria-hidden': 'true' }, h('span', null, kbd('J'), kbd('K'), 'move'),
@@ -892,6 +1206,9 @@ function callCard(t) {
     h('span', null, kbd('Z'), 'undo'), h('span', null, kbd('?'), 'every key')));
   kids.push(h('p', { class: 'card-foot' }, h('button', { class: 'linkish', type: 'button', onclick: () => blockAsker(t) }, 'Block ' + t.from + '…')));
   return h('article', { class: 'card', 'aria-labelledby': 'card-title' }, kids);
+}
+function passBtn(t) {
+  return canPass() && !t.isCall ? h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openPass(t), title: 'Hand this ask to one of your people' }, 'Pass on', kbd('P')) : null;
 }
 function laterBtn(t) {
   return h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => toggleLater(t), title: 'Only this computer knows; the AI is not told' },
@@ -903,8 +1220,10 @@ function cardFor(t) {
   const p = S.pending.get(t.task_id), failed = S.failed.get(t.task_id);
   const kids = [];
   kids.push(h('button', { class: 'linkish back', type: 'button', onclick: () => closeReading() }, '← The list'));
+  const brand = brandOf(t), look = brand ? brandLook(brand) : null;
+  if (brand) kids.push(brandLine(t, look));
   kids.push(whoBlock(t));
-  kids.push(h('div', { class: 'ai-says' }, h('span', { class: 'label' }, 'An AI is asking'),
+  kids.push(h('div', { class: 'ai-says' + (t.sender && !t.passed_on_by ? ' mine' : '') }, h('span', { class: 'label' }, t.sender && !t.passed_on_by ? 'A person is asking' : 'An AI is asking'),
     h('span', { class: 'label' }, '· ' + KIND_WORD[k]), isLater(t) ? h('span', { class: 'flag later' }, 'Later') : null));
   kids.push(h('h2', { class: 'card-title', id: 'card-title' }, t.title || 'An ask'));
   if (S.gone) { kids.push(h('p', { class: 'help' }, S.gone)); S.gone = null; }
@@ -933,8 +1252,9 @@ function cardFor(t) {
     kids.push(h('p', { class: 'cmd-where' }, s.where ? ['Where: ', h('b', null, s.where)] : null,
       s.where ? '. ' : '', t.shell_only ? t.shell_only : 'Copy the line and run it yourself; person.tools cannot run it for you.'));
   } else if (s.text) {
-    kids.push(h('div', { class: 'ask-words' }, h('p', null, linked(s.text))));
+    kids.push(h('div', { class: 'ask-words' + (t.sender ? ' mine' : '') }, h('p', null, linked(s.text))));
   }
+  if (k === 'link' && s.sign_in_page) kids.push(h('p', { class: 'note-state' }, 'This link opens a sign-in page' + (s.domain ? ' on ' + s.domain : '') + '. Sign in only where you meant to; nobody at person.tools will ever ask for your password.'));
   if (k === 'link') {
     const u = safeUrl(s.url);
     kids.push(h('div', { class: 'linkbox' }, h('span', { class: 'host' }, u ? u.host : 'Not a web address'),
@@ -942,6 +1262,7 @@ function cardFor(t) {
       u ? h('a', { class: 'btn', href: u.href, target: '_blank', rel: 'noopener noreferrer', id: 'open-link' }, 'Open link', kbd('O')) : null));
   }
   if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', linked(t.unlocks), '”')));
+  if (leftWords(t.expires_at)) kids.push(h('p', { class: 'note-state' }, 'If you do not answer by ' + fmtClock.format(ms(t.expires_at)) + ', the ask closes and ' + whoName(t) + ' is told you did not answer. Nothing is chosen for you.'));
 
   // Answers: the kinds of 8.1, with the ask's own words on its two answers
   const ans = [];
@@ -949,15 +1270,28 @@ function cardFor(t) {
   const isChosen = (b) => chosen && chosen.action === b.action && (chosen.choice ?? null) === (b.choice ?? null);
   if (k === 'choice') {
     const many = s.choices.length > 2;
-    s.choices.forEach((c, i) => {
+    (many ? s.choices : twoChoices(s.choices).filter((c) => c !== undefined)).forEach((c, i) => {
       const body = { action: 'answer', choice: c };
       const key = many ? String(i + 1) : (i === 0 ? '←' : i === 1 ? '→' : String(i + 1));
-      ans.push(ansBtn(c, key, () => answer(t, body), isChosen(body) ? 'chosen' : ''));
+      ans.push(ansBtn(lineFor(t, c) ? c + '…' : c, key, () => choose(t, c), isChosen(body) || d.lineFor === c ? 'chosen' : ''));
     });
     ans.push(h('span', { class: 'spacer' }));
     ans.push(ansBtn('Not now', 'X', () => answer(t, { action: 'not_now' })));
-    ans.push(laterBtn(t));
+    ans.push(ansBtn('Done', 'D', () => answer(t, { action: 'done' })));
+    ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('div', { class: 'answers choices', role: 'group', 'aria-label': 'Your answer' }, ans));
+    if (d.lineFor && lineFor(t, d.lineFor)) {
+      const c = d.lineFor, kb = s.keyboard;
+      const sendLine = () => { const v = (d.lineText || '').trim(); if (!v) { flashCard('Write the line first.'); return; } answer(t, { action: 'answer', choice: c, text: v }); };
+      const input = h('input', { id: 'f-line', type: kb === 'email' ? 'email' : kb === 'phone' ? 'tel' : 'text', inputmode: kb === 'number' ? 'decimal' : kb === 'phone' ? 'tel' : kb === 'email' ? 'email' : null,
+        autocomplete: 'off', maxlength: '4000', dataset: { field: 'line' }, 'aria-describedby': 'card-title' });
+      input.value = d.lineText || '';
+      input.addEventListener('input', () => { d.lineText = input.value; });
+      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); sendLine(); } });
+      kids.push(h('div', { class: 'field line-for' }, h('label', { class: 'label', for: 'f-line' }, lineFor(t, c)), input,
+        h('div', { class: 'answers' }, ansBtn('Send ' + c, '↵', sendLine, 'btn-you'),
+          h('button', { class: 'linkish', type: 'button', onclick: () => { d.lineFor = null; S.cardSig = ''; renderCard(true); } }, 'Choose again'))));
+    }
   } else if (k === 'words') {
     const send = () => { const v = (d.text || '').trim(); if (!v) { flashCard('Write a line first, or choose Done or Not now.'); return; } answer(t, { action: 'answer', text: v }); };
     kids.push(h('div', { class: 'field' },
@@ -968,38 +1302,53 @@ function cardFor(t) {
     ans.push(h('span', { class: 'spacer' }));
     ans.push(ansBtn(yn.no.label, '←', () => answer(t, yn.no.body), isChosen(yn.no.body) ? 'chosen' : ''));
     ans.push(ansBtn(yn.yes.label, '→', () => answer(t, yn.yes.body), isChosen(yn.yes.body) ? 'chosen' : ''));
-    ans.push(laterBtn(t));
+    ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('div', { class: 'answers', role: 'group', 'aria-label': 'Your answer' }, ans));
   } else if (k === 'approve' || k === 'link' || k === 'command') {
     ans.push(ansBtn(yn.no.label, '←', () => answer(t, yn.no.body), isChosen(yn.no.body) ? 'chosen' : ''));
     ans.push(ansBtn(yn.yes.label, '→', () => answer(t, yn.yes.body), isChosen(yn.yes.body) ? 'chosen' : ''));
     ans.push(h('span', { class: 'spacer' }));
     if (k === 'approve') ans.push(ansBtn('Not now', 'X', () => answer(t, { action: 'not_now' })));
-    ans.push(laterBtn(t));
+    if (k === 'approve' && doneOk(t)) ans.push(ansBtn('Done', 'D', () => answer(t, { action: 'done' })));
+    ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('div', { class: 'answers', role: 'group', 'aria-label': 'Your answer' }, ans));
-    if (k === 'approve') kids.push(h('p', { class: 'footnote' }, 'Approvals sent from the Desk carry no device signature, and ' + whoName(t) + ' can see that.'));
+    if (k === 'approve') kids.push(h('p', { class: 'footnote' }, 'Approvals sent from the Desk carry no device signature, and ' + whoName(t) + ' can see that: if it needs a signed approval, it may refuse this one. Approve on your phone for a signed one.'));
   } else {
     ans.push(ansBtn('Not now', 'X', () => answer(t, { action: 'not_now' })));
-    ans.push(laterBtn(t));
+    ans.push(laterBtn(t)); ans.push(passBtn(t));
     kids.push(h('p', { class: 'help' }, 'This kind of ask is new to the Desk. You can say Not now, send a note, or answer it on your phone.'));
     kids.push(h('div', { class: 'answers' }, ans));
   }
 
+  if (p && p.body.action !== 'note') kids.push(h('p', { class: 'sending-line', role: 'status' }, p.body.action === 'pass'
+    ? 'Passing it on to ' + (nameOfMember(p.body.to) || 'them') + ' in 5 s. Z takes it back.'
+    : 'Sending to ' + whoName(t) + ' in 5 s: ' + p.label + '. Z takes it back.'));
   // Notes: one may ride with any answer, or go alone and leave the ask open
   kids.push(notesBlock(t, d, p));
   kids.push(legendFor(t));
-  kids.push(h('p', { class: 'card-foot' }, h('button', { class: 'linkish', type: 'button', onclick: () => blockAsker(t) }, 'Block ' + whoName(t) + '…')));
-  return h('article', { class: 'card', 'aria-labelledby': 'card-title' }, kids);
+  kids.push(h('p', { class: 'card-foot' }, t.sender ? h('button', { class: 'linkish', type: 'button', onclick: (ev) => mutePerson(t.sender.name || whoName(t), ev.currentTarget, { task_id: t.task_id }) }, 'Mute ' + (t.sender.name || whoName(t)) + ': their asks never ring') : null,
+    t.sender ? ' · ' : null, h('button', { class: 'linkish', type: 'button', onclick: () => blockAsker(t) }, 'Block ' + whoName(t) + '…')));
+  return dress(h('article', { class: 'card', 'aria-labelledby': 'card-title' }, kids), look);
+}
+// Who wrote a note, as this person reads it: the asker (an AI, or a person who sent the ask), the person who passed the
+// ask on to them (by: "passer"), or themselves. A private note is between the two people; the AI never sees it.
+function noteWho(n, t) {
+  if (n.by === 'asker') return { w: n.name || whoName(t), cls: ' asker' };
+  if (n.by === 'passer') { const pb = t.passed_on_by; return { w: n.name || (typeof pb === 'string' ? pb : (pb && pb.name)) || 'Who passed it on', cls: '' }; }
+  return { w: 'You', cls: '' };
+}
+function noteLine(n, t, tm) {
+  const who = noteWho(n, t);
+  return h('li', null, h('span', { class: 'by' + who.cls, title: who.w }, who.w),
+    h('span', { class: 'tx' }, linked(n.note || ''), n.private && t.passed_on_by ? h('span', { class: 'priv' }, ' · ' + whoName(t) + ' does not see this') : null),
+    h('span', { class: 'tm' }, tm));
 }
 function notesBlock(t, d, p) {
   const notes = (Array.isArray(t.notes) ? t.notes : []).slice();
   if (p && p.body.action === 'note') notes.push({ at: null, note: p.body.note, by: 'person', pending: true });
   const last = notes[notes.length - 1];
   const kids = [h('span', { class: 'label' }, 'Notes')];
-  if (notes.length) kids.push(h('ol', { class: 'thread' }, notes.map((n) => h('li', null,
-    h('span', { class: 'by' + (n.by === 'asker' ? ' asker' : '') }, n.by === 'asker' ? whoName(t) : 'You'),
-    h('span', { class: 'tx' }, linked(n.note || '')),
-    h('span', { class: 'tm' }, n.pending ? 'sending…' : (n.at ? fmtClock.format(ms(n.at)) : ''))))));
+  if (notes.length) kids.push(h('ol', { class: 'thread' }, notes.map((n) => noteLine(n, t, n.pending ? 'sending…' : (n.at ? fmtClock.format(ms(n.at)) : '')))));
   if (last && last.by === 'person') kids.push(h('p', { class: 'note-state' }, 'Note, not done: the ask stays open until you answer it.'));
   else if (last && last.by === 'asker') kids.push(h('p', { class: 'note-state' }, whoName(t) + ' answered your note. The ask is still open.'));
   const sendNote = () => { const v = (d.note || '').trim(); if (!v) { $('#f-note').focus(); sr('Write the note first.'); return; } answer(t, { action: 'note', note: v }); };
@@ -1017,26 +1366,28 @@ function legendFor(t) {
   if (k === 'choice' && t.step.choices.length > 2) items.push(item(['1', '–', String(t.step.choices.length)], 'choose'));
   if (yn.no) items.push(item(['←', 'N'], yn.no.label));
   if (yn.yes) items.push(item(['→', 'Y'], yn.yes.label));
-  if (k === 'choice' || k === 'other' || k === 'approve') items.push(item(['X'], 'Not now (the AI is told)'));
+  if (k === 'choice' || k === 'other' || k === 'approve') items.push(item(['X'], 'Not now (' + (t.sender ? whoName(t) : 'the AI') + ' is told)'));
   if (k === 'link') items.push(item(['O'], 'open link'));
   if (k === 'command') items.push(item(['C'], 'copy'));
-  items.push(item(['Enter'], k === 'words' ? 'write' : 'note'), item(['U'], isLater(t) ? 'back from Later' : 'Later (only here)'), item(['Z'], 'undo'), item(['?'], 'every key'));
+  items.push(item(['Enter'], k === 'words' ? 'write' : 'note'), item(['U'], isLater(t) ? 'back from Later' : 'Later (only here)'), item(['Z'], 'undo (5 s)'), item(['?'], 'every key'));
   return h('div', { class: 'legend', 'aria-hidden': 'true' }, items);
 }
 function emptyCard() {
+  if (S.firstLook) return h('div', { class: 'empty' }, h('p', { class: 'help', role: 'status' }, S.lastErr ? 'person.tools has not answered yet; the Desk is trying again.'
+    : 'Loading your asks…' + (S.firstSlow ? ' person.tools is slow to answer just now.' : '')));
   const conns = (S.conns || []).filter((c) => !c.revoked_at);
   if (S.conns === null) loadConns();
   const pendingN = S.pending.size;
   const kids = [h('h2', null, pendingN ? 'Sending your answers.' : 'Nothing is waiting for you.'),
     h('p', null, 'When one of your AIs asks you something, it appears here: first if it is urgent, with a line across the top. Nothing makes a sound.')];
   if (conns.length) {
-    kids.push(h('ul', { class: 'ais' }, conns.map((c) => h('li', null, iconFor(c.icon, c.name), h('b', null, c.name),
+    kids.push(h('ul', { class: 'ais' }, conns.map((c) => h('li', null, iconFor(c.icon, c.name, false, c.icon_url), h('b', null, c.name),
       h('span', { class: 'm' }, c.blocked ? 'blocked' : c.quiet ? 'quiet' : 'last asked ' + agoWords(c.last_used_at))))));
   } else if (S.conns) {
     kids.push(h('p', null, 'No AI is connected to you yet. Connect one and you get a key and the words to give it. The key lets that AI ask you things and read your answers, and nothing else; you can revoke it with one click.'));
   }
   kids.push(h('div', { class: 'answers' }, ansBtn(conns.length ? 'Connect another AI' : 'Connect an AI', 'A', () => setView('ais', true), conns.length ? '' : 'btn-you'),
-    S.history.length || S.sentLocal.size ? ansBtn('History', 'H', () => setView('history')) : null));
+    ansBtn('History', 'H', () => setView('history'))));
   kids.push(h('p', { class: 'help' }, S.lastOk ? 'Last looked ' + fmtClock.format(S.lastOk) + '. The Desk looks again every 15 seconds while this tab is open, and the tab\'s icon shows how many asks are waiting.' : ''));
   const prim = (keys, what) => [h('dt', null, keys.map(kbd)), h('dd', null, what)];
   kids.push(h('div', { class: 'primer' }, h('span', { class: 'label' }, 'When asks arrive'),
@@ -1046,14 +1397,28 @@ function emptyCard() {
 }
 
 /* ---------- History: answered asks, searchable ---------- */
+async function loadDeepHistory() {
+  try { const d = await api('GET', '/v1/member/tasks?history=200'); S.historyDeep = Array.isArray(d && d.history) ? d.history : []; if (S.view === 'history') renderHistory(); }
+  catch (e) {
+    // the last 50 came with the list; say that older ones did not load, and never show "Loading" for ever
+    if (e.code === 'signed_out') return;
+    S.historyDeep = []; S.historyNote = 'Only your latest answers are here: older ones could not be read just now.';
+    if (S.view === 'history') renderHistory();
+  }
+}
 function historyItems() {
   const map = new Map();
+  for (const t of (S.historyDeep || [])) map.set(t.task_id, t);
   for (const t of S.history) map.set(t.task_id, t);
   for (const [id, t] of S.sentLocal) if (!map.has(id)) map.set(id, t);
   return [...map.values()].sort((a, b) => ms(b.reply && b.reply.at) - ms(a.reply && a.reply.at) || tms(b) - tms(a));
 }
 function historyAnswer(t) {
   const r = t.reply || {}, s = t.step || {};
+  if (t.state === 'passed' || r.action === 'pass' || t.passed_to) {
+    const pt = t.passed_to, n = (pt && (typeof pt === 'string' ? nameOfMember(pt) : (pt.name || nameOfMember(pt.member_id)))) || 'one of your people';
+    return 'Passed to ' + n;
+  }
   if (r.action === 'answer') return r.choice != null ? 'You picked ' + r.choice : r.text ? 'You wrote: ' + r.text : 'Answered';
   if (r.action === 'done') return 'Done';
   if (r.action === 'not_now') return 'Not now';
@@ -1064,7 +1429,13 @@ function historyAnswer(t) {
 function searchText(t) {
   const r = t.reply || {}, s = t.step || {};
   return [t.title, s.text, s.command, s.url, (s.choices || []).join(' '), whoName(t), t.unlocks, r.choice, r.text, r.note, r.approved_text,
-    (t.notes || []).map((n) => n.note).join(' '), historyAnswer(t)].filter(Boolean).join(' \n ').toLowerCase();
+    (t.notes || []).map((n) => n.note).join(' '), historyAnswer(t), passerName(t), cardWords(t)].filter(Boolean).join(' \n ').toLowerCase();
+}
+function cardWords(t) { // the words of an ask's card blocks, for search: headline, text, facts, when and where, price
+  const bl = t.card && Array.isArray(t.card.blocks) ? t.card.blocks : [];
+  const out = [];
+  (function walk(v) { if (typeof v === 'string') { if (!/^(m_|https?:)/.test(v)) out.push(v); } else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') Object.values(v).forEach(walk); })(bl);
+  return out.join(' ');
 }
 function renderHistory() {
   const q = ($('#search').value || '').trim().toLowerCase();
@@ -1072,13 +1443,14 @@ function renderHistory() {
   const items = q ? all.filter((t) => q.split(/\s+/).every((w) => searchText(t).includes(w))) : all;
   if (!S.hsel || !items.some((t) => t.task_id === S.hsel)) S.hsel = items.length ? items[0].task_id : null;
   const ol = $('#hlist');
-  ol.replaceChildren(...(items.length ? items.map((t) => rowFor(t, { history: true }))
-    : [h('li', { class: 'list-empty', role: 'presentation' }, q ? 'Nothing answered matches “' + q + '”.' : 'Nothing answered yet.')]));
+  fill(ol, ...(items.length ? items.map((t) => rowFor(t, { history: true }))
+    : [h('li', { class: 'list-empty', role: 'presentation' }, q ? 'Nothing answered matches “' + q + '”.' : S.historyDeep ? 'Nothing answered yet.' : 'Loading…')]),
+    S.historyNote ? h('li', { class: 'list-empty', role: 'presentation' }, S.historyNote) : null);
   ol.setAttribute('aria-activedescendant', S.hsel ? 'h-' + S.hsel : '');
   const selEl = S.hsel && document.getElementById('h-' + S.hsel); if (selEl) selEl.scrollIntoView({ block: 'nearest' });
   const t = items.find((x) => x.task_id === S.hsel);
   const pane = $('#hcard');
-  if (!t) { pane.replaceChildren(h('div', { class: 'empty' }, h('h2', null, q ? 'No match.' : 'Nothing answered yet.'),
+  if (!t) { fill(pane, h('div', { class: 'empty' }, h('h2', null, q ? 'No match.' : S.historyDeep ? 'Nothing answered yet.' : 'Loading what you answered…'),
     h('p', null, 'Each ask you answer is kept here with your answer and its notes, newest first.'))); return; }
   const r = t.reply || {}, s = t.step || {};
   const kids = [h('button', { class: 'linkish back', type: 'button', onclick: () => closeReading() }, '← The list'),
@@ -1097,9 +1469,8 @@ function renderHistory() {
     (r.action === 'approve' || r.action === 'deny') && r.device_approved === true ? h('p', { class: 'help' }, 'Signed by your device.') : null,
     r.note ? h('p', null, 'Your note: ' + r.note) : null));
   if (Array.isArray(t.notes) && t.notes.length) kids.push(h('section', { class: 'notes' }, h('span', { class: 'label' }, 'Notes'),
-    h('ol', { class: 'thread' }, t.notes.map((n) => h('li', null, h('span', { class: 'by' + (n.by === 'asker' ? ' asker' : '') }, n.by === 'asker' ? whoName(t) : 'You'),
-      h('span', { class: 'tx' }, n.note || ''), h('span', { class: 'tm' }, n.at ? fmtClock.format(ms(n.at)) : ''))))));
-  pane.replaceChildren(h('article', { class: 'card' }, kids));
+    h('ol', { class: 'thread' }, t.notes.map((n) => noteLine(n, t, n.at ? fmtClock.format(ms(n.at)) : '')))));
+  fill(pane, h('article', { class: 'card' }, kids));
 }
 $('#search').addEventListener('input', () => renderHistory());
 $('#search').addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); if (ev.target.value) { ev.target.value = ''; renderHistory(); } else $('#hlist').focus(); } if (ev.key === 'ArrowDown' || ev.key === 'Enter') { ev.preventDefault(); $('#hlist').focus(); } });
@@ -1123,7 +1494,10 @@ function renderAIs() {
   const live = (S.conns || []).filter((c) => !c.revoked_at), gone = (S.conns || []).filter((c) => c.revoked_at);
   const kids = [h('h2', { class: 'page-h' }, 'Your AIs'),
     h('p', { class: 'page-lede' }, 'Each AI you connect gets its own key. The key does one thing: it lets that AI ask you, and read your answers. Quiet: its asks still arrive here but never ring a phone. Block: it hears only "not available". Revoke: its key stops at once and its open asks are withdrawn.')];
-  if (S.aiMsg) { kids.push(h('p', { class: S.aiMsg.bad ? 'error' : 'saved', role: 'status' }, S.aiMsg.text)); S.aiMsg = null; }
+  if (S.aiMsg) { // stays 8 s, whatever redraws the page meanwhile
+    if (!S.aiMsg.until) S.aiMsg.until = Date.now() + 8000;
+    if (Date.now() < S.aiMsg.until) kids.push(h('p', { class: S.aiMsg.bad ? 'error' : 'saved', role: 'status' }, S.aiMsg.text)); else S.aiMsg = null;
+  }
   if (S.shownOnce) kids.push(shownOnceBox(S.shownOnce));
   if (S.conns === null) kids.push(h('p', { class: 'help' }, S.connsErr || 'Loading…'));
   else if (!live.length) kids.push(h('p', null, 'No AI is connected yet.'));
@@ -1131,7 +1505,7 @@ function renderAIs() {
     h('thead', null, h('tr', null, h('th', { class: 'label' }, 'AI'), h('th', { class: 'label' }, 'Waiting'), h('th', { class: 'label' }, 'Last asked'),
       h('th', { class: 'label' }, 'Connected'), h('th', { class: 'label' }, h('span', { class: 'sr' }, 'Actions')))),
     h('tbody', null, live.map((c) => h('tr', null,
-      h('td', { class: 'name' }, iconFor(c.icon, c.name), c.name, c.quiet ? h('span', { class: 'state' }, 'Quiet') : null, c.blocked ? h('span', { class: 'state blocked' }, 'Blocked') : null),
+      h('td', { class: 'name' }, iconFor(c.icon, c.name, false, c.icon_url), c.name, c.quiet ? h('span', { class: 'state' }, 'Quiet') : null, c.blocked ? h('span', { class: 'state blocked' }, 'Blocked') : null),
       h('td', { class: 'n' }, String(c.asks_waiting ?? '')),
       h('td', { class: 'when', title: c.last_used_at ? when(c.last_used_at) : '' }, agoWords(c.last_used_at)),
       h('td', { class: 'when' }, c.made_at ? fmtDay.format(ms(c.made_at)) : ''),
@@ -1146,11 +1520,19 @@ function renderAIs() {
     h('p', { class: 'help' }, 'Askers you blocked from a call or an ask. Each is told only that you are not available.'),
     h('table', { class: 'ai-table' }, h('tbody', null, S.blocks.map((b) => h('tr', null,
       h('td', { class: 'name' }, iconFor(null, b.name), b.name), h('td', { class: 'when' }, b.since ? 'since ' + fmtDay.format(ms(b.since)) : ''),
-      h('td', { class: 'acts' }, h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => unblock(b) }, 'Unblock')))))));
+      h('td', { class: 'acts' }, h('button', { class: 'btn btn-quiet', type: 'button', onclick: (ev) => { ev.currentTarget.disabled = true; ev.currentTarget.textContent = 'Unblocking…'; unblock(b); } }, 'Unblock')))))));
+  if (SEND_ON) {
+    if (S.mutes === undefined || S.mutes === null) loadMutes();
+    else if (S.mutes.length) kids.push(h('h3', { class: 'sec-h' }, 'Muted people'),
+      h('p', { class: 'help' }, 'People whose asks never ring you. Their asks still show here.'),
+      h('table', { class: 'ai-table' }, h('tbody', null, S.mutes.map((m) => h('tr', null,
+        h('td', { class: 'name' }, iconFor(null, m.name || 'Someone', true), m.name || 'Someone'), h('td', { class: 'when' }, m.since ? 'since ' + fmtDay.format(ms(m.since)) : ''),
+        h('td', { class: 'acts' }, h('button', { class: 'btn btn-quiet', type: 'button', onclick: (ev) => { ev.currentTarget.disabled = true; ev.currentTarget.textContent = 'Unmuting…'; unmute(m); } }, 'Unmute')))))));
+  }
   if (gone.length) kids.push(h('details', null, h('summary', { class: 'sec-h' }, 'Revoked (' + gone.length + ')'),
     h('table', { class: 'ai-table' }, h('tbody', null, gone.map((c) => h('tr', { class: 'revoked' },
       h('td', { class: 'name' }, iconFor(c.icon, c.name), c.name), h('td', { class: 'when' }, 'revoked ' + fmtDay.format(ms(c.revoked_at)))))))));
-  root.replaceChildren(h('div', { class: 'page-in' }, kids));
+  fill(root, h('div', { class: 'page-in' }, kids));
 }
 function connectForm() {
   const name = h('input', { type: 'text', id: 'c-name', minlength: '2', maxlength: '40', placeholder: 'Home camera, My assistant…', autocomplete: 'off', required: true });
@@ -1161,7 +1543,7 @@ function connectForm() {
   const btn = h('button', { class: 'btn btn-you', type: 'submit' }, 'Connect');
   const form = h('form', { class: 'form', autocomplete: 'off' },
     h('label', null, h('span', { class: 'label' }, 'Its name, as you will see it'), name),
-    h('fieldset', { class: 'icons' }, h('legend', { class: 'label' }, 'Its icon'), opts, h('label', null, 'or', emoji)),
+    h('fieldset', { class: 'icons' }, h('legend', { class: 'label' }, 'Its icon'), opts, h('label', { class: 'emoji-l' }, 'or', emoji)),
     msg, h('div', null, btn), h('p', { class: 'help' }, 'You get a key and a link, shown once, and the words to give your AI. Copy them before you leave this page.'));
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault(); msg.hidden = true;
@@ -1196,7 +1578,15 @@ function shownOnceBox(r) {
 
 /* ---------- Settings ---------- */
 async function patchSettings(body, note) {
-  try { const r = await api('PATCH', '/v1/member/settings', body); S.settings = r; S.setMsg = { text: note || 'Saved.' }; }
+  try {
+    let r;
+    try { r = await api('PATCH', '/v1/member/settings', body); }
+    catch (e) { // a server that reads longer_hold out but takes it in under its older name, longer_to_answer
+      if (e.status === 400 && e.code === 'unknown_field' && 'longer_hold' in body) r = await api('PATCH', '/v1/member/settings', { longer_to_answer: body.longer_hold });
+      else throw e;
+    }
+    S.settings = r; S.setMsg = { text: note || 'Saved.' };
+  }
   catch (e) { S.setMsg = { bad: true, text: e.message }; }
   renderSettings();
 }
@@ -1216,23 +1606,649 @@ function renderSettings() {
   else {
     kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Sounds', h('p', { class: 'help' }, 'The Desk never makes a sound. This is for every app of yours on person.tools.')),
       h('div', null, seg([[false, 'Off'], [true, 'On']], !!set.sounds, (v) => patchSettings({ sounds: v }, v ? 'Sounds on: your phone may make a sound for an urgent ask.' : 'Sounds off: nothing of ours makes a sound for you.'), 'Sounds'))));
+    // OWNER_router_25: the ask's first line in this person's own alerts, off unless they turn it on; shown once the service has it
+    const aw = typeof set.alert_words === 'boolean' ? set.alert_words : typeof st.alert_words === 'boolean' ? st.alert_words : null;
+    // the same words as the person's page, since the setting is theirs on every app
+    if (aw !== null) kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Show the ask in my alerts', h('p', { class: 'help' },
+      'Off: an alert says only who is asking. On: it may also show the ask\u2019s first line, up to 80 characters, never the whole ask. Your phone\u2019s own preview setting still decides what shows on a locked screen.')),
+      h('div', null, seg([[false, 'Off'], [true, 'On']], aw, (v) => patchSettings({ alert_words: v }, v ? 'Alerts may show the first line of an ask.' : 'Alerts will say only who is asking.'), 'Show the ask in my alerts'))));
+    if (typeof set.longer_hold === 'boolean') kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Give me more time to take a call', h('p', { class: 'help' },
+      'A call held for you for less than 3 minutes is held for 3 instead. Useful with a screen reader, or whenever you like. No asker sees this.')),
+      h('div', null, seg([[false, 'Off'], [true, 'On']], set.longer_hold, (v) => patchSettings({ longer_hold: v }, v ? 'Calls will wait 3 minutes for you.' : 'Calls wait the usual time.'), 'Give me more time to take a call'))));
     kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Quiet hours', h('p', { class: 'help' }, 'No call rings you in these hours.' + (q.tz ? ' Zone: ' + q.tz + '.' : ''))),
       h('div', null, 'From ', hours(q.start, (v) => patchSettings({ quiet_start: v }, 'Quiet hours saved.'), 'Quiet from'), ' to ', hours(q.end, (v) => patchSettings({ quiet_end: v }, 'Quiet hours saved.'), 'Quiet until'))));
     kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Photos and clips', h('p', { class: 'help' }, 'What your AIs send is yours. It is deleted after this many days.')),
       h('div', null, h('select', { 'aria-label': 'Days to keep photos and clips', onchange: (ev) => patchSettings({ material_days: Number(ev.target.value) }, 'Saved.') },
         (days.includes(set.material_days) ? days : days.concat([set.material_days]).sort((a, b) => a - b)).filter((x) => x).map((dd) => h('option', { value: String(dd), selected: dd === set.material_days }, dd + (dd === 1 ? ' day' : ' days')))))));
   }
+  kids.push(onRow());
+  kids.push(limitsRow());
   const theme = pref('theme', 'system');
   kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Look', h('p', { class: 'help' }, 'On this computer only.')),
     h('div', null, seg([['system', 'Like this computer'], ['light', 'Light'], ['dark', 'Dark']], theme, (v) => { setPref('theme', v); applyTheme(); renderSettings(); }, 'Look'))));
   const pr = passkeyRow(); if (pr) kids.push(pr);
-  const how = /^ps_/.test(S.cred || '') ? 'Signed in with your passkey' + (S.memberLabel ? ', for ' + S.memberLabel : '') + '. ' : 'Signed in with your page link. ';
+  const how = /^ps_/.test(S.cred || '') ? 'Signed in with your passkey' + (S.memberLabel ? ', for ' + S.memberLabel : '') + '. '
+    : /^ds_/.test(S.cred || '') ? 'Signed in with your phone; it can sign this computer out too (Menu, Computers signed in). ' : 'Signed in with your page link. ';
   kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'This computer', h('p', { class: 'help' }, how + (S.remember ? 'Remembered here until you sign out.' : 'Kept for this tab only; closing it signs you out.'))),
     h('div', null, h('button', { class: 'btn btn-stop', type: 'button', onclick: () => askSignOut() }, 'Sign out'),
       h('p', { class: 'help' }, 'Signing out removes the link and everything the Desk kept on this computer.'))));
-  root.replaceChildren(h('div', { class: 'page-in' }, kids));
+  const where = S.memberLabel || 'this page';
+  kids.push(h('div', { class: 'set' }, h('div', { class: 'k' }, 'Leave', h('p', { class: 'help' }, 'Ends your membership of ' + where + ' for good and deletes what it holds of yours. You are asked to type a word first.')),
+    h('div', null, h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openLeave() }, 'Leave ' + where + '…'))));
+  fill(root, h('div', { class: 'page-in' }, kids));
 }
 function applyTheme() { const v = pref('theme', 'system'); if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v); }
+
+/* ---------- A person as asker: My people, Send, Sent (OWNER_web_3; spec section 2 and 8.1; SERVICE's router_18) ----------
+   Switched on by <meta name="desk-send"> once the routes are live. */
+const SEND_ON = (document.querySelector('meta[name="desk-send"]') || {}).content === 'on';
+// Send shows only to a person who owns a panel of people: GET /v1/member/people names them ("name") or lists someone.
+// Everyone else (a person who joined someone's panel) never sees a Send that could reach nobody.
+const canSend = () => SEND_ON && S.isOwner === true;
+const canPass = () => PASS_ON && S.isOwner === true;
+function saveOwner() {
+  // Remembered beside the credential so Send, Sent and Pass on are drawn on the first frame, not seconds later
+  if (S.isOwner === null || !S.cred) return;
+  const keep = S.remember ? 'local' : 'session', drop = S.remember ? 'session' : 'local';
+  sset(keep, 'desk.owner', S.isOwner ? '1' : '0'); sdel(drop, 'desk.owner');
+}
+function cachedOwner() { const v = sget('session', 'desk.owner') || sget('local', 'desk.owner'); return v === '1' ? true : v === '0' ? false : null; }
+function applySendSwitch() {
+  const on = canSend();
+  document.documentElement.classList.toggle('send-on', on);
+  for (const el of $$('.send-only')) el.hidden = !on;
+}
+const personId = (p) => p.member_id || p.id || null;
+const personBase = (p) => p.name || p.alias || p.display_name || p.name_on_panel || 'Someone';
+function personName(p) {
+  // Two people with the same name are told apart by when they joined
+  const base = personBase(p), same = (S.people || []).filter((x) => personBase(x) === base);
+  return same.length > 1 && p.joined_at ? base + ' · joined ' + fmtDay.format(ms(p.joined_at)) + ' ' + fmtClock.format(ms(p.joined_at)) : base;
+}
+function personJoined(p) {
+  if (typeof p.joined === 'boolean') return p.joined;
+  if (typeof p.state === 'string') return /^joined|^member|^active/i.test(p.state);
+  return !!(p.joined_at || (p.member_id && !p.join_url));
+}
+function loadPeople(force) {
+  // One look at a time: a press of S, P or My people while one is on its way waits for it instead of asking again.
+  // After making a link, force a fresh look.
+  if (!force && S.peopleP) return S.peopleP;
+  const p = loadPeopleNow(); S.peopleP = p;
+  p.finally(() => { if (S.peopleP === p) S.peopleP = null; });
+  return p;
+}
+async function loadPeopleNow() {
+  if (!SEND_ON && !PASS_ON) return;
+  try {
+    // GET /v1/member/people answers {people: [joined], waiting: [links not used yet], note}
+    const r = await api('GET', '/v1/member/people');
+    if (Array.isArray(r)) S.people = r;
+    else S.people = (r.people || r.members || []).map((p) => Object.assign({ joined: p.joined === undefined ? true : p.joined }, p))
+      .concat((r.waiting || []).map((w) => Object.assign({}, w, { joined: false })));
+    S.peopleNote = (r && r.note) || null; S.peopleErr = null;
+    const owner = !!(r && !Array.isArray(r) && r.name) || S.people.length > 0;
+    if (owner !== S.isOwner) { S.isOwner = owner; applySendSwitch(); S.cardSig = ''; if (!$('#desk').hidden) render(); }
+    if (!$('#desk').hidden) saveOwner();
+    if (r && typeof r.name === 'string' && r.name) S.myName = r.name; // the sender's name as person.tools checked it on the account
+  }
+  catch (e) { if (e.code === 'signed_out') return; S.peopleErr = e.message; if (!S.people) S.people = []; }
+  if (S.view === 'people') renderPeople();
+  if (!$('#compose').hidden && S.compose) renderCompose();
+}
+function nameOfMember(id) { const p = (S.people || []).find((x) => personId(x) === id); return p ? personName(p) : null; }
+function threadName(t) {
+  const to = t.to && typeof t.to === 'object' ? t.to : null;
+  return t.to_name || (to && (to.name || to.alias || to.display_name)) || nameOfMember((to && to.member_id) || t.to || t.member_id) || 'Someone';
+}
+function normalizeSent(r) {
+  // GET /v1/member/sent: each ask with its threads. Read either form: sends with threads, or one task per person.
+  // GET /v1/member/sent answers {sent: [...], passed: [...]}: what was sent, and what was passed on (its answer comes back here)
+  const items = Array.isArray(r) ? r : ((r && (r.sent || r.asks || r.items)) || []).concat(((r && r.passed) || []).map((x) => Object.assign({ _passed: true }, x)));
+  const sends = [];
+  if (items.some((x) => Array.isArray(x.threads))) {
+    for (const x of items) sends.push({ key: x.send_id || x.id || (x.threads[0] && x.threads[0].task_id), title: x.title, step: x.step || {}, card: x.card,
+      created_at: x.created_at, expires_at: x.expires_at, urgency: x.urgency,
+      threads: x.threads.map((t) => Object.assign({ step: x.step || {}, title: x.title }, t)) });
+  } else {
+    const by = new Map();
+    for (const t of items) {
+      const k = t.send_id || t.batch_id || [t.title, JSON.stringify(t.step || {}), String(t.created_at || '').slice(0, 16)].join('|');
+      if (!by.has(k)) by.set(k, { key: k, title: t.title, step: t.step || {}, card: t.card, created_at: t.created_at, expires_at: t.expires_at, urgency: t.urgency,
+        passed: !!t._passed, from: t._passed ? (t.from && typeof t.from === 'object' ? t.from.name : t.from) : null, at: t.passed_at || t.created_at, threads: [] });
+      by.get(k).threads.push(t);
+    }
+    sends.push(...by.values());
+  }
+  return sends.sort((a, b) => ms(b.at || b.created_at) - ms(a.at || a.created_at));
+}
+// The key changes when an answer or a note arrives. Since 8:01 PM CT the service's "new" holds until the sender marks the
+// thread read (POST /v1/member/sent/read), on any device, so the Desk follows it; what this computer has shown stays read
+// here, and a thread with no "new" (one passed on) is news until shown.
+const threadNewsKey = (t) => t.task_id + ':' + (t.reply ? (t.answered_at || t.reply.at || 'r') : (t.state || '')) + ':' + ((t.notes || []).length);
+function threadHasNews(t) {
+  if (S.sentSeen.has(threadNewsKey(t))) return false;
+  if (typeof t.new === 'boolean') return t.new;
+  const notes = t.notes || [], last = notes[notes.length - 1];
+  return !!t.reply || !!(last && last.by !== 'asker');
+}
+const readPosted = new Set();
+function markSentRead(threads) {
+  // tell the service these answers were read, so the phone and the page stop showing them as new too
+  const ids = threads.filter((t) => t.new === true && !t._passed && !readPosted.has(t.task_id + ':' + threadNewsKey(t))).map((t) => t.task_id);
+  if (!ids.length) return;
+  for (const t of threads) if (ids.includes(t.task_id)) readPosted.add(t.task_id + ':' + threadNewsKey(t));
+  api('POST', '/v1/member/sent/read', { task_ids: ids }).then(() => { for (const t of threads) if (ids.includes(t.task_id)) t.new = false; renderSentCount(); }).catch(() => {});
+}
+const threadOpen = (t) => !t.reply && (!t.state || t.state === 'open' || t.state === 'waiting');
+function sentSeenKey() { return 'desk.sentseen.' + (S.memberId || 'x'); }
+function loadSentSeen() { try { const v = sget('local', sentSeenKey()); S.sentSeenFresh = v == null; S.sentSeen = new Set(JSON.parse(v || '[]')); } catch (e) { S.sentSeen = new Set(); } }
+function markThreadSeen(t) { if (!t) return; S.sentSeen.add(threadNewsKey(t)); sset('local', sentSeenKey(), JSON.stringify([...S.sentSeen].slice(-3000))); }
+async function loadSent() {
+  if (!SEND_ON) return;
+  try {
+    S.sent = normalizeSent(await api('GET', '/v1/member/sent')); S.sentErr = null;
+    if (S.sentSeenFresh) {
+      // First look on this computer: older answers are not news; only what the service still calls new is
+      S.sentSeenFresh = false;
+      for (const x of S.sent) for (const t of x.threads) if (t.new !== true) S.sentSeen.add(threadNewsKey(t));
+      sset('local', sentSeenKey(), JSON.stringify([...S.sentSeen].slice(-3000)));
+    }
+  }
+  catch (e) { if (e.code === 'signed_out') return; S.sentErr = e.message; if (!S.sent) S.sent = []; }
+  renderSentCount();
+  if (S.view === 'sent') renderSent();
+  if (S.view === 'asks') renderList();
+}
+function sentNews() {
+  const out = [];
+  for (const s of S.sent || []) for (const t of s.threads) if (threadHasNews(t)) out.push({ send: s, thread: t });
+  return out;
+}
+function renderSentCount() {
+  const c = $('#count-sent'); if (!c) return;
+  const n = sentNews().length; c.textContent = n; c.classList.toggle('zero', n === 0);
+}
+function replyWords(t) {
+  const r = t.reply || {};
+  if (!t.reply) { const st = t.state || 'open'; return st === 'lapsed' ? 'It closed unanswered.' : st === 'not_now' ? 'Not now' : 'Not answered yet'; }
+  // From the sender's side: what they answered, in plain words
+  const sp = t.step || {};
+  if (r.action === 'answer') return r.choice != null ? 'Picked: ' + r.choice : r.text ? 'Wrote: ' + r.text : 'Answered';
+  if (r.action === 'done') return 'Done';
+  if (r.action === 'not_now') return 'Not now';
+  if (r.action === 'approve') return (sp.approve_label || 'Approved') + (r.approved_text && r.approved_text !== sp.text ? ', with their own words: “' + r.approved_text + '”' : '');
+  if (r.action === 'deny') return sp.deny_label || 'Denied';
+  return 'Answered';
+}
+
+/* My people */
+function renderPeople() {
+  const root = $('#view-people');
+  const list = S.people || [];
+  const joined = list.filter(personJoined), waiting = list.filter((p) => !personJoined(p));
+  const kids = [h('h2', { class: 'page-h' }, 'My people'),
+    h('p', { class: 'page-lede' }, 'The people who joined from a link you sent. Your asks reach them as "From" your name, which their app takes from your account, never from what you type. Each can mute you, block you or leave at any time.')];
+  if (S.people === null) { kids.push(h('p', { class: 'help' }, 'Loading…')); loadPeople(); }
+  else if (S.peopleErr && !list.length) kids.push(h('p', { class: 'error' }, 'Your people could not be read: ' + S.peopleErr));
+  else if (!list.length) kids.push(h('p', null, S.peopleNote || 'Nobody yet. When someone joins from a link you sent, they appear here.'));
+  if (joined.length) kids.push(h('h3', { class: 'sec-h' }, 'Joined (' + joined.length + ')'),
+    h('table', { class: 'ai-table' }, h('tbody', null, joined.map((p) => h('tr', null,
+      h('td', { class: 'name' }, iconFor(null, personBase(p)), personBase(p)),
+      h('td', { class: 'when' }, p.joined_at ? 'joined ' + fmtDay.format(ms(p.joined_at)) + (personName(p) !== personBase(p) ? ' ' + fmtClock.format(ms(p.joined_at)) : '') : 'joined'),
+      h('td', { class: 'acts' }, h('button', { class: 'btn btn-quiet', type: 'button', 'aria-label': 'Send to ' + personName(p), onclick: () => openCompose([personId(p)]) }, 'Send')))))));
+  if (waiting.length) kids.push(h('h3', { class: 'sec-h' }, 'Not joined yet (' + waiting.length + ')'),
+    h('p', { class: 'help' }, 'Their link has not been used yet. If you sent it, they move up here once they join. ' + (S.peopleNote || 'A link is shown only once: make a fresh one to send again (the old one stops).')),
+    h('table', { class: 'ai-table' }, h('tbody', null, waiting.map((p) => {
+      // "resend" is the route that makes a fresh link ({method, path, body}); a plain address is copied as it is
+      const url = [p.resend, p.join_url, p.link].find((x) => typeof x === 'string' && /^https:\/\//.test(x));
+      const label = (p.resend && p.resend.body && p.resend.body.label) || personBase(p);
+      return h('tr', null,
+        h('td', { class: 'name' }, iconFor(null, personName(p)), personName(p)),
+        h('td', { class: 'when' }, p.sent_at || p.made_at ? 'link made ' + fmtDay.format(ms(p.sent_at || p.made_at)) + ' ' + fmtClock.format(ms(p.sent_at || p.made_at)) : ''),
+        h('td', { class: 'acts' }, url
+          ? h('button', { class: 'btn btn-quiet', type: 'button', onclick: (ev) => copyText(url, ev.currentTarget) }, 'Copy their link')
+          : h('button', { class: 'btn btn-quiet', type: 'button', 'aria-label': 'Make a fresh link for ' + personName(p), onclick: () => {
+            // the old link may already be in their messages: say it stops before it does (OWNER_router_23 kept the links already sent)
+            confirmBox('Make a fresh link for ' + personName(p) + '?', 'The link made ' + (p.sent_at ? fmtDay.format(ms(p.sent_at)) + ' ' + fmtClock.format(ms(p.sent_at)) : 'before') +
+              ' stops working. If you already sent it to ' + personName(p) + ', send them the new one instead.', 'Make a fresh link', async () => {
+              try { S.invite = { label: '', made: await api('POST', '/v1/member/people/links', { label }), msg: null }; loadPeople(true); }
+              catch (e) { S.invite = { label: '', made: null, msg: e.message }; }
+              renderPeople(); setTimeout(() => { const c = $('#view-people .invite'); if (c) c.scrollIntoView({ block: 'nearest' }); }, 0);
+            }); } }, 'Make a fresh link')));
+    }))));
+  kids.push(inviteBox());
+  fill(root, h('div', { class: 'page-in' }, kids));
+}
+/* Invite someone: POST /v1/member/people/links {label} -> {label, join_url, for_them, note}; a link works once */
+function inviteBox() {
+  const inv = S.invite || (S.invite = { label: '', made: null, msg: null });
+  const name = h('input', { type: 'text', id: 'inv-name', maxlength: '40', placeholder: 'Their name, as you call them', value: inv.label, autocomplete: 'off', oninput: (ev) => { inv.label = ev.target.value; } });
+  const kids = [h('h3', { class: 'sec-h' }, 'Invite someone'),
+    h('p', { class: 'help' }, 'You get a link that works once. Send it yourself, by text or email; when they join, they appear above.'),
+    h('form', { class: 'row-l invite-row', onsubmit: async (ev) => {
+      ev.preventDefault(); const v = inv.label.trim(); if (v.length < 2) { inv.msg = 'Write their name first.'; renderPeople(); return; }
+      const make = async () => {
+        try { inv.made = await api('POST', '/v1/member/people/links', { label: v }); inv.msg = null; inv.label = ''; loadPeople(true); }
+        catch (e) { inv.msg = e.message; }
+        renderPeople();
+      };
+      // a link for a name that already has an unused one stops that one: it may already be in their messages
+      const clash = (S.people || []).filter((p) => !personJoined(p)).find((p) => personBase(p).trim().toLowerCase() === v.toLowerCase());
+      if (clash) { confirmBox('A new link for ' + personBase(clash) + '?', personBase(clash) + ' already has a link that has not been used. A new one stops it: if you already sent it, send them the new one instead.', 'Make a new link', make); return; }
+      await make();
+    } }, name, h('button', { class: 'btn', type: 'submit' }, 'Make their link'))];
+  if (inv.msg) kids.push(h('p', { class: 'error' }, inv.msg));
+  if (inv.made && inv.made.join_url) {
+    const m = inv.made;
+    kids.push(h('div', { class: 'shown-once' }, h('h3', null, 'A link for ' + (m.label || 'them')),
+      h('div', { class: 'secret' }, h('span', { class: 'label' }, 'Their link'), h('code', null, m.join_url), h('button', { class: 'btn', type: 'button', onclick: (ev) => copyText(m.join_url, ev.currentTarget) }, 'Copy')),
+      m.for_them ? h('div', { class: 'prompt-box' }, h('div', { class: 'row-l' }, h('span', { class: 'label' }, 'A message you can send with it'), h('button', { class: 'btn btn-quiet', type: 'button', onclick: (ev) => copyText(m.for_them, ev.currentTarget) }, 'Copy the message')), h('pre', null, m.for_them)) : null,
+      m.note ? h('p', { class: 'help' }, m.note) : null,
+      h('p', null, h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { inv.made = null; renderPeople(); } }, 'Done'))));
+  }
+  return h('section', { class: 'invite' }, kids);
+}
+
+/* Send: compose, preview, a five-second undo, then the POST */
+const SEND_KINDS = [['choice', 'Pick one'], ['words', 'Answer in words'], ['link', 'Open a link'], ['approve', 'Approve or deny'], ['command', 'Run a command']];
+const DUE = [['', 'No deadline'], ['900', 'in 15 minutes'], ['3600', 'in 1 hour'], ['14400', 'in 4 hours'], ['86400', 'in 1 day'], ['604800', 'in 1 week']];
+function openCompose(to) {
+  S.compose = S.compose && !to ? S.compose : { to: new Set(to || []), kind: 'choice', title: '', text: '', choices: ['', ''], url: '', command: '', where: '',
+    approve_label: '', deny_label: '', editable: false, urgency: 'today', due: '', msg: null };
+  if (to) S.compose.to = new Set(to);
+  if (S.people === null) loadPeople();
+  renderCompose(); openOverlay('#compose');
+  setTimeout(() => { const f = $('#c-title'); if (f) f.focus(); }, 0);
+}
+function composeStep(c) {
+  if (c.kind === 'choice') return { type: 'question', text: c.text.trim(), choices: c.choices.map((x) => x.trim()).filter(Boolean) };
+  if (c.kind === 'words') return { type: 'question', text: c.text.trim() };
+  if (c.kind === 'link') return { type: 'link', url: c.url.trim(), text: c.text.trim() };
+  if (c.kind === 'approve') { const s = { type: 'approve', text: c.text.trim() }; if (c.approve_label.trim()) s.approve_label = c.approve_label.trim(); if (c.deny_label.trim()) s.deny_label = c.deny_label.trim(); if (c.editable) s.editable = true; return s; }
+  return { type: 'command', command: c.command.trim(), where: c.where.trim() };
+}
+function composeProblem(c) {
+  if (!c.to.size) return 'Pick at least one person.';
+  const t = c.title.trim(); if (t.length < 3 || t.length > 120) return 'The title is 3 to 120 characters.';
+  const s = composeStep(c);
+  if (c.kind === 'choice' && (!s.text || s.choices.length < 2 || s.choices.length > 4)) return 'Write the question and two to four choices.';
+  if ((c.kind === 'words' || c.kind === 'approve') && !s.text) return c.kind === 'words' ? 'Write the question.' : 'Write exactly what they approve.';
+  if (c.kind === 'link' && !safeUrl(s.url)) return 'The link must be a web address (https://…).';
+  if (c.kind === 'command' && !s.command) return 'Write the command.';
+  return null;
+}
+function previewFor(c) {
+  // The card as the receiver will see it: drawn by their own app, with your name from your account
+  const s = composeStep(c), kids = [h('div', { class: 'pv-from' }, h('span', { class: 'label' }, 'They see'), ' From ', h('b', null, S.myName || 'your name'),
+    h('span', { class: 'help' }, ' · ' + ({ now: 'Now', today: 'Today', whenever: 'Whenever' })[c.urgency] + (c.due ? ' · closes ' + DUE.find((d) => d[0] === c.due)[1] : '')))];
+  kids.push(h('p', { class: 'pv-title' }, c.title.trim() || 'Your title'));
+  if (s.text) kids.push(h('p', { class: 'pv-text' }, s.text));
+  if (c.kind === 'choice') kids.push(h('div', { class: 'pv-ans' }, (s.choices.length ? s.choices : ['Choice 1', 'Choice 2']).map((x) => h('span', { class: 'pv-btn' }, x)), h('span', { class: 'pv-btn quiet' }, 'Not now')));
+  if (c.kind === 'words') kids.push(h('div', { class: 'pv-ans' }, h('span', { class: 'pv-field' }, 'Their answer'), h('span', { class: 'pv-btn quiet' }, 'Not now')));
+  if (c.kind === 'link') kids.push(h('p', { class: 'pv-text mono' }, safeUrl(s.url) ? safeUrl(s.url).host : 'the link'), h('div', { class: 'pv-ans' }, h('span', { class: 'pv-btn' }, 'Done'), h('span', { class: 'pv-btn quiet' }, 'Not now')));
+  if (c.kind === 'approve') kids.push(h('div', { class: 'pv-ans' }, h('span', { class: 'pv-btn' }, s.deny_label || 'Deny'), h('span', { class: 'pv-btn' }, s.approve_label || 'Approve'), h('span', { class: 'pv-btn quiet' }, 'Not now')));
+  if (c.kind === 'command') kids.push(h('pre', { class: 'pv-cmd' }, s.command || 'the command'), h('div', { class: 'pv-ans' }, h('span', { class: 'pv-btn' }, 'Done'), h('span', { class: 'pv-btn quiet' }, 'Not now')));
+  return h('div', { class: 'preview', 'aria-label': 'Preview' }, kids);
+}
+function renderCompose() {
+  const c = S.compose; if (!c) return;
+  const body = $('#compose-body');
+  const keep = document.activeElement && body.contains(document.activeElement) && document.activeElement.id ? { id: document.activeElement.id, s: document.activeElement.selectionStart, e: document.activeElement.selectionEnd } : null;
+  const joined = (S.people || []).filter(personJoined);
+  const upd = (k) => (ev) => { c[k] = ev.target.type === 'checkbox' ? ev.target.checked : ev.target.value; c.msg = null; fill($('#c-preview'), previewFor(c)); };
+  const input = (id, k, ph, max) => h('input', { type: 'text', id, value: c[k], placeholder: ph, maxlength: max || 300, oninput: upd(k), autocomplete: 'off' });
+  const area = (id, k, ph) => { const t = h('textarea', { id, rows: 3, placeholder: ph, maxlength: 4000, oninput: upd(k) }); t.value = c[k]; return t; };
+  const kids = [];
+  kids.push(h('div', { class: 'c-row' }, h('span', { class: 'label' }, 'To'),
+    S.people === null ? h('span', { class: 'help' }, 'Loading your people…')
+      : !joined.length ? h('span', { class: 'help' }, 'Nobody has joined yet: someone you sent a link to appears here once they join. My people shows who has not joined, and makes links.')
+        : h('div', { class: 'c-to', role: 'group', 'aria-label': 'To' }, joined.map((p) => {
+          const id = personId(p), on = c.to.has(id);
+          return h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false',
+            onclick: () => { if (c.to.has(id)) c.to.delete(id); else c.to.add(id); c.msg = null; renderCompose(); } }, personName(p));
+        }), joined.length > 1 ? h('button', { type: 'button', class: 'linkish', onclick: () => { c.to = new Set(joined.map(personId)); renderCompose(); } }, 'everyone') : null)));
+  kids.push(h('div', { class: 'c-row' }, h('span', { class: 'label' }, 'Kind'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Kind of ask' },
+    SEND_KINDS.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': c.kind === k ? 'true' : 'false', onclick: () => { c.kind = k; c.msg = null; renderCompose(); } }, l)))));
+  kids.push(h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Title'), input('c-title', 'title', 'A few words they see in their list', 120)));
+  if (c.kind === 'choice' || c.kind === 'words') kids.push(h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Question'), area('c-text', 'text', c.kind === 'choice' ? 'What should they choose between?' : 'What do you want to know?')));
+  if (c.kind === 'choice') kids.push(h('div', { class: 'c-field' }, h('span', { class: 'label' }, 'Choices (2 to 4)'), h('div', { class: 'c-choices' },
+    c.choices.map((v, i) => h('span', { class: 'c-choice' }, h('input', { type: 'text', id: 'c-choice-' + i, value: v, maxlength: 80, placeholder: 'Choice ' + (i + 1),
+      oninput: (ev) => { c.choices[i] = ev.target.value; c.msg = null; fill($('#c-preview'), previewFor(c)); } }),
+      c.choices.length > 2 ? h('button', { type: 'button', class: 'linkish', 'aria-label': 'Remove choice ' + (i + 1), onclick: () => { c.choices.splice(i, 1); renderCompose(); } }, 'remove') : null)),
+    c.choices.length < 4 ? h('button', { type: 'button', class: 'linkish', onclick: () => { c.choices.push(''); renderCompose(); setTimeout(() => { const f = $('#c-choice-' + (c.choices.length - 1)); if (f) f.focus(); }, 0); } }, '+ a choice') : null)));
+  if (c.kind === 'link') kids.push(h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Link'), input('c-url', 'url', 'https://…', 2000)),
+    h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'What to do there'), area('c-text', 'text', 'Read it and say Done')));
+  if (c.kind === 'approve') kids.push(h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Exactly what they approve'), area('c-text', 'text', 'The words they say yes or no to')),
+    h('div', { class: 'c-two' }, h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Yes says'), input('c-al', 'approve_label', 'Approve', 40)),
+      h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'No says'), input('c-dl', 'deny_label', 'Deny', 40))),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: c.editable, onchange: upd('editable') }), 'They may edit the words before approving'));
+  if (c.kind === 'command') kids.push(h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'The exact command'), input('c-cmd', 'command', 'the line they copy', 2000)),
+    h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Where to run it'), input('c-where', 'where', 'Terminal on their laptop', 200)));
+  kids.push(h('div', { class: 'c-two' },
+    h('div', { class: 'c-field' }, h('span', { class: 'label' }, 'How soon'), h('div', { class: 'seg', role: 'group', 'aria-label': 'How soon' },
+      [['now', 'Now'], ['today', 'Today'], ['whenever', 'Whenever']].map(([k, l]) => h('button', { type: 'button', 'aria-pressed': c.urgency === k ? 'true' : 'false', onclick: () => { c.urgency = k; renderCompose(); } }, l)))),
+    h('label', { class: 'c-field' }, h('span', { class: 'label' }, 'Closes'), h('select', { id: 'c-due', onchange: upd('due') }, DUE.map(([v, l]) => h('option', { value: v, selected: c.due === v }, l))))));
+  kids.push(h('div', { id: 'c-preview' }, previewFor(c)));
+  if (c.msg) kids.push(h('p', { class: c.msg.bad ? 'error' : 'saved block', role: 'alert' }, c.msg.text));
+  kids.push(h('div', { class: 'row' }, h('span', { class: 'help row-note' }, 'After Send you have 5 seconds to take it back (Z). Notes go back and forth until they answer.'),
+    h('button', { class: 'btn', type: 'button', 'data-close': '', onclick: () => closeOverlays() }, 'Close', kbd('Esc')),
+    h('button', { class: 'btn btn-you', type: 'button', id: 'c-send', onclick: () => sendCompose() }, 'Send', kbd(MOD + '↵'))));
+  fill(body, ...kids);
+  if (keep) { const f = document.getElementById(keep.id); if (f) { f.focus(); try { f.setSelectionRange(keep.s, keep.e); } catch (e) { /* not text */ } } }
+}
+function sendCompose() {
+  const c = S.compose, problem = composeProblem(c);
+  if (problem) { c.msg = { bad: true, text: problem }; renderCompose(); return; }
+  const body = { to: [...c.to], title: c.title.trim(), step: composeStep(c), urgency: c.urgency, idempotency_key: 'desk-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) };
+  if (c.due) body.expires_in = Number(c.due);
+  const names = [...c.to].map((id) => nameOfMember(id) || 'someone');
+  closeOverlays();
+  const p = { body, names, draft: c, until: Date.now() + UNDO_MS };
+  p.timer = setTimeout(() => flushSend(p), UNDO_MS);
+  S.pendingSend = p; S.compose = null;
+  showSendUndo(p);
+}
+async function flushSend(p) {
+  if (S.pendingSend !== p) return;
+  clearTimeout(p.timer); S.pendingSend = null;
+  const box = $('#undo'); clearInterval(undoTick);
+  try {
+    const r = await api('POST', '/v1/member/people/asks', p.body);
+    const sentTo = (r && r.sent) || [], notSent = (r && r.not_sent) || [];
+    const waits = sentTo.filter((x) => x.waits_until).map((x) => (x.name || nameOfMember(x.to || x.member_id) || 'someone') + ' (after ' + fmtClock.format(ms(x.waits_until)) + ')');
+    const no = notSent.map((x) => (x.name || nameOfMember(x.to || x.member_id) || 'someone') + (x.why || x.reason ? ': ' + (x.why || x.reason) : ''));
+    showSent({ task: {}, body: {}, label: '' }, (no.length ? 'Not sent to ' + no.join('; ') + '. ' : '') + 'Sent to ' + p.names.filter((n) => !no.some((x) => x.startsWith(n))).join(', ') + (waits.length ? '; it reaches ' + waits.join(', ') + ' after their quiet hours' : '') + '. Answers come back under Sent.', !!no.length);
+    loadSent();
+  } catch (e) {
+    S.compose = p.draft; S.compose.msg = { bad: true, text: 'Not sent: ' + e.message };
+    renderCompose(); openOverlay('#compose'); box.hidden = true;
+  }
+}
+function showSendUndo(p) {
+  const box = $('#undo'); clearInterval(undoTick); clearTimeout(sentTimer);
+  box.className = 'undo'; fill(box);
+  const secs = h('span', { class: 'u-secs' }), bar = h('div', { class: 'u-bar' });
+  box.append(h('div', { class: 'u-row' }, h('span', { class: 'u-what' }, 'To ', h('b', null, p.names.join(', ')), ': ', p.body.title), secs,
+    h('button', { class: 'btn', type: 'button', onclick: () => undoSend() }, 'Undo', kbd('Z'))), bar);
+  box.hidden = false;
+  const tick = () => { const left = Math.max(0, p.until - Date.now()); secs.textContent = 'sends in ' + Math.ceil(left / 1000) + ' s'; bar.style.transform = 'scaleX(' + (left / UNDO_MS).toFixed(3) + ')'; if (left <= 0) clearInterval(undoTick); };
+  tick(); undoTick = setInterval(tick, 100);
+  sr('Sending to ' + p.names.join(', ') + ' in 5 seconds. Press Z to undo.');
+}
+function undoSend() {
+  const p = S.pendingSend; if (!p) return false;
+  clearTimeout(p.timer); S.pendingSend = null; clearInterval(undoTick); $('#undo').hidden = true;
+  S.compose = p.draft; renderCompose(); openOverlay('#compose'); sr('Not sent. Your ask is back in the editor.');
+  return true;
+}
+window.addEventListener('pagehide', () => { if (S.pendingSend) { const p = S.pendingSend; S.pendingSend = null; api('POST', '/v1/member/people/asks', p.body, { keepalive: true }).catch(() => {}); } });
+
+/* Sent: each ask with a thread per person */
+function renderSent() {
+  const ol = $('#slist'), sends = S.sent || [];
+  if (!S.ssel && sends.length) S.ssel = sends[0].key;
+  if (S.ssel && !sends.some((x) => x.key === S.ssel)) S.ssel = sends.length ? sends[0].key : null;
+  fill(ol, ...(sends.length ? sends.map((s) => {
+    const sel = s.key === S.ssel, answered = s.threads.filter((t) => t.reply).length, news = !sel && s.threads.some(threadHasNews); // the open one is being read
+    return h('li', { class: 'item' + (sel ? ' sel' : '') + (news ? ' new' : ''), role: 'option', 'aria-selected': sel ? 'true' : 'false', id: 's-' + s.key, dataset: { id: s.key },
+      onclick: () => { S.ssel = s.key; renderSent(); openReading(); } },
+      iconFor(null, s.threads.length === 1 ? threadName(s.threads[0]) : String(s.threads.length)),
+      h('span', { class: 't' }, s.title || 'An ask'),
+      h('span', { class: 'age' }, news ? h('span', { class: 'dot', title: 'An answer or note you have not read' }) : null, age(s.at || s.created_at)),
+      h('span', { class: 'sub' }, h('span', { class: 'kind' }, (s.passed ? 'Passed on to ' : 'To ') + (s.threads.length === 1 ? threadName(s.threads[0]) : s.threads.length + ' people')
+        + (s.passed && s.from ? ' · from ' + s.from : '') + ' · ' + (s.threads.length === 1 ? (answered ? 'answered' : threadOpen(s.threads[0]) ? 'waiting' : 'closed') : answered + ' of ' + s.threads.length + ' answered'))));
+  }) : [h('li', { class: 'list-empty', role: 'presentation' }, S.sent === null ? 'Loading…' : 'Nothing sent yet. Press S to send your first ask.')]));
+  const s = sends.find((x) => x.key === S.ssel), pane = $('#scard');
+  if (!s) { fill(pane, h('div', { class: 'empty' }, h('h2', null, 'Ask your people'), h('p', null, 'Send a question, a choice, a link, something to approve, or a command to the people who joined from your link. Their answers come back here, one thread each.'),
+    h('div', { class: 'answers' }, ansBtn('Send an ask', 'S', () => openCompose(), 'btn-you')))); return; }
+  const kids = [h('button', { class: 'linkish back', type: 'button', onclick: () => closeReading() }, '← The list'),
+    h('div', { class: 'ai-says mine' }, h('span', { class: 'label' }, s.passed ? 'You passed on' : 'You asked'), h('span', { class: 'label' }, '· ' + (KIND_WORD[kindOf({ step: s.step })] || 'An ask')), h('span', { class: 'help' }, (s.passed && s.from ? ' · from ' + s.from : '') + ' · ' + when(s.at || s.created_at))),
+    h('h2', { class: 'card-title' }, s.title || 'An ask')];
+  if (s.step && (s.step.text || s.step.command)) kids.push(h('div', { class: 'ask-words mine' }, h('p', null, s.step.command || s.step.text)));
+  if (s.expires_at && ms(s.expires_at) > Date.now()) kids.push(h('p', { class: 'help' }, 'Closes ' + when(s.expires_at)));
+  for (const t of s.threads) {
+    const notes = t.notes || [];
+    const d = draft('sent:' + t.task_id);
+    const ta = h('textarea', { rows: 1, placeholder: 'A note to ' + threadName(t) + ' (notes stop once they answer)', 'aria-label': 'Note to ' + threadName(t), maxlength: 2000, dataset: { field: 'sent-' + t.task_id } });
+    ta.value = d.note || ''; ta.addEventListener('input', () => { d.note = ta.value; });
+    const msg = h('p', { class: 'error', id: 'sent-err-' + t.task_id, role: 'alert', hidden: !d.err }, d.err || '');
+    if (d.err) { ta.setAttribute('aria-invalid', 'true'); ta.setAttribute('aria-describedby', msg.id); }
+    const send = async (btn) => {
+      const v = (d.note || '').trim(); if (!v) { ta.focus(); return; }
+      btn.disabled = true; d.err = null;
+      try { const r = await api('POST', '/v1/member/sent/' + enc(t.task_id) + '/notes', { note: v }); d.note = ''; if (r && Array.isArray(r.notes)) t.notes = r.notes; else t.notes = notes.concat([{ at: new Date().toISOString(), note: v, by: 'asker' }]); renderSent(); }
+      catch (e) {
+        // 409: answered or closed meanwhile; the note stays in the field to reuse in a new ask
+        if (e.status !== 409) { d.err = 'Not sent: ' + e.message; renderSent(); return; }
+        d.err = threadName(t) + ' answered or the ask closed, so your note was not sent: “' + v + '”. To ask more, send a new ask.';
+        await loadSent(); // now the Desk knows which: say it exactly
+        const now = (S.sent || []).flatMap((x) => x.threads).find((x) => x.task_id === t.task_id);
+        if (now) { d.err = (now.reply ? threadName(now) + ' answered first (' + replyWords(now) + ')' : 'The ask closed') + ', so your note was not sent: “' + v + '”. To ask more, send a new ask.'; renderSent(); }
+      }
+    };
+    ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); ev.stopPropagation(); send(ta.nextSibling); } });
+    kids.push(h('section', { class: 'thread-box' + (threadHasNews(t) ? ' news' : '') },
+      h('div', { class: 'tb-head' }, iconFor(null, threadName(t)), h('b', null, threadName(t)), h('span', { class: 'state' + (t.reply ? '' : ' waiting') }, t.reply ? 'Answered' : (t.state === 'lapsed' ? 'Closed' : 'Waiting')),
+        t.reply && t.reply.at ? h('span', { class: 'help' }, when(t.reply.at)) : null),
+      h('p', { class: 'tb-answer' }, replyWords(t)),
+      t.reply && t.reply.note ? h('p', { class: 'tb-note' }, 'Their note: ', t.reply.note) : null,
+      notes.length ? h('ol', { class: 'thread' }, notes.map((n) => h('li', null, h('span', { class: 'by', title: n.by === 'asker' ? 'You' : threadName(t) }, n.by === 'asker' ? 'You' : threadName(t)), h('span', { class: 'tx' }, linked(n.note || '')), h('span', { class: 'tm' }, n.at ? fmtClock.format(ms(n.at)) : '')))) : null,
+      notes.length && notes[notes.length - 1].by !== 'asker' && !t.reply ? h('p', { class: 'note-state' }, threadName(t) + ' wrote a note; the ask is still open.') : null,
+      threadOpen(t)
+        ? h('div', { class: 'note-row' }, ta, h('button', { class: 'btn', type: 'button', onclick: (ev) => send(ev.currentTarget) }, 'Send note', kbd(MOD + '↵')))
+        : h('div', { class: 'row-l closed-row' }, h('span', { class: 'help' }, (t.reply ? 'Answered' : 'Closed') + ', so notes stop here. To ask more, send a new ask.'),
+          personId(t.to || {}) ? h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openCompose([personId(t.to)]) }, 'New ask to ' + threadName(t)) : null),
+      threadOpen(t) || d.err ? msg : null));
+    markThreadSeen(t);
+  }
+  markSentRead(s.threads);
+  fill(pane, h('article', { class: 'card' }, kids));
+  renderSentCount();
+}
+function lastNoteWords(t) { const n = (t.notes || []).filter((x) => x.by !== 'asker').pop(); return n && n.note ? '“' + n.note + '”' : 'a note'; }
+function sendNewsRows() {
+  // On the Asks list: each new answer or note from your people is a line to read, not an ask to answer
+  const news = sentNews(); if (!SEND_ON || !news.length) return [];
+  return [h('li', { class: 'group-h people-h', role: 'presentation' }, 'Answers to what you sent', h('span', { class: 'n' }, String(news.length)), h('span', { class: 'gh-help' }, 'to read; each leaves once opened'))]
+    .concat(news.slice(0, 6).map(({ send, thread }) => h('li', { class: 'item reply-line new', role: 'presentation', onclick: () => { S.ssel = send.key; setView('sent'); } },
+      iconFor(null, threadName(thread)), h('span', { class: 't' }, threadName(thread) + ': ' + (thread.reply ? replyWords(thread) : lastNoteWords(thread))),
+      h('span', { class: 'age' }, h('span', { class: 'dot' }), age((thread.reply && thread.reply.at) || send.created_at)),
+      h('span', { class: 'sub' }, h('span', { class: 'kind' }, 'to “' + (send.title || 'your ask') + '”')))));
+}
+/* Pass on (OWNER_web_3 item 5): any ask on the deck goes to one of the person's own people.
+   POST /v1/member/tasks/{task_id}/pass {"to", "note"}; the answer answers the original ask and comes back into the passer's thread. */
+const PASS_ON = (document.querySelector('meta[name="desk-pass"]') || {}).content === 'on';
+function openPass(t) {
+  if (!canPass() || !t || t.isCall) return;
+  S.passing = { task: t, to: null, note: '' };
+  if (S.people === null) loadPeople().then(renderPass);
+  renderPass(); openOverlay('#passon');
+}
+function renderPass() {
+  const ps = S.passing; if (!ps) return;
+  const joined = (S.people || []).filter(personJoined), t = ps.task;
+  const note = h('textarea', { id: 'pass-note', rows: 2, maxlength: 2000, placeholder: 'A line for them (optional)', 'aria-label': 'A line for them' });
+  note.value = ps.note; note.addEventListener('input', () => { ps.note = note.value; });
+  const kids = [h('p', { class: 'help' }, '“' + (t.title || 'This ask') + '” from ' + whoName(t) + ' leaves your list. The person you pick sees the whole ask, as you see it here: its words, facts and pictures. Their answer goes to ' + whoName(t) + ' as your answer (' + whoName(t) + ' is never told who they are) and comes back to you under Sent. For 5 seconds after you pass it, Z takes it back.'),
+    S.people === null ? h('p', { class: 'help' }, 'Loading your people…')
+      : !joined.length ? h('p', null, 'Nobody has joined from your link yet, so there is nobody to pass it to.')
+        : h('div', { class: 'c-to', role: 'radiogroup', 'aria-label': 'Pass to' }, joined.map((p) => h('button', { type: 'button', class: 'chip' + (ps.to === personId(p) ? ' on' : ''), role: 'radio',
+          'aria-checked': ps.to === personId(p) ? 'true' : 'false', onclick: () => { ps.to = personId(p); renderPass(); } }, personName(p)))),
+    h('div', { class: 'c-field' }, note),
+    ps.msg ? h('p', { class: 'error', role: 'alert' }, ps.msg) : null,
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => closeOverlays() }, 'Close', kbd('Esc')),
+      h('button', { class: 'btn btn-you', type: 'button', onclick: () => doPass() }, 'Pass on', kbd(MOD + '↵')))];
+  fill($('#passon-body'), ...kids);
+}
+function doPass() {
+  const ps = S.passing; if (!ps) return;
+  if (!ps.to) { ps.msg = 'Pick who to pass it to.'; renderPass(); return; }
+  closeOverlays();
+  const body = { action: 'pass', to: ps.to }; if (ps.note.trim()) body.note = ps.note.trim();
+  S.passing = null;
+  answer(ps.task, body);
+}
+if (PASS_ON) $('#passon').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); ev.stopPropagation(); doPass(); } }, true);
+
+if (SEND_ON) {
+  applySendSwitch();
+  $('#send-open').addEventListener('click', () => openCompose());
+  $('#compose').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); ev.stopPropagation(); sendCompose(); } }, true);
+}
+
+/* A daily cap on asks from any one person (router_18: GET|POST /v1/member/limits {asks_per_person_per_day}) */
+async function loadLimits() { try { S.limits = await api('GET', '/v1/member/limits'); } catch (e) { S.limits = { error: true }; } if (S.view === 'settings') renderSettings(); }
+function limitsRow() {
+  if (S.limits === null || S.limits === undefined) { loadLimits(); return null; }
+  if (S.limits.error || S.limits.asks_per_person_per_day === undefined) return null;
+  const cur = S.limits.asks_per_person_per_day, opts = [1, 3, 5, 10, 20, 50];
+  return h('div', { class: 'set' }, h('div', { class: 'k' }, 'Asks from people', h('p', { class: 'help' }, 'How many asks any one person may send you in a day. ' + (S.limits.note || 'Your own AIs are not counted.'))),
+    h('div', null, h('select', { 'aria-label': 'Asks a person may send you a day', onchange: async (ev) => {
+      try { S.limits = await api('POST', '/v1/member/limits', { asks_per_person_per_day: Number(ev.target.value) }); S.setMsg = { text: 'Saved.' }; } catch (e) { S.setMsg = { bad: true, text: e.message }; }
+      renderSettings(); } },
+      (opts.includes(cur) ? opts : opts.concat([cur]).sort((a, b) => a - b)).map((v) => h('option', { value: String(v), selected: v === cur }, v + (v === 1 ? ' a day' : ' a day'))))));
+}
+
+/* The one-time notice (router_18): before any ask from a person shows, the receiver reads who can send them asks. */
+function noticeCard() {
+  const n = S.notice; if (!n) return null;
+  return h('section', { class: 'notice-card', 'aria-labelledby': 'notice-h' }, h('p', { class: 'label', id: 'notice-h' }, 'Before any ask from a person'),
+    h('p', { class: 'notice-text' }, n.text || ((n.from || 'Someone') + ' can send you tasks and questions here; you can mute or leave at any time.')),
+    h('div', { class: 'answers' },
+      h('button', { class: 'btn btn-you', type: 'button', onclick: async (ev) => { const b = ev.currentTarget; b.disabled = true; b.textContent = 'One moment…';
+        try { await api('POST', '/v1/member/people/notice', {}); S.notice = null; S.noticeAckAt = Date.now(); S.cardSig = ''; render(); if (S.loading) S.lookAgain = true; else refresh(true); } catch (e) { b.disabled = false; b.textContent = 'Not saved: ' + e.message; } } }, 'OK, show me their asks'),
+      h('button', { class: 'btn', type: 'button', onclick: (ev) => mutePerson(n.from || 'them', ev.currentTarget) }, 'Mute ' + (n.from || 'them')),
+      h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => openLeave(n.from || null) }, 'Leave…')),
+    h('p', { class: 'help' }, 'Muted, their asks never ring and still show here. Leave ends your membership here and deletes what it holds of yours.'));
+}
+
+/* ---------- Leave (8.1 and P16; router_18 item 8d: Mute and Leave on the notice's own screen) ----------
+   POST /v1/member/leave {"confirm": true} deletes the person's answers, records, receipts and feedback on this page and stops
+   its link for good. The Desk offers the receipts first and asks for the word "leave" typed, since nothing takes it back. */
+function openLeave(from) {
+  S.leaving = { from: from || null, typed: '', msg: null, saved: '', busy: false, where: S.memberLabel || 'this page' };
+  renderLeave(); openOverlay('#leave');
+  setTimeout(() => { const f = $('#leave-typed'); if (f) f.focus(); }, 0);
+}
+function renderLeave() {
+  const L = S.leaving; if (!L) return;
+  $('#leave-h').textContent = 'Leave ' + L.where + '?';
+  const ok = () => L.typed.trim().toLowerCase() === 'leave';
+  const go = h('button', { class: 'btn btn-stop', type: 'button', id: 'leave-go', disabled: !ok() || L.busy, onclick: () => doLeave() }, L.busy ? 'Leaving…' : 'Leave');
+  const field = h('input', { type: 'text', id: 'leave-typed', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': 'leave-what', value: L.typed });
+  field.addEventListener('input', () => { L.typed = field.value; go.disabled = !ok() || L.busy; });
+  field.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ok()) { ev.preventDefault(); doLeave(); } });
+  fill($('#leave-body'),
+    h('p', { id: 'leave-what' }, 'You stop being a member here' + (L.from ? ', and ' + L.from + ' can no longer send you asks' : '') +
+      '. At once and for good: your answers, records, receipts and feedback here are deleted, and this page\'s link stops working on every device. Your person.tools account and any other pages you joined stay. To stop only this computer, sign out instead.'),
+    h('div', { class: 'row-l leave-save' }, h('button', { class: 'btn', type: 'button', onclick: (ev) => saveReceipts(ev.currentTarget) }, 'Save my receipts first'),
+      h('span', { class: 'help', role: 'status' }, L.saved)),
+    h('label', { class: 'label', for: 'leave-typed' }, 'Type leave to confirm'), field,
+    L.msg ? h('p', { class: 'error', role: 'alert' }, L.msg) : null,
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', 'data-close': '', onclick: () => closeOverlays() }, 'Keep it', kbd('Esc')), go));
+}
+const localDay = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+async function saveReceipts(btn) {
+  const L = S.leaving; btn.disabled = true;
+  try {
+    const r = await api('GET', '/v1/member/receipts');
+    const url = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' }));
+    const a = h('a', { href: url, download: 'person-tools-receipts-' + localDay() + '.json', hidden: true });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    if (L) L.saved = 'Saved to your downloads.';
+  } catch (e) { if (L) L.saved = 'Not saved: ' + e.message; }
+  if (S.leaving) renderLeave();
+}
+async function doLeave() {
+  const L = S.leaving; if (!L || L.busy || L.typed.trim().toLowerCase() !== 'leave') return;
+  L.busy = true; L.msg = null; renderLeave();
+  try {
+    await api('POST', '/v1/member/leave', { confirm: true });
+    S.leaving = null; closeOverlays();
+    signOut('You left ' + L.where + '. Its link no longer works, and this computer forgot it.');
+  } catch (e) {
+    if (e.code === 'signed_out') return;
+    L.busy = false; L.msg = 'You have not left: ' + e.message; renderLeave();
+  }
+}
+async function mutePerson(name, btn, body) {
+  try { await api('POST', '/v1/member/mutes', body || { panel_owner: true }); showSent({ task: {}, body: {}, label: '' }, 'Muted ' + name + ': their asks will never ring. They still show here.'); if (btn) btn.textContent = 'Muted'; }
+  catch (e) { showSent({ task: {}, body: {}, label: '' }, 'Not muted: ' + e.message, true); }
+}
+
+/* ---------- On: when calls can ring this person (POST /v1/member/on) ----------
+   The service keeps a person On for at most 12 hours (the promise: On ends by itself), so there is no "On with no end". */
+function noteRing(o, sentAt) {
+  if (sentAt && (S.onBusy || (S.onChangedAt && S.onChangedAt > sentAt))) return; // older than the person's last On/Off
+  S.ring = { on: o.on, on_until: o.on_until, quiet_now: !!o.quiet_now, quiet: o.quiet || (S.ring && S.ring.quiet) || null }; renderOn(); }
+const isOn = () => S.ring && S.ring.on && S.ring.on !== 'off' && (!S.ring.on_until || ms(S.ring.on_until) > Date.now());
+function onWords() {
+  if (S.onPending !== undefined) return S.onPending ? 'Calls: turning On…' : 'Calls: turning Off…';
+  if (!S.ring) return 'Calls: …';
+  if (!isOn()) return 'Calls: Off';
+  return 'Calls: On' + (S.ring.on_until ? ' until ' + fmtClock.format(ms(S.ring.on_until)) : '');
+}
+function renderOn() {
+  const b = $('#on-btn'); if (!b) return;
+  b.textContent = onWords(); b.classList.toggle('is-on', !!isOn());
+  b.title = S.ring && S.ring.quiet_now ? 'Quiet hours now: calls wait until they end.' : isOn() ? 'Calls from your panels can ring you.' : 'No call rings you. Your AIs’ asks still arrive.';
+  if (S.view === 'settings') { const r = $('#on-row'); if (r) r.replaceWith(onRow()); }
+}
+function hoursUntil(hh) { // the next time today or tomorrow at hh:00, in hours from now
+  const d = new Date(); const t = new Date(d); t.setHours(hh, 0, 0, 0); if (t <= d) t.setDate(t.getDate() + 1);
+  return (t - d) / 3600000;
+}
+async function setOn(hours) {
+  // The press shows at once. Changes go one after another, so the person's last press is the one the service keeps
+  // (two at once could land in either order on a slow service).
+  S.onPending = hours; renderOnMenu(false); renderOn();
+  if (S.onBusy) return; // the change on its way sends the latest press when it lands
+  S.onBusy = true; let err = null;
+  while (S.onPending !== undefined) {
+    const hrs = S.onPending;
+    const body = hrs ? { on: true, hours: Math.min(12, Math.max(0.25, hrs)), until: new Date(Date.now() + Math.min(12, hrs) * 3600000).toISOString() } : { on: false };
+    try { const r = await api('POST', '/v1/member/on', body); err = null; S.ring = Object.assign({}, S.ring || {}, { on: r.on, on_until: r.on_until, quiet_now: !!r.quiet_now }); }
+    catch (e) { err = e; if (e.code === 'signed_out') { S.onPending = undefined; break; } }
+    if (S.onPending === hrs) S.onPending = undefined; // nothing newer was pressed meanwhile
+  }
+  S.onBusy = false; S.onChangedAt = Date.now(); renderOn();
+  if (err) { sr('Not changed: ' + err.message); flashOn('Not changed: ' + err.message); }
+  else sr(isOn() ? 'You are On until ' + fmtClock.format(ms(S.ring.on_until)) + '.' : 'You are Off. No call rings you.');
+}
+function flashOn(t) { const b = $('#on-btn'); if (b) { b.textContent = t; setTimeout(renderOn, 2500); } }
+function onChoices() {
+  const out = [['Off', 0], ['On for 1 hour', 1], ['On for 2 hours', 2]];
+  for (const hh of [17, 18, 19, 20, 21, 22, 23]) { const hrs = hoursUntil(hh); if (hrs > 2.2 && hrs <= 12) out.push(['On until ' + fmtClock.format(new Date(Date.now() + hrs * 3600000)), hrs]); }
+  out.push(['On for 12 hours (the longest)', 12]);
+  return out;
+}
+function renderOnMenu(open) {
+  const m = $('#on-menu'), b = $('#on-btn');
+  if (open === undefined) open = m.hidden;
+  m.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!open) return;
+  const q = S.ring && S.ring.quiet;
+  fill(m, h('p', { class: 'menu-note' }, isOn() ? 'You are On until ' + fmtClock.format(ms(S.ring.on_until)) + '.' : 'You are Off: no call rings you. Your AIs’ asks still arrive.'),
+    ...onChoices().map(([label, hrs]) => h('button', { role: 'menuitem', type: 'button', onclick: () => setOn(hrs) }, label)),
+    h('p', { class: 'menu-note' }, 'On ends by itself, at most after 12 hours.' + (q ? ' Quiet hours ' + hourName(q.start) + ' to ' + hourName(q.end) + ': no call rings then.' : '')));
+  const first = m.querySelector('[role=menuitem]'); if (first) first.focus();
+}
+function onRow() {
+  return h('div', { class: 'set', id: 'on-row' }, h('div', { class: 'k' }, 'Calls can ring me', h('p', { class: 'help' }, 'Calls from panels you joined. On ends by itself, at most after 12 hours. Your AIs’ asks arrive either way.')),
+    h('div', null, h('p', { class: 'on-state' }, S.onPending !== undefined ? (S.onPending ? 'Turning On…' : 'Turning Off…') : isOn() ? 'On until ' + fmtClock.format(ms(S.ring.on_until)) + (S.ring.quiet_now ? ' (quiet hours now: calls wait)' : '') : S.ring ? 'Off' : '…'),
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Calls can ring me' }, [['Off', 0], ['1 hour', 1], ['2 hours', 2], ['12 hours', 12]].map(([l, hrs]) =>
+        h('button', { type: 'button', 'aria-pressed': (hrs === 0 ? !isOn() : false) ? 'true' : 'false', onclick: () => setOn(hrs) }, l)))));
+}
+$('#on-btn').addEventListener('click', (ev) => { ev.stopPropagation(); renderOnMenu(); });
+document.addEventListener('click', (ev) => { if (!$('#on-menu').hidden && !ev.target.closest('.on-wrap')) renderOnMenu(false); });
+$('#on-menu').addEventListener('keydown', (ev) => {
+  const items = $$('#on-menu [role=menuitem]'), i = items.indexOf(document.activeElement);
+  if (ev.key === 'ArrowDown' || ev.key === 'j') { ev.preventDefault(); ev.stopPropagation(); items[(i + 1) % items.length].focus(); }
+  else if (ev.key === 'ArrowUp' || ev.key === 'k') { ev.preventDefault(); ev.stopPropagation(); items[(i - 1 + items.length) % items.length].focus(); }
+  else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); renderOnMenu(false); $('#on-btn').focus(); }
+  else if (ev.key === 'Tab') renderOnMenu(false);
+});
 
 /* ---------- views, overlays ---------- */
 function setView(v, focusForm) {
@@ -1240,18 +2256,88 @@ function setView(v, focusForm) {
   for (const b of $$('.view')) { const on = b.dataset.view === v; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
   $('#view-asks').hidden = v !== 'asks'; $('#view-history').hidden = v !== 'history';
   $('#view-ais').hidden = v !== 'ais'; $('#view-settings').hidden = v !== 'settings';
+  $('#view-sent').hidden = v !== 'sent'; $('#view-people').hidden = v !== 'people';
+  if (v === 'sent') { renderSent(); loadSent(); setTimeout(() => $('#slist').focus(), 0); }
+  if (v === 'people') { renderPeople(); loadPeople(); }
   S.cardSig = '';
-  if (v === 'ais') { S.blocks = null; renderAIs(); loadConns(); if (focusForm) setTimeout(() => { const n = $('#c-name'); if (n) n.focus(); }, 50); }
+  if (v === 'ais') { S.blocks = null; S.mutes = null; renderAIs(); loadConns(); if (focusForm) setTimeout(() => { const n = $('#c-name'); if (n) n.focus(); }, 50); }
   if (v === 'settings') { renderSettings(); loadSettings(); }
-  if (v === 'history') { renderHistory(); setTimeout(() => $('#hlist').focus(), 0); }
+  if (v === 'history') { renderHistory(); setTimeout(() => $('#hlist').focus(), 0); loadDeepHistory(); }
   if (v === 'asks') setTimeout(() => $('#list').focus(), 0);
   render();
 }
 for (const b of $$('.view')) b.addEventListener('click', () => setView(b.dataset.view));
 $('#sort').addEventListener('change', (ev) => { S.sort = ev.target.value; setPref('sort', S.sort); render(); });
 $('#refresh').addEventListener('click', () => refresh());
-$('#signout').addEventListener('click', () => askSignOut());
-$('#keys-open').addEventListener('click', () => openOverlay('#keys'));
+/* The menu: the same place and the same things as the phone's (OWNER_web_2). */
+function menuOpen(open) {
+  const m = $('#menu'), b = $('#menu-open');
+  if (open === undefined) open = m.hidden;
+  m.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) { const first = m.querySelector('[role=menuitem]'); if (first) first.focus(); }
+}
+$('#menu-open').addEventListener('click', (ev) => { ev.stopPropagation(); menuOpen(); });
+document.addEventListener('click', (ev) => { if (!$('#menu').hidden && !ev.target.closest('.menu-wrap')) menuOpen(false); });
+$('#menu').addEventListener('keydown', (ev) => {
+  const items = $$('#menu [role=menuitem]'), i = items.indexOf(document.activeElement);
+  if (ev.key === 'ArrowDown' || ev.key === 'j') { ev.preventDefault(); ev.stopPropagation(); items[(i + 1) % items.length].focus(); }
+  else if (ev.key === 'ArrowUp' || ev.key === 'k') { ev.preventDefault(); ev.stopPropagation(); items[(i - 1 + items.length) % items.length].focus(); }
+  else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); menuOpen(false); $('#menu-open').focus(); }
+  else if (ev.key === 'Tab') { menuOpen(false); }
+});
+for (const it of $$('#menu [role=menuitem]')) it.addEventListener('click', () => {
+  menuOpen(false);
+  const go = it.dataset.go;
+  if (go === 'ais' || go === 'history' || go === 'settings' || go === 'people') setView(go);
+  else if (go === 'keys') openOverlay('#keys');
+  else if (go === 'computers') showComputers();
+  else if (go === 'pages') showPages();
+  else if (go === 'feedback') { $('#feedback-msg').textContent = ''; openOverlay('#feedback'); setTimeout(() => $('#feedback-text').focus(), 0); }
+  else if (go === 'signout') askSignOut();
+});
+/* Switch page: a passkey that opens several pages shows one at a time. Switching sends what waits in its five seconds
+   first, then opens the Desk again on the other page, so nothing of one page is shown or sent as the other. */
+function applyPagesSwitch() { const on = /^ps_/.test(S.cred || '') && (S.mems || []).length > 1; for (const el of $$('.pages-only')) el.hidden = !on; }
+function showPages() {
+  const list = $('#pages-list');
+  fill(list, ...(S.mems || []).map((m) => h('button', { class: 'btn pick-page', type: 'button', disabled: m.id === S.member ? true : undefined,
+    onclick: () => switchPage(m) }, h('span', null, m.label + (m.id === S.member ? ' · this one' : '')), h('span', { class: 'pick-n', 'data-mb': m.id }, 'counting open asks…'))));
+  openOverlay('#pages');
+  const first = list.querySelector('button:not([disabled])'); if (first) first.focus({ preventScroll: true });
+  for (const m of S.mems || []) countOpen(S.cred, m.id).then((n) => { const el = list.querySelector('.pick-n[data-mb="' + m.id + '"]'); if (el) el.textContent = n ? n + (n === 1 ? ' ask open' : ' asks open') : 'nothing open'; })
+    .catch(() => { const el = list.querySelector('.pick-n[data-mb="' + m.id + '"]'); if (el) el.textContent = ''; });
+}
+async function switchPage(m) {
+  for (const b of $$('#pages-list button')) b.disabled = true;
+  sr('Opening ' + m.label + '…');
+  await Promise.all([...S.pending.keys()].map((id) => flush(id))); // sent as the page they were made on
+  if (S.pendingSend) await flushSend(S.pendingSend);
+  const keep = S.remember ? 'local' : 'session';
+  sset(keep, 'desk.member', m.id); sset(keep, 'desk.member_label', m.label); sdel('local', 'desk.owner'); sdel('session', 'desk.owner');
+  location.reload();
+}
+/* Computers signed in: read-only here; the phone approves, lists for others and signs computers out. */
+async function showComputers() {
+  const body = $('#computers-list'); fill(body, h('p', { class: 'help' }, 'Loading…')); openOverlay('#computers');
+  try {
+    const r = await api('GET', '/v1/member/desk/sessions');
+    const list = Array.isArray(r && r.sessions) ? r.sessions : Array.isArray(r) ? r : [];
+    if (!list.length) { fill(body, h('p', null, 'No computer is signed in with your phone.')); return; }
+    fill(body, h('ul', { class: 'computers' }, list.map((c) => h('li', null,
+      h('b', null, [c.browser, c.where || c.city].filter(Boolean).join(' · ') || 'A computer'), c.current || c.this ? h('span', { class: 'state' }, 'This one') : null,
+      h('span', { class: 'help' }, (c.signed_in_at || c.made_at ? 'signed in ' + when(c.signed_in_at || c.made_at) : '') + (c.last_used_at ? ' · last used ' + agoWords(c.last_used_at) : ''))))));
+  } catch (e) {
+    fill(body, h('p', { class: 'help' }, e.status === 404 ? 'This list arrives with signing in by your phone.' : 'The list could not be read: ' + e.message));
+  }
+}
+$('#feedback-send').addEventListener('click', async () => {
+  const ta = $('#feedback-text'), msg = $('#feedback-msg'), v = ta.value.trim();
+  if (!v) { msg.textContent = 'Write what should change first.'; ta.focus(); return; }
+  $('#feedback-send').disabled = true;
+  try { await api('POST', '/v1/member/feedback', { text: v.slice(0, 2000) }); ta.value = ''; msg.textContent = 'Sent. Thank you.'; }
+  catch (e) { msg.textContent = 'Not sent: ' + e.message; }
+  $('#feedback-send').disabled = false;
+});
 function askSignOut() {
   if (S.pending.size) confirmBox('Send your answers first?', 'An answer is still waiting out its five seconds. Signing out sends it now.', 'Send and sign out', () => { for (const id of [...S.pending.keys()]) flush(id, true); signOut(); });
   else signOut();
@@ -1261,6 +2347,8 @@ function openOverlay(sel) { lastFocus = document.activeElement; const o = $(sel)
 function closeOverlays() { let any = false; for (const o of $$('.overlay')) if (!o.hidden) { o.hidden = true; any = true; } if (any && lastFocus) lastFocus.focus(); return any; }
 for (const b of $$('[data-close]')) b.addEventListener('click', () => closeOverlays());
 for (const o of $$('.overlay')) o.addEventListener('click', (ev) => { if (ev.target === o) closeOverlays(); });
+// The key list is a light panel: the page behind it stays usable, and a click anywhere else closes it.
+document.addEventListener('mousedown', (ev) => { const k = $('#keys'); if (!k.hidden && !ev.target.closest('#keys .sheet') && !ev.target.closest('#menu-open') && !ev.target.closest('.menu')) { k.hidden = true; } }, true);
 function confirmBox(title, text, yes, onyes) {
   $('#confirm-h').textContent = title; $('#confirm-p').textContent = text;
   const y = $('#confirm-yes'); y.textContent = yes;
@@ -1275,9 +2363,11 @@ function buildKeymap() {
     [['Enter'], 'Write: the answer, the words you approve, or a note. In the answer box, Enter sends'],
     [[MOD, 'Enter'], 'Send the note alone; the ask stays open'], [['O'], 'Open the link in a new tab'], [['C'], 'Copy the command'],
     [['Z'], 'Undo the last answer (five seconds)'], [['Esc'], 'Leave a box, close this, or go back to the list'],
-    [['I'], 'Asks'], [['H'], 'History'], [['/'], 'Search history'], [['A'], 'Your AIs'], [[','], 'Settings'], [['R'], 'Look for new asks now'], [['?'], 'These keys'],
+    [['M'], 'The menu'], [['I'], 'Asks'], [['H'], 'History'],
+    ...(SEND_ON ? [[['S'], 'Send an ask to your people'], [['T'], 'Sent: their answers, a thread each']] : []),
+    ...(canPass() ? [[['P'], 'Pass the ask on to one of your people']] : []), [['/'], 'Search history'], [['A'], 'Your AIs'], [[','], 'Settings'], [['R'], 'Look for new asks now'], [['?'], 'These keys'],
   ];
-  $('#keymap').replaceChildren(...rows.flatMap(([ks, what]) => [h('dt', null, ks.map(kbd)), h('dd', null, what)]));
+  fill($('#keymap'), ...rows.flatMap(([ks, what]) => [h('dt', null, ks.map(kbd)), h('dd', null, what)]));
 }
 function focusCard() { const p = $('#card'); p.focus({ preventScroll: true }); }
 function openReading() { $('#view-asks').classList.add('reading'); $('#view-history').classList.add('reading'); }
@@ -1285,6 +2375,11 @@ function closeReading() { $('#view-asks').classList.remove('reading'); $('#view-
 
 /* ---------- the keyboard ---------- */
 function move(delta) {
+  if (S.view === 'sent') {
+    const items = $$('#slist .item'); if (!items.length) return;
+    const i = items.findIndex((x) => x.dataset.id === S.ssel);
+    S.ssel = items[Math.max(0, Math.min(items.length - 1, (i < 0 ? 0 : i + delta)))].dataset.id; renderSent(); return;
+  }
   if (S.view !== 'asks' && S.view !== 'history') return;
   if (S.view === 'history') {
     const items = $$('#hlist .item'); if (!items.length) return;
@@ -1332,15 +2427,20 @@ document.addEventListener('keydown', (ev) => {
   switch (k) {
     case 'j': case 'ArrowDown': return act(() => move(1));
     case 'k': case 'ArrowUp': return act(() => move(-1));
-    case 'ArrowRight': case 'y': if (t && yn && yn.yes) return act(() => (yn.yes.call ? takeCall(t) : answer(t, yn.yes.body))); return;
-    case 'ArrowLeft': case 'n': if (t && yn && yn.no) return act(() => answer(t, yn.no.body)); return;
+    case 'ArrowRight': case 'y': if (t && yn && yn.yes) return act(() => (yn.yes.call ? takeCall(t) : yn.yes.body.choice !== undefined ? choose(t, yn.yes.body.choice) : answer(t, yn.yes.body))); return;
+    case 'ArrowLeft': case 'n': if (t && yn && yn.no) return act(() => (yn.no.body.choice !== undefined ? choose(t, yn.no.body.choice) : answer(t, yn.no.body))); return;
     case 'x': if (t) return act(() => answer(t, t.isCall ? { action: 'call_not_now', local: true } : { action: 'not_now' })); return;
+    case 'd': if (t && !t.isCall && doneOk(t)) return act(() => answer(t, { action: 'done' })); return;
     case 'u': if (t && !t.isCall) return act(() => toggleLater(t)); return;
     case 'z': return act(() => undo());
     case 'Enter': if (t && t.isCall) return act(() => takeCall(t)); if (t && S.view === 'asks') { const f = firstField(); if (f) { ev.preventDefault(); openReading(); f.focus(); } } return;
     case 'o': { const a = $('#open-link'); if (a && S.view === 'asks') { ev.preventDefault(); a.click(); } return; }
     case 'c': { const p = $('#cmd-line'); if (p && t) { ev.preventDefault(); copyText(t.step.command || '', $('.cmd-top .btn')); } return; }
     case 'r': return act(() => refresh());
+    case 'm': return act(() => menuOpen(true));
+    case 's': if (canSend()) return act(() => openCompose()); return;
+    case 't': if (canSend()) return act(() => setView('sent')); return;
+    case 'p': if (canPass() && t && !t.isCall) return act(() => openPass(t)); return;
     case 'i': return act(() => setView('asks'));
     case 'h': return act(() => setView('history'));
     case '/': return act(() => { setView('history'); setTimeout(() => $('#search').focus(), 0); });
@@ -1348,17 +2448,31 @@ document.addEventListener('keydown', (ev) => {
     case ',': return act(() => setView('settings'));
     case '?': return act(() => openOverlay('#keys'));
     default:
-      if (/^[1-9]$/.test(k) && t && kindOf(t) === 'choice') { const c = t.step.choices[Number(k) - 1]; if (c !== undefined) act(() => answer(t, { action: 'answer', choice: c })); }
+      if (/^[1-9]$/.test(k) && t && kindOf(t) === 'choice') { const c = t.step.choices[Number(k) - 1]; if (c !== undefined) act(() => choose(t, c)); }
   }
 });
 
+/* ---------- the server's optional parts, from its discovery document (section 5) ---------- */
+async function loadFeatures() {
+  try {
+    const r = await fetch(API + '/.well-known/' + WIRE, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+    const d = r.ok ? await r.json() : null;
+    S.features = new Set(Array.isArray(d && d.features) ? d.features : []); S.cardSig = ''; render();
+  } catch (e) { /* none known: the Desk offers only what every server takes */ }
+}
 /* ---------- start ---------- */
 function start(data) {
+  qrStop();
   $('#booting').hidden = true; $('#signin').hidden = true; $('#desk').hidden = false;
   S.view = 'asks';
   if (data) absorb(data);
-  loadSettings(); loadConns();
-  api('GET', '/v1/member/offers').then((o) => { if (o && Array.isArray(o.offers)) { S.offers = o.offers; for (const c of callItems()) loadSeat(c); render(); } }).catch(() => {});
+  loadSettings(); loadConns(); setTimeout(loadDeepHistory, 1500); loadFeatures();
+  if (SEND_ON) setTimeout(() => { if (S.cred && S.limits == null) loadLimits(); }, 2500); // Settings opens whole
+  if (SEND_ON || PASS_ON) { if (!S.peopleEarly) loadPeople(); S.peopleEarly = null; saveOwner(); }
+  applyPagesSwitch();
+  if (SEND_ON) loadSent();
+  const offersAt = Date.now();
+  api('GET', '/v1/member/offers').then((o) => { if (o) noteRing(o, offersAt); if (o && Array.isArray(o.offers)) { S.offers = o.offers.filter((x) => !S.blockedCalls.has(x.call_id)); for (const c of callItems()) loadSeat(c); render(); } }).catch(() => {});
   render(); schedule();
   $('#list').focus();
 }
@@ -1367,13 +2481,16 @@ window.addEventListener('hashchange', scrubAddress);
 (async () => {
   const cred = sget('session', 'desk.cred') || sget('local', 'desk.cred');
   if (!cred) { showSignIn(); return; }
+  const slow = setTimeout(() => { $('#booting').textContent = 'Opening your Desk… person.tools is slow to answer just now.'; }, 3000);
   S.cred = cred; S.remember = !!sget('local', 'desk.cred');
   S.member = sget('session', 'desk.member') || sget('local', 'desk.member') || null;
   S.memberLabel = sget('session', 'desk.member_label') || sget('local', 'desk.member_label') || null;
-  try { const data = await api('GET', '/v1/member/tasks'); start(data); }
-  catch (e) {
-    if (e.status === 401 || e.status === 403 || e.status === 404) signOut('This page link stopped working. Paste your current link.');
-    else { start(null); S.lastErr = e.message; render(); }
-  }
+  S.isOwner = cachedOwner(); applySendSwitch();
+  try { S.mems = JSON.parse(sget('session', 'desk.mems') || sget('local', 'desk.mems') || '[]'); } catch (e) { S.mems = []; }
+  applyPagesSwitch();
+  if (SEND_ON || PASS_ON) S.peopleEarly = loadPeople();
+  clearTimeout(slow);
+  S.firstLook = true; start(null); refresh(true); // drawn now; the asks fill in when person.tools answers (refresh signs out a dead link)
+  setTimeout(() => { if (S.firstLook && S.cred) { S.firstSlow = true; S.cardSig = ''; render(); } }, 3000);
 })();
 })();

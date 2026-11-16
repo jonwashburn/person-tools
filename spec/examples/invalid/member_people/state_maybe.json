@@ -1,0 +1,26 @@
+{
+  "name": "Robin",
+  "people": [
+    {
+      "member_id": "mb_sam01",
+      "name": "Sam",
+      "joined_at": "2026-11-16T20:24:01Z",
+      "state": "maybe"
+    }
+  ],
+  "waiting": [
+    {
+      "name": "Alex",
+      "sent_at": "2026-11-16T20:25:22Z",
+      "state": "not yet",
+      "resend": {
+        "method": "POST",
+        "path": "/v1/member/people/links",
+        "body": {
+          "label": "Alex"
+        }
+      }
+    }
+  ],
+  "note": "A join link is shown only once, when it is made: to send it again, make a fresh one for that name (the old one stops)."
+}

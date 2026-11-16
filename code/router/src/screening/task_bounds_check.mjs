@@ -1,7 +1,7 @@
 // Checks for task_bounds.js (OWNER_all_7, 15 Nov 2026). Run: node code/router/src/screening/task_bounds_check.mjs (Node 22)
 // PASS cases are the tasks waiting on the operator now (the CEO's seed list) and ordinary shapes; REFUSE cases are each bound.
 // Fake secrets below are made up, built at run time so no secret-shaped string sits in this file.
-import { taskBounds, checkTask, TASK_BOUNDS_VERSION } from "./task_bounds.js";
+import { taskBounds, checkTask, keyShapeIn, maskKeyShapes, TASK_BOUNDS_VERSION } from "./task_bounds.js";
 
 const DASH5 = "-".repeat(5);
 const R = (n, c = "Ab9") => c.repeat(Math.ceil(n / c.length)).slice(0, n);
@@ -101,6 +101,11 @@ const screenBad = [
 for (const [name, t] of screenPass) { n++; const r = checkTask(t, LISTS); if (r.ok) ok++; else console.log("FALSE HOLD (screen)", name, JSON.stringify({ d: r.decision, c: r.code, why: r.why }).slice(0, 200)); }
 for (const [name, t] of screenBad) { n++; const r = checkTask(JSON.parse(JSON.stringify(t).replace(/\\\\u0435/g, "\u0435").replace(/\\\\u0441/g, "\u0441")), LISTS); if (!r.ok) ok++; else console.log("MISS (screen)", name); if (process.env.WHY) console.log("  why", name.padEnd(22), r.decision, r.code, String(r.why || "").slice(0, 90)); }
 
+// keyShapeIn / maskKeyShapes (1.3.0): one list for the service's other paths
+const shapes = [["a card processor's live key", "Use sk" + "_live_" + R(28)], ["an AWS key", "key AK" + "IA" + "ABCDEFGHIJKLMNOP"], ["a GitHub token", "gh" + "p_" + R(36)],
+  ["a Slack token", "xo" + "xb-" + "1234567890-abcdefghij"], ["one of ours", "real" + "_" + R(20)], ["a long mixed run", "id " + R(40)]];
+for (const [name, v] of shapes) { n++; if (keyShapeIn(v) && maskKeyShapes(v).includes("[removed]") && !maskKeyShapes(v).includes(v.split(" ").pop())) ok++; else console.log("MISS key shape", name); }
+for (const v of ["Can you water the ferns today?", "Open https://example.com/a/b/c/d/e/f and pick one", "commit 3f2a9c1", "Wren Hale can send you tasks"]) { n++; if (!keyShapeIn(v) && maskKeyShapes(v) === v) ok++; else console.log("FALSE key shape", v); }
 for (const [name, t, o] of pass) { n++; const r = taskBounds(t, LISTS); if (r.ok) ok++; else console.log("FALSE REFUSAL", name, JSON.stringify(r)); }
 for (const [name, t, code, o] of refuse) { n++; const r = taskBounds(t, { ...LISTS, ...(o || {}) }); if (!r.ok && r.code === code) ok++; else console.log("MISS", name, "expected", code, "got", JSON.stringify(r)); }
 console.log(`task_bounds ${TASK_BOUNDS_VERSION}: ${ok}/${n} (bounds: ${pass.length} pass, ${refuse.length} refused; screen: ${screenPass.length} allowed, ${screenBad.length} held or refused)`);

@@ -1,0 +1,48 @@
+{
+  "member_id": "mb_robin01",
+  "on": "on_until",
+  "on_until": "2026-11-16T20:53:44Z",
+  "quiet": {
+    "start": 22,
+    "end": 7,
+    "tz": "America/Chicago"
+  },
+  "settings": {
+    "longer_hold": false,
+    "sounds": false
+  },
+  "silent": true,
+  "ring_cap": {
+    "used": 1,
+    "limit": 4,
+    "resets_at": "2026-11-16T21:23:53Z",
+    "applies": false
+  },
+  "missed_rings": 0,
+  "quiet_now": false,
+  "next_ring_at": "2026-11-16T20:24:01Z",
+  "calls_waiting": 0,
+  "calls_not_reached": 0,
+  "offers": [
+    {
+      "seat_id": "s_seat01",
+      "call_id": "call_calm01",
+      "state": "offered",
+      "ask": "Which word fits a calm morning, quiet or bright?",
+      "kind": "answer",
+      "minutes": 2,
+      "pay": {
+        "per_person_usd": "0.00",
+        "unpaid_test": true
+      },
+      "asker": {
+        "name": "Example Studio"
+      },
+      "notification": "An unpaid test call",
+      "held_until": "2026-11-16T20:38:53Z",
+      "seat_token": "st_example01"
+    }
+  ],
+  "checked_at": "2026-11-16T20:24:01Z",
+  "look_again_after_seconds": 10
+}

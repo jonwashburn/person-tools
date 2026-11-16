@@ -22,7 +22,7 @@ export const PAY_FLOOR_CENTS_PER_HOUR = 1800;
 const NESTED_UNTIL = Date.parse('2026-11-14T12:01:00Z');   // 6:01 AM CT Sat 14 Nov
 
 const TOP = ['ask', 'kind', 'content', 'people', 'max_total_usd', 'idempotency_key', 'enough', 'pool', 'answer_fields', 'minutes',
-  'pay_per_person_usd', 'deadline_minutes', 'require', 'voice', 'content_rating', 'may_train_on_answers', 'pace', 'script', 'ext', 'wants_strangers'];
+  'pay_per_person_usd', 'deadline_minutes', 'require', 'voice', 'content_rating', 'may_train_on_answers', 'pace', 'script', 'ext', 'wants_strangers', 'card'];
 const NESTED = ['experience', 'respond', 'who', 'pay', 'by_minutes'];
 const FIELD_KEYS = ['type', 'label', 'optional', 'max_length', 'min', 'max', 'choices', 'multiple', 'min_label', 'max_label'];
 const SCRIPT_KEYS = ['accept', 'delay_seconds', 'media_seconds', 'play_fraction', 'realtime', 'visible_fraction', 'revealed', 'visible_seconds',
@@ -310,6 +310,7 @@ export function normalizeCall(body0, now = Date.now(), opts = {}) {
     require, content_rating, may_train_on_answers: may_train, pace, script, max_total_cents, media_seconds_hint: body.__seconds || null, ext: body.ext || null };
   Object.defineProperty(spec, 'floorError', { value: floorError, enumerable: false });   // not stored with the call
   // OWNER_all_6 item 2: the in-band ask for real strangers; kept apart (strangers.js), never in the stored call or its quote
+  Object.defineProperty(spec, 'card_raw', { value: body.card === undefined ? null : body.card, enumerable: false });   // checked in calls.js (cards.js), then stored as spec.card
   Object.defineProperty(spec, 'wants_strangers', { value: body.wants_strangers !== undefined || (body.ext && body.ext['person.tools'] && body.ext['person.tools'].wants_strangers !== undefined) ? body : null, enumerable: false });
   return { spec, defaults_used: defaults, idempotency_key: idem };
 }

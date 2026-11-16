@@ -58,6 +58,8 @@ h1:focus, h2:focus { outline: none; }
 code { font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
 
 main { padding: 0 var(--pad); max-width: 1440px; margin: 0 auto; }
+.first-call { padding: 20px var(--pad) 0; max-width: 1440px; margin: 0 auto; }   /* the first-call block sits before main: give it main's edges (it ran flush to the screen's edge) */
+.first-call p { max-width: 46em; }
 /* the stage: the hero and the agent's side beside the phone. The phone sticks only inside the stage, so it can never be
    drawn over the sections below it (it once was: a display:contents hero made the whole page its sticky range). */
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 420px); grid-template-areas: "words phone" "agent phone";

@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_task.json",
+  "title": "An ask, as a person client reads it (section 26.5)",
+  "type": "object",
+  "required": [
+    "task_id",
+    "title",
+    "urgency",
+    "from",
+    "step",
+    "created_at",
+    "state",
+    "reply",
+    "notes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 120
+    },
+    "urgency": {
+      "enum": [
+        "now",
+        "today",
+        "whenever"
+      ]
+    },
+    "from": {
+      "type": "string",
+      "minLength": 1
+    },
+    "connection": {
+      "type": "object",
+      "required": [
+        "name",
+        "yours"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "icon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "yours": {
+          "type": "boolean"
+        }
+      },
+      "description": "The AI that asked; yours is true only for an AI this person connected; a passed-on copy carries no id."
+    },
+    "step": {
+      "$ref": "#/$defs/step"
+    },
+    "unlocks": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 0,
+      "maxLength": 300
+    },
+    "created_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "expires_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "state": {
+      "enum": [
+        "open",
+        "answered",
+        "done",
+        "not_now",
+        "lapsed"
+      ]
+    },
+    "reply": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/reply"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/note"
+      }
+    },
+    "card": {
+      "type": "object",
+      "required": [
+        "blocks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "minProperties": 1
+          }
+        }
+      },
+      "description": "The asker's layout: blocks drawn in order (headline, text, media, facts, price, when_where, choices, input); a client ignores a block it does not know."
+    },
+    "brand": {
+      "type": "object",
+      "required": [
+        "name",
+        "domain",
+        "verified"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mark": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "colours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "means"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "means": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "maxItems": 4
+        },
+        "grounds": {
+          "type": "object",
+          "required": [],
+          "additionalProperties": false,
+          "properties": {
+            "light": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "dark": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            }
+          }
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified": {
+          "const": true
+        },
+        "mark_url": {
+          "$ref": "common.json#/$defs/https_url"
+        }
+      },
+      "description": "The asker's brand, present only once its domain is proved (MEMBER-10)."
+    },
+    "media": {
+      "type": "object",
+      "required": [
+        "kind",
+        "content_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bytes": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "deleted_at": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "The ask's one photo or clip; fetched at GET /v1/member/tasks/{task_id}/media."
+    },
+    "sender": {
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "behind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "person"
+        },
+        "behind": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "A person who sent the ask: their name as the server holds it on their account, and what stands behind it."
+    },
+    "passed_on_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "shell_only": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "question"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "choices": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 4
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "description": "A question: with 2 to 4 choices, or (choices absent or null) answered in words."
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "link"
+            },
+            "url": {
+              "$ref": "common.json#/$defs/https_url"
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "domain": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sign_in_page": {
+              "type": "boolean"
+            }
+          },
+          "description": "A link: where it goes and what to do there; domain is the host it really opens."
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "command"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "command"
+            },
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "where": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "description": "A command: the exact line, and where to run it; only the person can run it."
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "approve"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approve_label": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "deny_label": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "editable": {
+              "type": "boolean"
+            }
+          },
+          "description": "Approve or deny exactly what text says, under the ask's own labels; editable lets the person change text."
+        }
+      ]
+    },
+    "reply": {
+      "type": "object",
+      "required": [
+        "action",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "answer",
+            "done",
+            "not_now",
+            "approve",
+            "deny"
+          ]
+        },
+        "choice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "$ref": "common.json#/$defs/time"
+        },
+        "approved_text": {
+          "type": "string"
+        },
+        "device_approved": {
+          "type": "boolean"
+        },
+        "mark": {
+          "type": "string"
+        },
+        "masked": {
+          "type": "string"
+        }
+      },
+      "description": "The person's answer (26.5); approved_text, device_approved and mark come with approve and deny."
+    },
+    "note": {
+      "type": "object",
+      "required": [
+        "at",
+        "note",
+        "by"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "common.json#/$defs/time"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "by": {
+          "enum": [
+            "person",
+            "asker",
+            "passer"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "private": {
+          "type": "boolean"
+        }
+      },
+      "description": "One line of the note thread (26.5); private lines never reach the asker (26.10)."
+    }
+  }
+}

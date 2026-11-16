@@ -1,0 +1,130 @@
+{
+  "open": [
+    {
+      "task_id": "tk_dinner01",
+      "title": "Dinner tonight",
+      "urgency": "today",
+      "from": "Robot chef",
+      "connection": {
+        "id": "cn_chef01",
+        "name": "Robot chef",
+        "icon": "chef",
+        "yours": true
+      },
+      "step": {
+        "type": "question",
+        "text": "What should I start at 5:30 PM?",
+        "choices": [
+          "Salmon and rice",
+          "Pasta with greens",
+          "Chicken tacos",
+          "Surprise me"
+        ]
+      },
+      "unlocks": "I take the right things out of the fridge at 4 PM.",
+      "created_at": "2026-11-16T20:24:01Z",
+      "expires_at": "2026-11-17T20:24:01Z",
+      "state": "open",
+      "reply": null,
+      "notes": []
+    },
+    {
+      "task_id": "tk_porch01",
+      "title": "Package at the front door",
+      "urgency": "today",
+      "from": "Home camera",
+      "connection": {
+        "id": "cn_home01",
+        "name": "Home camera",
+        "icon": "home",
+        "yours": true
+      },
+      "step": {
+        "type": "question",
+        "text": "The camera saw a parcel left on the porch at 2:39 PM. Bring it in now?",
+        "choices": [
+          "Leave it",
+          "Bring it in"
+        ]
+      },
+      "unlocks": "I ask the robot to carry it inside.",
+      "created_at": "2026-11-16T20:24:01Z",
+      "expires_at": "2026-11-17T20:24:01Z",
+      "state": "open",
+      "reply": null,
+      "notes": [],
+      "media": {
+        "kind": "photo",
+        "content_type": "image/jpeg",
+        "bytes": 18482,
+        "seconds": null,
+        "deleted_at": "2026-11-23T20:24:01Z"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "from": "Robot chef",
+      "task_ids": [
+        "tk_dinner01"
+      ]
+    },
+    {
+      "from": "Home camera",
+      "task_ids": [
+        "tk_porch01"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "task_id": "tk_soup01",
+      "title": "Soup or salad",
+      "urgency": "today",
+      "from": "Robot chef",
+      "connection": {
+        "id": "cn_chef01",
+        "name": "Robot chef",
+        "icon": "chef",
+        "yours": true
+      },
+      "step": {
+        "type": "question",
+        "text": "Soup or salad?",
+        "choices": [
+          "Soup",
+          "Salad"
+        ]
+      },
+      "unlocks": "I take the right things out of the fridge at 4 PM.",
+      "created_at": "2026-11-16T20:24:01Z",
+      "expires_at": "2026-11-17T20:24:01Z",
+      "state": "answered",
+      "reply": {
+        "action": "answer",
+        "choice": "Soup",
+        "text": null,
+        "note": "Hot, please.",
+        "at": "2026-11-16T20:25:23Z"
+      },
+      "notes": [
+        {
+          "at": "2026-11-16T20:25:22Z",
+          "note": "Either is fine.",
+          "by": "person"
+        }
+      ]
+    }
+  ],
+  "passed_on": [
+    {
+      "task_id": "tk_porchlight01",
+      "title": "Porch light schedule",
+      "from": "Home camera",
+      "passed_to": "Sam",
+      "passed_at": "2026-11-16T20:25:22Z",
+      "state": "open",
+      "reply": null
+    }
+  ]
+}

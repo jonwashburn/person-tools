@@ -14,7 +14,7 @@
 
 import { withheldRegexps, foldForNames } from "./index.js";
 
-export const TASK_BOUNDS_VERSION = "1.2.0";
+export const TASK_BOUNDS_VERSION = "1.3.0";
 
 // --- 1. key and token values -------------------------------------------------------------------------------------------
 // Shapes of secrets, matched on the raw text (case kept). Each is long enough that ordinary words never match.
@@ -38,6 +38,11 @@ const KEY_SHAPES = [
 ];
 // A long run of mixed letters and digits with no spaces reads as a secret (a 40-character hex commit id does not: hex only).
 const HIGH_ENTROPY = /(?<![A-Za-z0-9_\/.-])(?=[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-]))(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*[0-9])[A-Za-z0-9_-]{32,}/;
+// For the service's other paths (a person's sends to their people, an AI's asks, notes, replies): the same list of key shapes,
+// so every path refuses or masks the same values (TRUST, router_18 attack, 15 Nov 2026: a card processor's live key got through
+// a send and an AI's ask, whose narrower pattern missed it).
+export function keyShapeIn(text) { const s = String(text ?? ""); for (const [rx, what] of KEY_SHAPES) if (rx.test(s)) return what; return HIGH_ENTROPY.test(s) ? "a long run of mixed letters and digits" : null; }
+export function maskKeyShapes(text) { let s = String(text ?? ""); for (const rx of [...KEY_SHAPES.map((k) => k[0]), HIGH_ENTROPY]) s = s.replace(new RegExp(rx.source, rx.flags.replace("g", "") + "g"), "[removed]"); return s; }
 // A step that would put a secret on the screen (so it could be copied into a chat): printing a key file or the environment.
 // Only in a command, and only when the output lands on the terminal (a pipe or a redirect sends it elsewhere).
 const SECRET_FILE = String.raw`(?:\S*\.env\b|\S*\.p8\b|\S*\.pem\b|\S*\bid_(?:rsa|ed25519)\b|\S*secrets?\/\S*|\S*\.config\/humancall\S*)`;

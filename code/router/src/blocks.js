@@ -13,9 +13,15 @@ async function siblings(env, m) {
 }
 
 export async function addBlock(env, m, b) {
-  for (const k of Object.keys(b || {})) if (!['call_id', 'task_id'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send call_id or task_id.`, null);
+  for (const k of Object.keys(b || {})) if (!['call_id', 'task_id', 'passer'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send call_id or task_id (and passer: true to block the one who passed it on).`, null);
   let pr = null;
-  if (b && b.call_id) {   // a call on this member's panel: one they were shown, even after the offer lapsed (TRUST 3:11)
+  if (b && b.task_id && b.passer === true) {   // OWNER_router_18 item 7: the one who passed this ask on, by the name the person saw
+    const t = await env.DB.prepare(`SELECT passed_by FROM tasks WHERE id = ? AND panel_id = ? AND (to_name = ? OR to_name = ?)`).bind(String(b.task_id), m.panel_id, m.person_name || '\u0000', 'mb:' + m.id).first();
+    if (!t) throw notFixable(404, 'not_found', 'No call or task of yours has that id.');
+    if (!t.passed_by) throw fixable('invalid_field', 'passer', 'Nobody passed this ask to you.', false);
+    pr = await env.DB.prepare('SELECT po.principal_id, po.name AS seen FROM owner_members om JOIN panel_owners po ON po.panel_id = om.panel_id WHERE om.member_id = ? LIMIT 1').bind(t.passed_by).first();
+    if (!pr) throw notFixable(409, 'conflict', 'The one who passed this sends nothing of their own; to stop asks from this panel, leave it.');
+  } else if (b && b.call_id) {   // a call on this member's panel: one they were shown, even after the offer lapsed (TRUST 3:11)
     pr = await env.DB.prepare('SELECT c.principal_id, COALESCE(c.asker_name, p.asker_name) AS seen FROM calls c LEFT JOIN panels p ON p.id = c.panel_id WHERE c.id = ? AND c.panel_id = ?').bind(String(b.call_id), m.panel_id).first();
   } else if (b && b.task_id) {   // a task on this member's list
     pr = await env.DB.prepare(`SELECT principal_id, program AS seen FROM tasks WHERE id = ? AND panel_id = ? AND (to_name = ? OR to_name = ?)`).bind(String(b.task_id), m.panel_id, m.person_name || '\u0000', 'mb:' + m.id).first();

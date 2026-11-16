@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_settings.json",
+  "title": "A membership's settings: GET and PATCH /v1/member/settings (section 26.8)",
+  "type": "object",
+  "required": [
+    "member_id",
+    "quiet",
+    "settings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "member_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "quiet": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "tz"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Quiet hours: no call reaches the person between start and end, in tz."
+    },
+    "settings": {
+      "type": "object",
+      "required": [
+        "sounds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sounds": {
+          "type": "boolean"
+        },
+        "longer_hold": {
+          "type": "boolean"
+        },
+        "material_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "alert_words": {
+          "type": "boolean"
+        }
+      }
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

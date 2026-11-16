@@ -160,7 +160,8 @@ Section 1 is the scope. Sections 2 to 8 are what every request shares. Sections 
 comes back and how well it is evidenced. Sections 15 to 18 are receipts, people, screening and the simulated pool.
 Sections 19 and 20 are the two bindings. Sections 21 and 22 are security and privacy. Section 23 is the profile of
 stronger rules that protect people, which a server may declare; sections 24 and 25 are the registries and what
-conformance means. Appendix D gives an order for building the smallest conforming server in a day. Appendix A lists what is
+conformance means. Section 26 is the person's side: the interface between a server and the app a person answers in, for
+calls and for asks from their own AIs and their own people. Appendix D gives an order for building the smallest conforming server in a day. Appendix A lists what is
 left for later, with the reason for each; Appendix B how it composes with other protocols; Appendix C the reasons for
 the main choices.
 

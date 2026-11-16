@@ -1,0 +1,16 @@
+{
+  "to": [
+    "mb_sam01"
+  ],
+  "title": "Tea or coffee",
+  "step": {
+    "type": "question",
+    "text": "Tea or coffee?",
+    "choices": [
+      "Tea",
+      "Coffee"
+    ]
+  },
+  "urgency": "whenever",
+  "expires_in": 3600
+}

@@ -1,0 +1,55 @@
+{
+  "seat_id": "s_seat01",
+  "call_id": "call_calm01",
+  "status": "offered",
+  "offer_expires_at": "2026-11-16T20:38:53Z",
+  "asker": {
+    "name": "Example Studio",
+    "note": "a test: nobody is paid"
+  },
+  "asker_is_ai": true,
+  "ask": "Which word fits a calm morning, quiet or bright?",
+  "minutes": 2,
+  "pay": {
+    "per_person_usd": "0.00",
+    "unpaid_test": true,
+    "per_hour_usd": null,
+    "test_money": true
+  },
+  "kept_days": 395,
+  "kept": {
+    "answers_days": 395,
+    "record_days": 30,
+    "recordings_days": 90,
+    "note": "your answers up to 13 months, or until you delete them"
+  },
+  "download_bytes": null,
+  "may_train_on_answers": false,
+  "evidence": null,
+  "paid_usd": null,
+  "content_rating": "general",
+  "recorded": [],
+  "experience": {
+    "kind": "answer",
+    "media_id": null,
+    "media_ids": [],
+    "seconds": null,
+    "text": null,
+    "items": [],
+    "media_url": null
+  },
+  "fields": {
+    "answer": {
+      "type": "text",
+      "max_length": 2000
+    }
+  },
+  "panel": {
+    "name": "Robin's people",
+    "members": 3,
+    "anonymous": false
+  },
+  "simulated_person": false,
+  "deadline": "2026-11-16T22:23:48Z",
+  "report": "POST /v1/seats/{token}/stop with {\"reason\": \"upset\"} stops the call and reports it"
+}

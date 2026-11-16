@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_limits.json",
+  "title": "How many asks any one person may send a day: GET and POST /v1/member/limits (section 26.10)",
+  "type": "object",
+  "required": [
+    "asks_per_person_per_day"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "asks_per_person_per_day": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

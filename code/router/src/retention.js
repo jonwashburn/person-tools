@@ -59,6 +59,7 @@ export async function retention(env, now, until = Infinity) {
   if (late()) return out;
   // 6. members who left: their link to past seats is removed, then the row
   for (const m of (await env.DB.prepare('SELECT id FROM members WHERE left_at IS NOT NULL AND left_at < ? AND (gone_note IS NULL OR left_at < ?) LIMIT 50').bind(now - DAY, now - 30 * DAY).all()).results || []) {
+    try { await (await import('./people.js')).leaveCleanup(env, m.id); } catch { }   // TRUST 12:31 PM CT 16 Nov: what 15 Nov added for them goes too
     await env.DB.batch([
       env.DB.prepare('UPDATE seats SET member_id = NULL WHERE member_id = ?').bind(m.id),
       env.DB.prepare('UPDATE seats SET offered_to = NULL WHERE offered_to = ?').bind(m.id),
@@ -79,7 +80,7 @@ export async function retention(env, now, until = Infinity) {
   try { out.stranger_requests = (await env.DB.prepare('DELETE FROM stranger_requests WHERE created_at < ?').bind(now - 90 * DAY).run()).meta.changes; } catch { }
   // OWNER_router_13: an ask nobody answered lapses at 30 days (never a default answer); its webhook says so; the row stays 30 more days
   try {
-    const due = (await env.DB.prepare('SELECT * FROM tasks WHERE state = \'open\' AND created_at < ? LIMIT 50').bind(now - 30 * DAY).all()).results || [];
+    const due = (await env.DB.prepare('SELECT * FROM tasks WHERE state = \'open\' AND COALESCE(expires_at, created_at + ?) < ? LIMIT 50').bind(30 * DAY, now).all()).results || [];   // OWNER_router_15: the asker's own expires_in
     for (const t of due) {
       const r = await env.DB.prepare('UPDATE tasks SET state = \'lapsed\', lapsed_at = ? WHERE id = ? AND state = \'open\'').bind(now, t.id).run();
       if (r.meta.changes === 1 && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'lapsed' }); } catch { } }
@@ -107,6 +108,8 @@ export async function retention(env, now, until = Infinity) {
   }
   // 15. a person's own material, connections revoked 30 days ago, webhook deliveries (OWNER_all_10; DATA.md, policy/CONNECTIONS.md)
   if (!late()) { try { const { ownRetention } = await import('./own.js'); Object.assign(out, await ownRetention(env, now)); } catch (e) { out.own_error = String(e && e.message || e).slice(0, 120); } }
+  // 16. Desk sessions signed out or 30 days unused; sign-in codes an hour after they ran out (TRUST 12:31 PM CT 16 Nov)
+  if (!late()) { try { Object.assign(out, await (await import('./people.js')).deskRetention(env, now)); } catch (e) { out.desk_error = String(e && e.message || e).slice(0, 120); } }
   // 7 waits for December 2027; 11 has no table.
   return out;
 }

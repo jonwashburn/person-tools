@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_seat.json",
+  "title": "A seat as a client reads it before the person accepts: GET /v1/seats/{seat_token} (section 26.7)",
+  "type": "object",
+  "required": [
+    "seat_id",
+    "call_id",
+    "status",
+    "asker",
+    "asker_is_ai",
+    "ask",
+    "minutes",
+    "pay",
+    "content_rating",
+    "recorded",
+    "kept",
+    "may_train_on_answers",
+    "experience",
+    "fields"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "seat_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "call_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "status": {
+      "$ref": "common.json#/$defs/seat_status"
+    },
+    "offer_expires_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deadline": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "asker": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "asker_is_ai": {
+      "type": "boolean"
+    },
+    "ask": {
+      "type": "string",
+      "minLength": 1
+    },
+    "minutes": {
+      "type": "number",
+      "minimum": 0
+    },
+    "pay": {
+      "type": "object",
+      "required": [
+        "per_person_usd",
+        "unpaid_test"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "per_person_usd": {
+          "$ref": "common.json#/$defs/money"
+        },
+        "unpaid_test": {
+          "type": "boolean"
+        },
+        "per_hour_usd": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "test_money": {
+          "type": "boolean"
+        }
+      }
+    },
+    "content_rating": {
+      "$ref": "common.json#/$defs/content_rating"
+    },
+    "recorded": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "kept": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "answers_days": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "record_days": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "recordings_days": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "kept_days": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "download_bytes": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/count"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "may_train_on_answers": {
+      "type": "boolean"
+    },
+    "experience": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "common.json#/$defs/kind"
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {}
+        },
+        "media_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "media_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "media_url": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/https_url"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "fields": {
+      "type": "object"
+    },
+    "panel": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "members": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "anonymous": {
+          "type": "boolean"
+        }
+      }
+    },
+    "simulated_person": {
+      "type": "boolean"
+    },
+    "report": {
+      "type": "string"
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/evidence_level"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "paid_usd": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/money"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

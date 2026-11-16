@@ -234,6 +234,9 @@
     state.fbEl.addEventListener("focusout", function () { setTimeout(function () { if (state.redrawLater && !state.fbEl.contains(document.activeElement)) { state.redrawLater = false; render(); } }, 0); });
     return state.fbEl;
   }
+  state.alertWords = null;   // OWNER_router_25: read once; the offers poll does not carry it
+  fetch("/xp/members/" + encodeURIComponent(token) + "/settings", { headers: { Accept: "application/json" } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
+    .then(function (d) { if (d && d.settings && typeof d.settings.alert_words === "boolean") { state.alertWords = d.settings.alert_words; if (state.loaded) render(); } });
   function privateSection() {
     var st = state.settings || {};
     function flip(key, readKey) {
@@ -247,6 +250,11 @@
     }
     return h("section", { class: "screen", "aria-labelledby": "pv-h" },
       h("p", { class: "label", id: "pv-h" }, "PRIVATE SETTINGS"),
+      // OWNER_router_25: the ask's first line in my own alerts, off unless the person turns it on
+      state.alertWords === null ? null : h("button", { type: "button", class: "toggle", "aria-pressed": state.alertWords ? "true" : "false", onclick: function () {
+        var v = !state.alertWords; api("POST", "settings", { alert_words: v }).then(function (r) {
+          if (r.ok) { state.alertWords = v; live.textContent = "Saved."; } else live.textContent = "Not saved."; render(); }); } }, "Show the ask in my alerts" + (state.alertWords ? " (on)" : " (off)")),
+      state.alertWords === null ? null : h("p", { class: "note" }, "Off: an alert says only who is asking. On: it may also show the ask's first line, up to 80 characters, never the whole ask. Your phone's own preview setting still decides what shows on a locked screen. Only you see this."),
       h("button", { type: "button", class: "toggle", "aria-pressed": st.longer_hold ? "true" : "false", onclick: function () { flip("longer_to_answer", "longer_hold"); } }, "Give me more time to take a call" + (st.longer_hold ? " (on)" : " (off)")),
       h("p", { class: "note" }, "Calls on your panel are held for you for 15 minutes. With this On, any call held for less is held for 3 minutes instead. Useful with a screen reader, or whenever you like. No asker ever sees this, and it never changes what you are paid or how often you are rung."));
   }
@@ -483,22 +491,140 @@
 
   // TASKS (OWNER_all_7: one place where the operator's programs give the operator tasks): what our programs ask this person
   // to do, in one list, most urgent first, grouped by the program that asks; done ones leave for a history he can search
-  var tasks = { open: [], history: [], sig: "", q: "", note: {}, msg: {} };
+  var tasks = { open: [], history: [], sig: "", q: "", note: {}, msg: {}, answer: {}, press: {}, people: [], ownerName: null, sent: null, send: { to: {}, title: "", text: "", choices: "", urgency: "today" }, passTo: {} };
   setTimeout(function () { try { loadBlocks(); } catch (e) {} }, 0);
   setTimeout(function () { try { loadAis(); } catch (e) {} }, 0);   // the person's own AIs, once
   function loadTasks() {
     fetch("/x/members/" + encodeURIComponent(token) + "/tasks", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
-      .then(function (d) { if (!d) return; var sig = JSON.stringify([d.open, d.history]); if (sig === tasks.sig) return; tasks.sig = sig; tasks.open = d.open || []; tasks.history = d.history || []; render(); });
+      .then(function (d) { if (!d) return; var sig = JSON.stringify([d.open, d.history, d.notice, d.answers_to_read, d.passed_on]); if (sig === tasks.sig) return; tasks.sig = sig; tasks.open = d.open || []; tasks.history = d.history || [];
+        tasks.personNotice = d.notice || null; tasks.answers = d.answers_to_read || []; tasks.passed = d.passed_on || []; render(); });
   }
-  function replyTask(t, body) {
-    tasks.msg[t.task_id] = "Sending..."; render();
+  // OWNER_router_20: a press shows at once, right under the button.
+  // The list never redraws while focus is inside it (so typing is never lost), and a pressed button holds the focus, so the answer to a
+  // press is written in place: the card's buttons wait, the words appear under the one pressed, a note joins the thread at once.
+  function pressStatus(btn, text, kind) {
+    if (!btn || !btn.parentNode) return null;
+    var li = btn.closest ? btn.closest("[data-task]") : null;
+    var s = li ? li.querySelector(".press-status") : null;
+    if (!s) s = h("p", { class: "note press-status", role: "status" });
+    if (btn.nextSibling !== s) btn.parentNode.insertBefore(s, btn.nextSibling);
+    s.textContent = text; s.setAttribute("data-kind", kind || "");
+    var id = li && li.getAttribute("data-task");
+    if (id) tasks.press[id] = { label: btn.textContent, text: text, kind: kind || "", until: kind === "ok" ? Date.now() + 6000 : kind === "busy" ? 0 : Date.now() + 60000 };
+    return s;
+  }
+  // a redraw draws the last press's words under the same button (and keeps the buttons waiting while it is sending)
+  function pressAgain(t, li) {
+    var ps = tasks.press[t.task_id]; if (!ps) return li;
+    if (ps.until && ps.until < Date.now()) { delete tasks.press[t.task_id]; return li; }
+    var bs = li.querySelectorAll("button"), bb = null; for (var i = 0; i < bs.length; i++) if (bs[i].textContent === ps.label) bb = bs[i];
+    if (!bb || !bb.parentNode) return li;
+    bb.parentNode.insertBefore(h("p", { class: "note press-status", role: "status", "data-kind": ps.kind }, ps.text), bb.nextSibling);
+    if (ps.kind === "busy") { var as = li.querySelectorAll("button.answer"); for (var j = 0; j < as.length; j++) as[j].disabled = true; }
+    return li;
+  }
+  function cardBusy(btn, busy) {
+    var li = btn && btn.closest ? btn.closest("[data-task]") : null; if (!li) return;
+    var bs = li.querySelectorAll("button.answer"); for (var i = 0; i < bs.length; i++) bs[i].disabled = !!busy;
+  }
+  function noteLine(n) { return h("p", { class: "note" }, (n.by === "person" ? "You" : n.name || "It") + (n.private ? " (only to you)" : "") + ", " + clock(new Date(n.at).getTime()) + ": " + n.note); }
+  // OWNER_router_18: a person sends asks to their own people, passes an ask on, reads what came back (through /xp, its own relay)
+  function xp(method, rest, body) {
+    return fetch("/xp/members/" + encodeURIComponent(token) + "/" + rest, { method: method, headers: body ? { "Content-Type": "application/json", Accept: "application/json" } : { Accept: "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }, function () { return { ok: r.ok, status: r.status, d: {} }; }); }, function () { return { ok: false, status: 0, d: {} }; });
+  }
+  function loadPeople() { xp("GET", "people").then(function (r) { if (!r.ok) return; tasks.people = r.d.people || []; tasks.ownerName = r.d.name || null; if (tasks.people.length) loadSent(); else render(); }); }
+  function loadSent() { xp("GET", "sent").then(function (r) { if (r.ok) { tasks.sent = r.d; render(); } }); }
+  setTimeout(function () { try { loadPeople(); } catch (e) {} }, 0);
+  function noticeBox() {
+    var n = tasks.personNotice; if (!n) return null;
+    return pressAgain({ task_id: "notice" }, h("div", { class: "block", "data-task": "notice" }, h("p", { class: "label" }, "BEFORE ANY ASK FROM A PERSON"), h("p", { class: "lede" }, n.text),
+      h("button", { type: "button", class: "go answer", onclick: function (e) { var b = e.currentTarget; pressStatus(b, "One moment\u2026", "busy");
+        xp("POST", "people/notice").then(function (r) { if (!r.ok) return pressStatus(b, "Not saved: " + ((r.d && r.d.message) || "try again."), "bad"); tasks.personNotice = null; if (b.blur) b.blur(); tasks.sig = ""; loadTasks(); }); } }, "OK, show me their asks"),
+      h("button", { type: "button", class: "quiet answer", onclick: function (e) { var b = e.currentTarget;
+        xp("POST", "mutes", { panel_owner: true }).then(function (r) { pressStatus(b, r.ok ? "Muted: their asks will never ring. They still show here." : "Not muted: " + ((r.d && r.d.message) || "try again."), r.ok ? "ok" : "bad"); }); } }, "Mute " + n.from),
+      h("a", { href: "#lv-h", class: "quiet" }, "Leave this panel")));
+  }
+  function passBox(t) {
+    if (!tasks.people.length || t.state !== "open") return null;
+    var sel = h("select", { "aria-label": "Pass it on to" }, h("option", { value: "" }, "Pass it on to\u2026"), tasks.people.map(function (p) { return h("option", { value: p.member_id }, p.name); }));
+    if (tasks.passTo[t.task_id]) sel.value = tasks.passTo[t.task_id];
+    sel.addEventListener("change", function () { tasks.passTo[t.task_id] = sel.value; });
+    return [sel, h("button", { type: "button", class: "quiet answer", onclick: function (e) { var b = e.currentTarget, to = sel.value; if (!to) return pressStatus(b, "Pick who first.", "bad");
+      var who = sel.options[sel.selectedIndex].textContent, body = { to: to }, n = (tasks.note[t.task_id] || "").trim(); if (n) body.note = n;
+      cardBusy(b, true); pressStatus(b, "Passing it to " + who + "\u2026", "busy");
+      xp("POST", "tasks/" + encodeURIComponent(t.task_id) + "/pass", body).then(function (r) {
+        if (!r.ok) { cardBusy(b, false); return pressStatus(b, "Not passed: " + ((r.d && r.d.message) || "try again."), "bad"); }
+        delete tasks.note[t.task_id]; pressStatus(b, "Passed to " + who + ". It leaves your list; you see their answer under What you sent.", "ok");
+        setTimeout(function () { if (b.blur) b.blur(); tasks.sig = ""; loadTasks(); loadSent(); }, 1500); }); } }, "Pass it on")];
+  }
+  function sendBox() {
+    if (!tasks.people.length) return null;
+    var st = tasks.send;
+    var boxes = tasks.people.map(function (p) { var c = h("input", { type: "checkbox", value: p.member_id }); c.checked = !!st.to[p.member_id]; c.addEventListener("change", function () { st.to[p.member_id] = c.checked; });
+      return h("label", { class: "check" }, c, " " + p.name); });
+    var ti = h("input", { type: "text", maxlength: "120", "aria-label": "Title", placeholder: "Title (what it is about)", value: st.title }); ti.addEventListener("input", function () { st.title = ti.value; });
+    var tx = h("textarea", { rows: "2", "aria-label": "Your question", class: "task-text", placeholder: "Your question" }, st.text); tx.addEventListener("input", function () { st.text = tx.value; });
+    var ch = h("input", { type: "text", maxlength: "300", "aria-label": "Choices, with commas (optional)", placeholder: "Choices, with commas (optional): Pizza, Tacos", value: st.choices }); ch.addEventListener("input", function () { st.choices = ch.value; });
+    var ur = h("select", { "aria-label": "How soon" }, [["today", "Today"], ["now", "Now (it rings once)"], ["whenever", "Whenever"]].map(function (u) { return h("option", { value: u[0] }, u[1]); })); ur.value = st.urgency; ur.addEventListener("change", function () { st.urgency = ur.value; });
+    return pressAgain({ task_id: "send" }, h("div", { class: "block", "data-task": "send" }, h("p", { class: "label" }, "SEND TO YOUR PEOPLE"), h("p", { class: "note" }, "It reaches them as from " + (tasks.ownerName || "you") + ": your account's name, never typed here."),
+      h("div", null, boxes), ti, tx, ch, ur,
+      h("button", { type: "button", class: "go answer", onclick: function (e) { var b = e.currentTarget, to = Object.keys(st.to).filter(function (k) { return st.to[k]; });
+        if (!to.length) return pressStatus(b, "Pick who it is for.", "bad");
+        if (st.title.trim().length < 3 || st.text.trim().length < 3) return pressStatus(b, "Write a title and a question first.", "bad");
+        var choices = st.choices.split(",").map(function (c) { return c.trim(); }).filter(Boolean);
+        var step = { type: "question", text: st.text.trim() }; if (choices.length) step.choices = choices;
+        pressStatus(b, "Sending\u2026", "busy"); b.disabled = true;
+        xp("POST", "people/asks", { to: to, title: st.title.trim(), step: step, urgency: st.urgency }).then(function (r) { b.disabled = false;
+          if (!r.ok) return pressStatus(b, "Not sent: " + ((r.d && r.d.message) || "try again."), "bad");
+          var s = (r.d.sent || []), waits = s.filter(function (x) { return x.waits_until; }), no = r.d.not_sent || [];
+          pressStatus(b, "Sent to " + s.map(function (x) { return x.name; }).join(", ") + "." + (waits.length ? " " + waits.map(function (x) { return x.name; }).join(", ") + ": it waits until their tomorrow (their daily limit)." : "") + (no.length ? " Not available: " + no.map(function (x) { return x.name; }).join(", ") + "." : ""), "ok");
+          tasks.send = { to: {}, title: "", text: "", choices: "", urgency: st.urgency }; if (b.blur) b.blur(); loadSent(); }); } }, "Send the ask")));
+  }
+  function sentBox() {
+    var s = tasks.sent; if (!s || (!(s.sent || []).length && !(s.passed || []).length)) return null;
+    function item(x, passed) {
+      var r = x.reply || {}, ans = r.choice || r.text || (x.state === "done" ? "Done" : x.state === "not_now" ? "Not now" : x.state === "approve" ? "Approved" : null);
+      var inp = h("input", { type: "text", maxlength: "500", "aria-label": "A note to " + x.to.name, placeholder: "A note to " + x.to.name });
+      return pressAgain({ task_id: "s-" + x.task_id }, h("li", { class: "task block", "data-task": "s-" + x.task_id }, h("p", { class: "label" }, (passed ? "PASSED TO " : "TO ") + String(x.to.name || "").toUpperCase() + " \u00b7 " + String(x.state).toUpperCase()),
+        h("p", { class: "sub" }, x.title), passed ? h("p", { class: "note" }, "From " + x.from + ".") : null,
+        ans ? h("p", null, "Answer: " + ans + (r.note ? " (" + r.note + ")" : "")) : h("p", { class: "note" }, x.waits_until ? "Waits until " + new Date(x.waits_until).toLocaleString() + " (their daily limit)." : "No answer yet."),
+        h("div", { class: "task-thread" }, (x.notes || []).map(function (n) { return h("p", { class: "note" }, (n.by === "person" ? x.to.name : "You") + ", " + clock(new Date(n.at).getTime()) + ": " + n.note); })),
+        x.state === "open" ? [inp, h("button", { type: "button", class: "quiet answer", onclick: function (e) { var b = e.currentTarget, v = inp.value.trim(); if (!v) return pressStatus(b, "Write the note first.", "bad");
+          pressStatus(b, "Sending your note\u2026", "busy"); xp("POST", "sent/" + encodeURIComponent(x.task_id) + "/notes", { note: v }).then(function (r) {
+            if (!r.ok) return pressStatus(b, "Not sent: " + ((r.d && r.d.message) || "try again."), "bad"); inp.value = ""; pressStatus(b, "Sent to " + x.to.name + ".", "ok"); setTimeout(loadSent, 1200); }); } }, "Send a note")] : null));
+    }
+    return h("details", { open: true }, h("summary", null, "What you sent (" + ((s.sent || []).length + (s.passed || []).length) + ")"),
+      h("ul", { class: "tasks" }, (s.sent || []).slice(0, 30).map(function (x) { return item(x, false); }), (s.passed || []).slice(0, 30).map(function (x) { return item(x, true); })));
+  }
+  function replyTask(t, body, btn) {
+    var who = (t.connection && t.connection.name) || t.from || "the asker", isNote = body.action === "note";
+    function failed(why) { if (btn) { cardBusy(btn, false); pressStatus(btn, why, "bad"); } else { tasks.msg[t.task_id] = why; render(); } }
+    if (btn) { cardBusy(btn, true); pressStatus(btn, isNote ? "Sending your note\u2026" : "Sending\u2026", "busy"); }
+    else { tasks.msg[t.task_id] = "Sending..."; render(); }
     fetch("/x/members/" + encodeURIComponent(token) + "/tasks/" + encodeURIComponent(t.task_id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }, function () { return { ok: r.ok, d: {} }; }); })
-      .then(function (r) { tasks.msg[t.task_id] = r.ok ? "" : "Not sent: " + ((r.d && r.d.message) || "try again.");
+      .then(function (r) {
         if (r.ok && r.d && r.d.reply && r.d.reply.masked) tasks.notice = r.d.reply.masked;   // OWNER_router_2: a pasted key never rests with us
-        if (r.ok) { delete tasks.note[t.task_id]; tasks.sig = ""; loadTasks(); } else render(); },
-        function () { tasks.msg[t.task_id] = "Not sent: no connection. Try again."; render(); });
+        if (!r.ok) return failed("Not sent: " + ((r.d && r.d.message) || "try again."));   // the typed words stay where they are
+        if (!isNote) tasks.flash = { text: (body.action === "not_now" ? "Not now, sent to " : body.action === "deny" ? "Denied, sent to " : "Sent to ") + who + ": \u201C" + t.title + "\u201D. It is in Done below.", until: Date.now() + 8000 };
+        tasks.msg[t.task_id] = "";
+        if (isNote) {   // it stays open: the field clears and the note joins the thread now, not at the next reload
+          delete tasks.note[t.task_id];
+          t.notes = (t.notes || []).concat([{ by: "person", at: new Date().toISOString(), note: body.note }]);
+          var li = btn && btn.closest ? btn.closest("li.task") : null;
+          if (li) { var inp = li.querySelector("input.task-note"); if (inp) inp.value = ""; var th = li.querySelector(".task-thread"); if (th) th.appendChild(noteLine(t.notes[t.notes.length - 1])); }
+          if (btn) { cardBusy(btn, false); pressStatus(btn, "Sent to " + who + ". It stays open; you\u2019ll see their reply here.", "ok");
+            setTimeout(function () { var p = tasks.press[t.task_id]; if (p && p.kind === "ok" && p.until <= Date.now() + 50) { delete tasks.press[t.task_id];
+              var all = document.querySelectorAll('li.task[data-task="' + t.task_id + '"] .press-status'); for (var k = 0; k < all.length; k++) all[k].parentNode.removeChild(all[k]); } }, 6100); }
+          tasks.sig = ""; loadTasks();
+        } else {   // answered: say so at the button, then the card moves to Done
+          delete tasks.note[t.task_id]; delete tasks.answer[t.task_id];
+          if (btn) pressStatus(btn, (body.action === "not_now" ? "Not now, sent to " : body.action === "deny" ? "Denied, sent to " : "Sent to ") + who + ". It moves to Done.", "ok");
+          setTimeout(function () { var a = document.activeElement, li2 = btn && btn.closest ? btn.closest("li.task") : null; if (li2 && a && li2.contains(a) && a.blur) a.blur(); tasks.sig = ""; loadTasks(); }, btn ? 1500 : 0);
+        } },
+        function () { failed("Not sent: no connection. Try again."); });
   }
   function withNote(t, body) { var n = (tasks.note[t.task_id] || "").trim(); if (n) body.note = n; return body; }
   var URG = { now: "NOW", today: "TODAY", whenever: "WHENEVER" };
@@ -518,21 +644,21 @@
     var sel = h("select", { "aria-label": "The reason" }, h("option", { value: "" }, "Pick the reason"), REVIEW_REASONS.map(function (r, i) { return h("option", { value: String(i + 1) }, (i + 1) + ". " + r); }));
     var other = h("input", { type: "text", maxlength: "200", "aria-label": "One line", placeholder: "One line (only for reason 12)" });
     var msg = tasks.msg[t.task_id] ? h("p", { class: "note", role: "status" }, tasks.msg[t.task_id]) : null;
-    return h("li", { class: "task block" },
+    return pressAgain(t, h("li", { class: "task block", "data-task": t.task_id },
       h("p", { class: "label" }, "TODAY · FROM PERSON.TOOLS CHECK"),
       h("p", { class: "sub" }, watch ? "Check this before anyone sees it" : "Check this before anyone hears it"),
       h("p", null, "From: " + (s.asker || "an asker") + " · " + (watch ? "watch" : "listen") + " · " + len + " (at most 60 seconds is checked) · for " + (s.people || "its") + " people who joined that asker's panel. Their ask: \u201C" + (s.ask || "") + "\u201D."),
       h("p", { class: "note" }, "Nobody at person.tools has heard or seen this yet. Play it at low volume first. You can stop at any moment; nothing counts against you, and Not now leaves it on your list."),
       player,
       h("p", { class: "label" }, "REFUSE IF ANY OF THESE IS IN IT"), sel, other,
-      h("button", { type: "button", class: "quiet", onclick: function () {
-        if (!sel.value) { tasks.msg[t.task_id] = "Pick the reason first."; render(); return; }
+      h("button", { type: "button", class: "quiet answer", onclick: function (e) { var b = e.currentTarget;
+        if (!sel.value) { pressStatus(b, "Pick the reason first.", "bad"); return; }
         var body = { action: "refuse", reason: Number(sel.value) }; if (sel.value === String(REVIEW_REASONS.length)) body.text = other.value.trim();
-        replyTask(t, body); } }, "Refuse"),
+        replyTask(t, body, b); } }, "Refuse"),
       h("p", { class: "note" }, "Pass if none of these is in it, it is what the ask says, and you would be at ease with it playing on a stranger's phone under \u201Cfrom " + (s.asker || "the asker") + "\u201D."),
-      h("button", { type: "button", class: "go", onclick: function () { replyTask(t, { action: "pass" }); } }, "Pass"),
-      h("button", { type: "button", class: "quiet", onclick: function () { tasks.msg[t.task_id] = "It stays on your list."; render(); } }, "Not now"),
-      msg);
+      h("button", { type: "button", class: "go answer", onclick: function (e) { replyTask(t, { action: "pass" }, e.currentTarget); } }, "Pass"),
+      h("button", { type: "button", class: "quiet answer", onclick: function (e) { pressStatus(e.currentTarget, "It stays on your list.", "ok"); } }, "Not now"),
+      msg));
   }
   function taskCard(t) {
     if (t.state === "withdrawn") return h("li", { class: "task block task-withdrawn" },   // OWNER_router_3: struck through for a day, no buttons
@@ -541,6 +667,8 @@
     var s = t.step || {}, kids = [];
     kids.push(h("p", { class: "label" }, (URG[t.urgency] || "") + " · FROM " + String(t.from || "").toUpperCase()));
     kids.push(h("p", { class: "sub" }, t.title));
+    if (t.sender) kids.push(h("p", { class: "note" }, "From " + t.sender.name + ": " + t.sender.behind));
+    if (t.passed_on_by) kids.push(h("p", { class: "note" }, "Passed on to you by " + t.passed_on_by + "."));
     if (s.type === "command") {
       var copied = h("span", { class: "note", role: "status" });
       if (s.where) kids.push(h("p", { class: "note" }, "Where: " + s.where));
@@ -552,15 +680,17 @@
     } else if (s.type === "link") {
       if (s.text) kids.push(h("p", null, s.text));
       kids.push(h("a", { class: "linkbtn", href: s.url, target: "_blank", rel: "noopener noreferrer" }, "Open the link"));
+      if (s.domain) kids.push(h("p", { class: "note" }, "It goes to " + s.domain + (s.sign_in_page ? ". It is a sign-in page: sign in only if you know this site." : ".")));
     } else if (s.type === "approve") {   // OWNER_all_10 C: approve or deny; an editable text may be changed first (the CEO 12:57)
       var ed = s.editable ? h("textarea", { rows: "6", "aria-label": "The text you approve", class: "task-text" }, s.text) : null;
       kids.push(ed || h("p", null, s.text));
-      kids.push(h("button", { type: "button", class: "go", onclick: function () { var b = { action: "approve" }; if (ed && ed.value.trim() && ed.value !== s.text) b.text = ed.value; replyTask(t, withNote(t, b)); } }, s.approve_label || "Approve"));
-      kids.push(h("button", { type: "button", class: "quiet", onclick: function () { replyTask(t, withNote(t, { action: "deny" })); } }, s.deny_label || "Deny"));
+      kids.push(h("button", { type: "button", class: "go answer", onclick: function (e) { var b = { action: "approve" }; if (ed && ed.value.trim() && ed.value !== s.text) b.text = ed.value; replyTask(t, withNote(t, b), e.currentTarget); } }, s.approve_label || "Approve"));
+      kids.push(h("button", { type: "button", class: "quiet answer", onclick: function (e) { replyTask(t, withNote(t, { action: "deny" }), e.currentTarget); } }, s.deny_label || "Deny"));
     } else if (s.type === "question") {
       kids.push(h("p", null, s.text));
-      if (s.choices) s.choices.forEach(function (c) { kids.push(h("button", { type: "button", class: "go", onclick: function () { replyTask(t, withNote(t, { action: "answer", choice: c })); } }, c)); });
-      else { var ta = h("textarea", { rows: "2", "aria-label": "Your answer", class: "task-text" }); kids.push(ta, h("button", { type: "button", class: "go", onclick: function () { if (ta.value.trim()) replyTask(t, withNote(t, { action: "answer", text: ta.value.trim() })); } }, "Send the answer")); }
+      if (s.choices) s.choices.forEach(function (c) { kids.push(h("button", { type: "button", class: "go answer", onclick: function (e) { replyTask(t, withNote(t, { action: "answer", choice: c }), e.currentTarget); } }, c)); });
+      else { var ta = h("textarea", { rows: "2", "aria-label": "Your answer", class: "task-text" }, tasks.answer[t.task_id] || ""); ta.addEventListener("input", function () { tasks.answer[t.task_id] = ta.value; });
+        kids.push(ta, h("button", { type: "button", class: "go answer", onclick: function (e) { if (ta.value.trim()) replyTask(t, withNote(t, { action: "answer", text: ta.value.trim() }), e.currentTarget); else pressStatus(e.currentTarget, "Write your answer first.", "bad"); } }, "Send the answer")); }
     }
     if (t.media) {   // the person's own photo or clip from their AI: shown only here, deleted on their schedule
       var msrc = "/x/members/" + encodeURIComponent(token) + "/tasks/" + encodeURIComponent(t.task_id) + "/media";
@@ -568,19 +698,20 @@
       kids.push(h("p", { class: "note" }, "Only you see this. It is deleted " + (t.media.deleted_at ? "on " + new Date(t.media.deleted_at).toLocaleDateString() : "on your schedule") + "."));
     }
     if (t.unlocks) kids.push(h("p", { class: "note" }, "It unlocks: " + t.unlocks));
-    var nt = h("input", { type: "text", maxlength: "500", "aria-label": "A note (optional)", placeholder: "A note (optional)", value: tasks.note[t.task_id] || "" });
+    var nt = h("input", { type: "text", maxlength: "500", "aria-label": "A note (optional)", placeholder: "A note (optional)", class: "task-note", value: tasks.note[t.task_id] || "" });
     nt.addEventListener("input", function () { tasks.note[t.task_id] = nt.value; });
     kids.push(nt);
-    if (s.type !== "question" && s.type !== "approve") kids.push(h("button", { type: "button", class: "go", onclick: function () { replyTask(t, withNote(t, { action: "done" })); } }, "Done"));
-    kids.push(h("button", { type: "button", class: "quiet", onclick: function () { replyTask(t, withNote(t, { action: "not_now" })); } }, "Not now"));
+    if (s.type !== "question" && s.type !== "approve") kids.push(h("button", { type: "button", class: "go answer", onclick: function (e) { replyTask(t, withNote(t, { action: "done" }), e.currentTarget); } }, "Done"));
+    kids.push(h("button", { type: "button", class: "quiet answer", onclick: function (e) { replyTask(t, withNote(t, { action: "not_now" }), e.currentTarget); } }, "Not now"));
+    kids.push(passBox(t));
     kids.push(h("button", { type: "button", class: "quiet", onclick: function () { blockAsker({ task_id: t.task_id }, (t.connection && t.connection.name) || t.from || "this asker"); } }, "Block this asker"));
-    kids.push(h("button", { type: "button", class: "quiet", onclick: function () { var n = (tasks.note[t.task_id] || "").trim(); if (!n) { tasks.msg[t.task_id] = "Write the note first."; render(); return; } replyTask(t, { action: "note", note: n }); } }, "Send the note only"));   // it stays open
-    (t.notes || []).forEach(function (n) { kids.push(h("p", { class: "note" }, (n.by === "person" ? "You" : "It") + ", " + new Date(n.at).toLocaleTimeString() + ": " + n.note)); });
+    kids.push(h("button", { type: "button", class: "quiet answer", onclick: function (e) { var b = e.currentTarget, n = (tasks.note[t.task_id] || nt.value || "").trim(); if (!n) { pressStatus(b, "Write the note first.", "bad"); return; } replyTask(t, { action: "note", note: n }, b); } }, "Send the note only"));   // it stays open
+    kids.push(h("div", { class: "task-thread" }, (t.notes || []).map(noteLine)));
     if (tasks.msg[t.task_id]) kids.push(h("p", { class: "note", role: "status" }, tasks.msg[t.task_id]));
-    return h("li", { class: "task block" }, kids);
+    return pressAgain(t, h("li", { class: "task block", "data-task": t.task_id }, kids));
   }
   function tasksSection() {
-    if (!tasks.open.length && !tasks.history.length) return null;
+    if (!tasks.open.length && !tasks.history.length && !tasks.personNotice && !tasks.people.length && !(tasks.answers || []).length && !(tasks.passed || []).length) return null;
     var waiting = tasks.open.filter(function (t) { return t.state !== "withdrawn"; }).length;
     var groups = [];
     tasks.open.forEach(function (t) { var g = groups.filter(function (x) { return x.from === t.from; })[0]; if (g) g.items.push(t); else groups.push({ from: t.from, items: [t] }); });
@@ -600,9 +731,16 @@
     var el = h("section", { class: "screen", "aria-labelledby": "tasks-h" },
       h("p", { class: "label", id: "tasks-h" }, "TASKS FOR YOU"),
       tasks.notice ? h("p", { class: "note", role: "status" }, tasks.notice) : null,
+      tasks.flash && tasks.flash.until > Date.now() ? h("p", { class: "note press-status", role: "status", "data-kind": "ok" }, tasks.flash.text) : null,
+      noticeBox(),
+      (tasks.answers || []).map(function (a) { return h("p", { class: "note" }, a.from + " answered \u201C" + a.title + "\u201D: " + ((a.reply && (a.reply.choice || a.reply.text)) || a.state) + ". ",
+        h("button", { type: "button", class: "quiet", onclick: function () { xp("POST", "sent/read", { task_ids: [a.task_id] }).then(function () { tasks.sig = ""; loadTasks(); }); } }, "Got it")); }),
       waiting ? h("p", { class: "lede" }, waiting === 1 ? "One task is waiting for you." : waiting + " tasks are waiting for you.") : h("p", { class: "note" }, "No task is waiting."),
       groups.map(function (g) { return [h("p", { class: "label" }, "FROM " + String(g.from || "").toUpperCase()), h("ul", { class: "tasks" }, g.items.map(taskCard))]; }),
-      tasks.history.length ? h("details", null, h("summary", null, "Done (" + tasks.history.length + ")"), q, hist) : null);
+      tasks.history.length ? h("details", null, h("summary", null, "Done (" + tasks.history.length + ")"), q, hist) : null,
+      (tasks.passed || []).length ? h("details", null, h("summary", null, "Passed on (" + tasks.passed.length + ")"), h("ul", { class: "task-history" }, tasks.passed.map(function (p) {
+        return h("li", null, h("span", { class: "label" }, "PASSED TO " + String(p.passed_to).toUpperCase()), " ", p.title, p.reply ? ": " + (p.reply.choice || p.reply.text || p.state) : " (no answer yet)"); }))) : null,
+      sendBox(), sentBox());
     el.addEventListener("focusout", function () { setTimeout(function () { if (state.redrawLater && !el.contains(document.activeElement)) { state.redrawLater = false; render(); } }, 0); });
     state.taskEl = el;
     return el;

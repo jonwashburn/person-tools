@@ -30,7 +30,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); }, function () { return { ok: false, status: 0, d: {} }; });
   }
 
-  function render(notice, panel) {
+  function render(notice, panel, owner, people) {
     var qs = hourSelect("q-start", 21), qe = hourSelect("q-end", 8);
     var err = h("div", { role: "alert" });
     var accept = h("button", { class: "go you", type: "button", onclick: doJoin }, notice.accept);
@@ -38,14 +38,15 @@
     function doJoin() {
       accept.disabled = true; accept.textContent = "Joining…";
       post("join/" + encodeURIComponent(code), { adult: true, us_resident: true, notice_accepted: true, notice_id: notice.id, tz: tz,
-        quiet_start: Number(qs.value), quiet_end: Number(qe.value) }).then(function (r) {
+        quiet_start: Number(qs.value), quiet_end: Number(qe.value), owner_line_seen: !!owner }).then(function (r) {   // OWNER_router_18: this page showed the owner's line
         if (!r.ok) { accept.disabled = false; accept.textContent = notice.accept;
           fill(err, h("div", { class: "block err" }, h("p", { class: "label" }, "NOT JOINED"), h("p", null, (r.d && r.d.message) || "The call service did not answer. Try again in a minute."))); return; }
-        joined(r.d, { start: Number(qs.value), end: Number(qe.value) });
+        joined(r.d, { start: Number(qs.value), end: Number(qe.value) }, people);   // TRUST 8:45 PM CT 15 Nov: a people panel's page says asks
       });
     }
     fill(main, h("section", { class: "screen" },
       h("p", { class: "label" }, panel && panel.name ? "INVITED TO THE PANEL " + String(panel.name).toUpperCase() : "YOU ARE INVITED"),
+      owner ? h("p", { class: "lede" }, owner.line) : null,
       h("h1", { class: "ask" }, notice.title),
       h("p", { class: "note how-it-works" }, h("strong", null, "What a call is: "), "a short task on a web page, a minute or two. You listen or look, then type your answer. Nobody phones you; your phone shows a notification if you allow it."),
       h("p", { class: "lede" }, notice.lede),
@@ -64,18 +65,18 @@
   }
 
   // the ring, set up right here (an iPhone first needs the page on its Home Screen; Android and desktop do not)
-  function ringBlock(mt) {
+  function ringBlock(mt, P) {   // P: a people panel's owner: the words say asks
     var box = h("div", { class: "block" }, h("p", { class: "label" }, "NOTIFICATIONS ON THIS PHONE"));
     var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
     var standalone = navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
     var ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
     var note = h("p", { class: "note", role: "status" });
     if (ios && !standalone) {
-      box.appendChild(h("p", null, "On an iPhone: tap Open my page, then Share, then \u201CAdd to Home Screen\u201D. Open the new icon and tap \u201CLet this phone show calls\u201D there."));
+      box.appendChild(h("p", null, "On an iPhone: tap Open my page, then Share, then \u201CAdd to Home Screen\u201D. Open the new icon and tap \u201C" + (P ? "Let this phone show notifications" : "Let this phone show calls") + "\u201D there."));
       return box;
     }
-    if (!ok) { box.appendChild(h("p", null, "This browser cannot ring. Your page lists every call offered to you; keep it open or look in now and then.")); return box; }
-    var btn = h("button", { class: "go", type: "button" }, "Let this phone show calls");
+    if (!ok) { box.appendChild(h("p", null, P ? "This browser cannot ring. Your page lists every ask from " + P + "; look in now and then." : "This browser cannot ring. Your page lists every call offered to you; keep it open or look in now and then.")); return box; }
+    var btn = h("button", { class: "go", type: "button" }, P ? "Let this phone show notifications" : "Let this phone show calls");
     btn.addEventListener("click", function () {
       btn.disabled = true; note.textContent = "Asking your phone\u2026";
       Notification.requestPermission().then(function (perm) {
@@ -88,12 +89,12 @@
             return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
           }).then(function (sub) {
             return fetch("/x/members/" + encodeURIComponent(mt) + "/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscription: sub.toJSON() }) });
-          }).then(function (r) { note.textContent = r.ok ? "Done: this phone rings when a call comes, while you are On and outside your quiet hours." : "Saved on this phone, but the service did not take it; your page still lists every call."; });
+          }).then(function (r) { note.textContent = r.ok ? (P ? "Done: an urgent ask can ring this phone, while you are On and outside your quiet hours." : "Done: this phone rings when a call comes, while you are On and outside your quiet hours.") : "Saved on this phone, but the service did not take it; your page still lists " + (P ? "every ask." : "every call."); });
         });
       }).catch(function (e) { btn.disabled = false; note.textContent = "That did not work on this phone (" + (e && e.name ? e.name : "error") + "). Your page still lists every call."; });
     });
     box.appendChild(btn); box.appendChild(note);
-    box.appendChild(h("p", { class: "note" }, "The notification says only how many minutes the call takes and its pay, or that it is an unpaid test. Never the asker's words."));
+    box.appendChild(h("p", { class: "note" }, P ? "A notification never shows the ask's words: open your page to read it." : "The notification says only how many minutes the call takes and its pay, or that it is an unpaid test. Never the asker's words."));
     return box;
   }
   // ms from now until the next time the clock in tz reads hour:00 (quiet hours end on the hour)
@@ -103,7 +104,7 @@
     var d = (hour * 3600 - (g("hour") * 3600 + g("minute") * 60 + g("second")) + 86400) % 86400;
     return (d || 86400) * 1000;
   }
-  function joined(d, quiet) {
+  function joined(d, quiet, P) {   // P: the owner's name when this is a person's people-only panel (asks, not calls)
     // when On starts inside the quiet hours just chosen, say so: nobody rings until they end (and maybe not this time)
     function quietNote(untilMs) {
       if (!quiet || quiet.start === quiet.end) return "";
@@ -116,11 +117,12 @@
     }
     var page = d.page || ("/m/" + d.member_token);
     var path = page.replace(/^https?:\/\/[^/]+/, "");
-    var onWords = h("p", { class: "lede" }, "You start Off: nobody can ring you until you switch On.");
-    var OFF_NOTE = "On means you are free to be rung. The next step lets this phone show a call when one comes.";
+    var onWords = h("p", { class: "lede" }, P ? "You start Off. Asks from " + P + " wait on your page either way; nothing rings until you switch On." : "You start Off: nobody can ring you until you switch On.");
+    var OFF_NOTE = P ? "On means an urgent ask from " + P + " may ring this phone once. Everything else just waits on your page." : "On means you are free to be rung. The next step lets this phone show a call when one comes.";
     var ON_NOTE = "What happens next: nothing, until an AI asks this panel a question; there is no set time. A call waits for you about a minute, so let this phone show calls just below; otherwise you see a call only while your page is open.";
+    if (P) ON_NOTE = "What happens next: nothing, until " + P + " sends you an ask. It waits on your page; an urgent one also rings this phone once, if you let it below.";
     var nextNote = h("p", { class: "note" }, OFF_NOTE);
-    var seg = h("div", { class: "seg", role: "group", "aria-label": "Can you be called" });
+    var seg = h("div", { class: "seg", role: "group", "aria-label": P ? "Can you be rung" : "Can you be called" });
     function drawSeg(isOn) {
       seg.textContent = "";
       if (isOn) seg.appendChild(h("button", { type: "button", onclick: function () { setOn(0); } }, "Turn off now"));
@@ -143,9 +145,10 @@
       onWords,
       seg,
       nextNote,
-      ringBlock(d.member_token),
+      ringBlock(d.member_token, P),
       h("div", { class: "block" }, h("p", { class: "label" }, "KEEP YOUR PAGE'S LINK"),
-        h("p", null, "Your page has its own link, not the one you were sent: the calls offered to you, your receipts, the On switch, and how to leave. Anyone with your page's link can act as you, so keep it to yourself."),
+        h("p", null, P ? "Your page has its own link, not the one you were sent: the asks from " + P + ", the On switch, mute and block, and how to leave. Anyone with your page's link can act as you, so keep it to yourself."
+          : "Your page has its own link, not the one you were sent: the calls offered to you, your receipts, the On switch, and how to leave. Anyone with your page's link can act as you, so keep it to yourself."),
         h("p", { class: "note" }, "Bookmark it or add it to your Home Screen. We cannot look it up for you, because we do not know who you are; if you lose it, ask the person who invited you for a new invitation."),
         h("a", { class: "go linkbtn", href: path }, "Open my page"),
         /iPhone|iPad|iPod/.test(navigator.userAgent) ? h("a", { class: "linkbtn", href: "persontools://m/" + encodeURIComponent(d.member_token) }, "Open in the iPhone app") : null,
@@ -167,6 +170,12 @@
 
   if (!/^jc_[a-z0-9]+$/.test(code)) { fill(main, h("section", { class: "screen" }, h("p", { class: "big" }, "Not a join link."), h("p", { class: "lede" }, "Open the link you were sent again."))); return; }
   // a principal's own panel (policy/OWN_PANELS.md) has its own notice, naming the asker as the asker named itself
+  function fillName(o, mark, name) {
+    if (typeof o === "string") return o.split(mark).join(name);
+    if (Array.isArray(o)) return o.map(function (x) { return fillName(x, mark, name); });
+    if (o && typeof o === "object") { var r = {}; for (var k in o) r[k] = fillName(o[k], mark, name); return r; }
+    return o;
+  }
   function fillPrincipal(o, name) {
     if (typeof o === "string") return o.split("{principal}").join(name);
     if (Array.isArray(o)) return o.map(function (x) { return fillPrincipal(x, name); });
@@ -175,8 +184,10 @@
   }
   fetch("/x/join/" + encodeURIComponent(code)).then(function (r) { return r.ok ? r.json() : r.text().then(function () { return null; }); }, function () { return null; }).then(function (j) {
     var own = !!(j && j.own && j.principal_name);
+    var people = !!(j && j.people && j.owner_name);   // OWNER_router_23: a person's people-only panel has its own notice, naming its owner
+    if (people) return fetch("/tester_notice_people.json").then(function (r) { return r.json(); }).then(function (n) { return [fillName(n, "{owner}", j.owner_name), j]; });
     return fetch(own ? "/tester_notice_own.json" : "/tester_notice.json").then(function (r) { return r.json(); }).then(function (n) { return [own ? fillPrincipal(n, j.principal_name) : n, j]; });
-  }).then(function (x) { var j = x[1]; render(x[0], j && j.panel ? j.panel : j); }, function () {
+  }).then(function (x) { var j = x[1]; render(x[0], j && j.panel ? j.panel : j, j && j.owner && j.owner.line ? j.owner : null, j && j.people && j.owner_name ? j.owner_name : null); }, function () {
     fill(main, h("section", { class: "screen" }, h("p", { class: "big" }, "Not loaded."), h("p", { class: "lede" }, "Try again in a minute.")));
   });
 })();

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_account.json",
+  "title": "A person's account: GET /v1/account (section 26.11)",
+  "type": "object",
+  "required": [
+    "person_id",
+    "made_at",
+    "memberships"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "person_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "handle": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "made_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "memberships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "member_id",
+          "panel",
+          "joined_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "member_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "panel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "asked_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name_on_panel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "joined_at": {
+            "$ref": "common.json#/$defs/time"
+          }
+        }
+      }
+    },
+    "passkeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "made_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "made_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "last_used_at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "synced": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "member_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "member_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "apple_push": {
+            "type": "boolean"
+          },
+          "web_push": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "open_case": {
+      "type": "string"
+    }
+  }
+}

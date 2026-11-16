@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desk_sign_in_poll.json",
+  "title": "A computer's look at its code: GET /v1/desk/sign_in/{poll} (section 26.11)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "waiting"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "waiting": {
+          "const": true
+        },
+        "expires_at": {
+          "$ref": "common.json#/$defs/time"
+        }
+      },
+      "description": "202: not approved yet."
+    },
+    {
+      "type": "object",
+      "required": [
+        "session",
+        "member_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "member_id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "description": "200, once: the computer session."
+    }
+  ]
+}

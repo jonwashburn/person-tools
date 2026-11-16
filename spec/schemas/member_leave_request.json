@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_leave_request.json",
+  "title": "Leave for good: POST /v1/member/leave (section 26.8)",
+  "type": "object",
+  "required": [
+    "confirm"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "confirm": {
+      "const": true
+    }
+  }
+}

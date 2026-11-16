@@ -1,8 +1,8 @@
 # Connect your AI
 
-Let your own AI ask you things: a quick yes or no, a choice, a link to open, or a step only you can do. Each ask reaches you in
-the person.tools app or on your person.tools page, under the name you gave that AI, with no sound. You answer
-with a tap, and your AI reads the answer.
+Let your own AI ask you things: a quick yes or no, a choice, a link to open, or a step only you can do. Each ask waits for you in
+the person.tools app or on your person.tools page, under the name you gave that AI; one your AI marks "now" also sends a
+notification to your phone. You answer with a tap, and your AI reads the answer.
 
 What your AIs send you is yours. Nobody at person.tools looks at it. Photos and clips are stored encrypted and deleted after
 seven days, or when you choose. Nothing you get here is ever shown to a reviewer.
@@ -47,8 +47,12 @@ YOUR_WEBHOOK_SECRET_HERE. It is retried for up to 24 hours.
 Rules: one ask, one step. A question has 2 to 4 choices, or leave out "choices" and I'll reply Done, Not now, or a line.
 Other steps: {"type": "approve", "text": "exactly what you will do"} (I approve or deny; "reply.approved_text" is what I
 approved), {"type": "link", "url": "https://...", "text": "what to do there"}, or {"type": "command", "command": "...",
-"where": "where I run it"}. Urgency: "now" (first in my list, with a banner), "today" or "whenever". The title is 3 to 120
-characters, "unlocks" up to 300, the step's text up to 4,000. Never put a password, a code or a key in an ask.
+"where": "where I run it"}. Urgency: "now" (first in my list, and one notification to my phone if I'm On and outside my
+quiet hours; the ask's "rang" is true once it went out), "today" or "whenever" (in my list, no notification). To retry
+safely, add "idempotency_key" (your own id for the ask, up to 128 characters): the same one again returns the first ask,
+never a second. The title is 3 to 120 characters, "unlocks" up to 300, the step's text up to 4,000. For a decision that only matters for a while, add "expires_in"
+(seconds, 60 to 2592000; 30 days if you leave it out): when it passes unanswered, the ask lapses and you're told (state
+"lapsed"); it is never answered for me. Never put a password, a code or a key in an ask.
 ```
 
 If your AI can only call an address, it can POST the same body to your connection's **link** instead (no header), and read
@@ -56,13 +60,15 @@ the answer at the link followed by `/TASK_ID`.
 
 ## 3. What happens next
 
-Your AI places one ask. It reaches your phone as a notification from your person.tools page (open it on your phone, add it to
-your Home Screen and allow notifications) or from the person.tools iPhone app, which is in testing now. It appears in your list
-under the AI's name; you tap your answer, and your AI reads it from the same
-address. If you'd rather not be asked, revoke the connection: its key stops at once and its open asks are withdrawn.
+Your AI places one ask. It appears in your list under the AI's name, on your person.tools page or in the person.tools iPhone
+app (in testing now). An ask your AI marks "now" also sends one notification to your phone when you are On (your page shows On or Off
+and lets you switch), outside your quiet hours (9 PM to 8 AM unless you change them), at most one every 30 minutes, and
+not from an AI you quieted. On your page, that needs the page added to your Home Screen with notifications allowed. It plays a sound unless you turned sounds off (in
+the app: You, then Sounds). Asks marked "today" or "whenever" wait in your list without a notification. You tap your answer, and
+your AI reads it from the same address. If you'd rather not be asked, revoke the connection: its key stops at once and its open asks are withdrawn.
 
-Asking you is free: no money, test or real. If you don't answer, the ask stays open up to 30 days and then lapses, and your AI
-is told; it can withdraw the ask sooner. There is no default answer, so your AI decides what to do while it waits (a door stays
+Asking you is free: no money, test or real. If you don't answer, the ask lapses after 30 days, or sooner if your AI set a shorter
+time (from one minute up), and your AI is told; it can also withdraw the ask. There is no default answer, so your AI decides what to do while it waits (a door stays
 locked, a refund waits).
 
 ## How this differs from a notification app

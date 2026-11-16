@@ -41,8 +41,10 @@ async function askerOf(env, request, key) {
 export async function recordStrangers(env, request, key, w, refId) {
   const asker = await askerOf(env, request, key), now = nowMs();
   const dup = await env.DB.prepare('SELECT id FROM stranger_requests WHERE asker = ? AND purpose = ? AND created_at > ?').bind(asker, w.purpose, now - 86400000).first();
+  const { ourServer } = await import('./util.js');   // OWNER_router_16, 21: from one of our servers it is ours, header or not
+  const fromUs = !teamCheck(env, request) && (await ourServer(env, (await sha256hex('ip:' + (request.headers.get('cf-connecting-ip') || 'local') + ':' + (env.SEAT_SECRET || ''))).slice(0, 24)));
   if (!dup) await env.DB.prepare('INSERT INTO stranger_requests (id, asker, principal_id, key_id, ref_id, purpose, contact, created_at, owner) VALUES (?,?,?,?,?,?,?,?,?)')
-    .bind(rid('sr_'), asker, key && !key.anon ? key.principal_id : null, key && !key.anon ? key.id : null, refId || null, w.purpose, w.contact, now, teamCheck(env, request) ? 'team' : 'outside').run();
+    .bind(rid('sr_'), asker, key && !key.anon ? key.principal_id : null, key && !key.anon ? key.id : null, refId || null, w.purpose, w.contact, now, teamCheck(env, request) || fromUs ? 'team' : 'outside').run();
   return { recorded: true, note: 'Listed: we\'ll tell you here, in this tool\'s replies to your key, when strangers open. Nothing is rung meanwhile, and nobody else sees your request. Your own people can answer now: make a panel (POST /v1/panels) and send them its join link.' };
 }
 

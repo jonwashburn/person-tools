@@ -333,15 +333,21 @@ def build(out, with_index=False):
             "answered; reply.choice, reply.text and reply.action hold the answer. Steps: question (2 to 4 choices, or none), approve, link, "
             "command. Or, with an MCP client, add https://%%API%%/mcp with that key as the bearer: two tools, ask_person and "
             "ask_person_reply. No page yet? They make one at https://%%RUN%%/start (a minute, no email). Asking your own user is free: no "
-            "money, test or real. If nobody answers, the ask stays open up to 30 days and then lapses (state \"lapsed\", and your webhook is "
+            "money, test or real. If nobody answers, the ask lapses after 30 days, or sooner with \"expires_in\" (60 s to 30 days; state "
+            "\"lapsed\", and your webhook is "
             "told); there is no default answer, so you decide what to do while you wait, and you may withdraw it sooner (POST "
             "/v1/tasks/<task_id>/withdraw). Or add \"webhook\": \"https://...\" to the ask: the answer is POSTed there, signed with the "
             "connection's webhook secret (x-person-tools-signature). The whole page, with a prompt "
             "to paste: https://%%SITE%%/connect.")
+    _m0, _h0 = len(smd), len(sh)   # the own-AI section goes first on /start (operations for the CEO, 12:20 PM CT 16 Nov)
     smd += ['## Your user wants you to ask them', '', MINE, '', '```', "curl -s https://%%API%%/v1/tasks -H 'authorization: Bearer conn_THEIR_KEY' -H 'content-type: application/json' -d '{\"title\": \"Refund over $50\", \"step\": {\"type\": \"question\", \"text\": \"Refund order 1042 ($64)?\", \"choices\": [\"Yes\", \"No\"]}, \"urgency\": \"now\"}'", '```', '']
     sh += '<h2>Your user wants you to ask them</h2><p>' + html.escape(MINE).replace('https://%%SITE%%/connect', '<a href="/connect">https://%%SITE%%/connect</a>') + '</p>'
     smd += [canon['own_ai_difference'], '', canon['preview_means'], '']
     sh += '<p>' + html.escape(canon['own_ai_difference']) + '</p><p>' + html.escape(canon['preview_means']) + '</p>'
+    _mine_md, _mine_h = smd[_m0:], sh[_h0:]
+    del smd[_m0:]; sh = sh[:_h0]
+    assert smd[0].startswith('# First call') and smd[3] == ''
+    smd[4:4] = _mine_md; sh = _mine_h + sh
     for n, (h, d, code) in enumerate(steps, 1):
         smd += ['## %d. %s' % (n, h), '', d, '']
         if code: smd += ['```', code, '```', '']
@@ -379,19 +385,22 @@ def build(out, with_index=False):
     sh += '<h2>Everything else</h2><p><a href="/tools.json">The tool text as served</a> &middot; <a href="/price.json">price and terms</a> &middot; <a href="/questions">questions</a> &middot; <a href="https://%%API%%/openapi.json">OpenAPI file</a> &middot; <a href="https://%%API%%/.well-known/' + names['wire_prefix'] + '">discovery file</a> &middot; <a href="https://%%SPEC%%/">the standard (draft)</a></p>'
     w('start.md', '\n'.join(smd))
     w('start.html', page('First call to %s' % names['network'], 'From nothing to a first call', 'Your first call, step by step',
-                         'A test key, one tool call and one fetch. Simulated people answer in seconds, so you can see the whole road before anyone real is rung.', sh, '/start', v))
+                         'Your user wants you to ask them on their phone? One key from them, one ask, free. Calling other people? A test key, one tool call and one fetch; simulated people answer in seconds, so you can see the whole road before anyone real is rung.', sh, '/start', v))
     # llms.txt
     _ac = ((canon.get('identity') or {}).get('also_called') or {}).get('value') or []
     _rp = (canon.get('identity') or {}).get('real_people_line') or {}
-    L = ['# %s' % names['network'], '', '> ' + v['one_sentence'], '', v['status_plain'] + ((' ' + _rp['value']) if _rp.get('live') else ''), '']
+    # own AI first (operations for the CEO, 12:20 PM CT 16 Nov: lead with 'your AIs ask you'; 4 of 8 cold agents had read us as built for panels)
+    L = ['# %s' % names['network'], '', '> ' + v['one_sentence'], '',
+         'Your own AIs ask you on your phone (approvals, choices, a line), free: you connect each one and give it a key; https://%%%%SITE%%%%/connect. Run by %s, Austin, Texas; contact %s.' % (canon['operator']['name'], (canon.get('contact') or {}).get('value') or 'see /security'), '',
+         v['status_plain'] + ((' ' + _rp['value']) if _rp.get('live') else ''), '']
     if _ac: L += ['Also called: ' + ', '.join(_ac) + '.', '']
     L += [
          'Names are working names: %s (the service), %s (the open standard, draft), %s (the tool).' % (names['network'], names['standard'], names['tool']), '',
          '## Start', '',
+         '- Your user wants you to ask THEM (yes or no, a choice, an approval) on their phone? They make a connection (You, then Connect an AI; no page yet? https://%%RUN%%/start) and give you its key; POST /v1/tasks with it and GET /v1/tasks/<id>, or add https://%%API%%/mcp with it (tools ask_person, ask_person_reply). Free; if nobody answers, the ask lapses after 30 days or your own expires_in (60 s up; state lapsed, and you are told), there is no default answer, and you may withdraw it sooner: https://%%SITE%%/connect',
          '- One line, no key (prices a simulated call; nothing is spent): ' + "curl -s https://%%API%%/v1/quotes -H 'content-type: application/json' -d '" + json.dumps({'ask': 'Which headline is clearer, and why?', 'kind': 'compare', 'people': 3, 'content': [{'text': 'Plan a week of dinners in five minutes'}, {'text': 'Dinner, decided'}]}) + "'",
          '- The same in Python: requests.post("https://%%API%%/v1/quotes", json={...}) or httpx.post(...); with urllib, send a User-Agent header of your own. All four in [start.md](https://%%SITE%%/start.md).',
          '- Your user already has people (testers, customers, players, a list or a chat)? POST /v1/panels gives a join link and a message (for_your_user) they drop into that email or chat; each person joins in about two minutes; calls with the panel\'s pool ring them and the answers come back to you. Free.',
-         '- Your user wants you to ask THEM (yes or no, a choice, an approval) on their phone? They make a connection (You, then Connect an AI; no page yet? https://%%RUN%%/start) and give you its key; POST /v1/tasks with it and GET /v1/tasks/<id>, or add https://%%API%%/mcp with it (tools ask_person, ask_person_reply). Free; if nobody answers, the ask lapses after 30 days (state lapsed, and you are told), there is no default answer, and you may withdraw it sooner: https://%%SITE%%/connect',
          '- ' + canon['preview_means'],
          '- ' + canon['own_ai_difference'],
          '- [First call, from nothing](https://%%SITE%%/start.md): a free test key, the MCP server, one call, the answers.',

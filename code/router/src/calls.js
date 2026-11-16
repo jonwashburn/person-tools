@@ -38,6 +38,15 @@ function adapterCtx(env, request, call, mode, principalName, account = 'ours', a
     arrivalUrl: runnerBase(request) + '/p/' + (call && call.arrival_token || '') };
 }
 
+// OWNER_router_9: a card on a call, checked like a task's (fixed blocks, no address or script, none of our own words); its words then
+// pass the full call screen with the ask (screen_gate.js), since a call may reach people who never chose this asker (TRUST 12:41)
+async function cardOnCall(env, key, spec) {
+  if (spec.card_raw === null || spec.card_raw === undefined) return;
+  if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A card needs a key: it is drawn under its principal.', 'Bearer test_...', {}, 401);
+  const { readCard } = await import('./cards.js');
+  spec.card = await readCard(env, key, spec.card_raw);
+}
+
 async function resolvePool(env, key, spec) {
   if (spec.pool_kind === 'simulated') return { simulated: true, panel: null, members: 0 };
   if (spec.pool_kind === 'adapter') {
@@ -224,6 +233,7 @@ function minutesFromMaterial(spec, defaults_used) {
 export async function quote(env, request, key, body) {
   const k = key || ANON;
   const { spec, defaults_used } = normalizeCall(body, Date.now(), { quote: true });   // CALL-7: no material needed for a price
+  await cardOnCall(env, k, spec);
   const wantS = spec.wants_strangers ? (await import('./strangers.js')).readWantsStrangers(spec.wants_strangers) : null;   // OWNER_all_6 item 2
   const pool = await resolvePool(env, k, spec);
   if (spec.floorError && !pool.adapter) throw spec.floorError;
@@ -440,10 +450,14 @@ async function autoIdemKey(env, scope, op, hash, now) {
 export async function openCall(env, request, key, body, ipHash) {
   const now = nowMs();
   const { spec, defaults_used, idempotency_key } = normalizeCall(body, now);
+  await cardOnCall(env, key, spec);
   const wantS = spec.wants_strangers ? (await import('./strangers.js')).readWantsStrangers(spec.wants_strangers) : null;   // OWNER_all_6 item 2
   // a keyless call our own checks make (the team header) keeps a scope of its own, so GET /v1/proof never counts it
   const idemScope = key.anon ? (teamCheck(env, request) ? 'anon:team:' : 'anon:') + ipHash : key.id;
-  const reqHash = await sha256hex(canonical({ ...callOut(spec), script: spec.script || null, ext: spec.ext || null }));   // equal calls are equal however written
+  // equal calls are equal however written; a different card or wants_strangers is a different call (TRUST 4:56 PM CT 15 Nov), and is
+  // hashed only when sent, so a retry of a call made before this change still finds its first answer
+  const reqHash = await sha256hex(canonical({ ...callOut(spec), script: spec.script || null, ext: spec.ext || null, ...(spec.card ? { card: spec.card } : {}),
+    ...(body && body.wants_strangers !== undefined ? { wants_strangers: body.wants_strangers } : {}) }));
   let idem = idempotency_key;
   if (!idem) { idem = await autoIdemKey(env, idemScope, 'call', reqHash, now); defaults_used.idempotency_key = 'none given: the same body from the same ' + (key.anon ? 'address' : 'principal') + ' within 10 minutes returns this call'; }
   const prior = await env.DB.prepare('SELECT request_hash, status, response_json FROM idempotency WHERE key_id = ? AND op = ? AND idem_key = ? AND created_at > ?').bind(idemScope, 'call', idem, now - 86400000).first();
@@ -740,6 +754,12 @@ async function settleSeat(env, request, s, now) {
   if (s.state === 'offered' && s.offer_expires_at <= now && call.panel_id === 'p_self') { await setSeat(env, s.id, 'offered', { state: 'expired', stop_reason: 'missed', due_at: null }); return; }
   if (s.state === 'offered' && s.offer_expires_at <= now) {
     const ch = await env.DB.prepare('UPDATE seats SET state = \'waiting\', offered_to = NULL, offer_expires_at = NULL, due_at = ? WHERE id = ? AND state = \'offered\' AND offer_expires_at <= ?').bind(now, s.id, now).run();
+    // OWNER_router_22 (the CEO, 6:30 PM CT 15 Nov: "a lapse caused by our own fault is not his 'no'"): the person reported this offer
+    // would not open: the lapse counts for nothing, and they are offered it again when operations re-offers it (POST /internal/seats/{id}/reoffer)
+    if (ch.meta.changes === 1 && s.offered_to) {
+      const failed = await env.DB.prepare('SELECT 1 AS x FROM events WHERE seat_id = ? AND body_json LIKE \'{"open_failed"%\' AND json_extract(body_json, \'$.open_failed\') = ? LIMIT 1').bind(s.id, s.offered_to).first();
+      if (failed) { await env.DB.prepare('INSERT INTO events (seat_id, received_at, body_json) VALUES (?,?,?)').bind(s.id, now, JSON.stringify({ open_failed_lapse: s.offered_to })).run(); return; }
+    }
     // RING_RULES (chief's ruling, 2:38 PM CT): a lapsed offer counts as missed (toward Off, and PEOPLE-8's 'never again')
     // only if it reached the person: the push service accepted the ring for them, or their open page listed the offer.
     // An offer they were never told about counts for nothing; their page is told a call could not reach them.
@@ -813,6 +833,67 @@ async function setSeat(env, id, fromState, to) {
 }
 
 export const PRIVATE_HOLD_MS = 15 * 60000;
+
+// OWNER_router_22: the person's client says an offer would not open (POST /v1/member/offers/{seat_id}/open_failed {"why"}). Once per call
+// per member (TRUST: the two-misses rule can't be dodged with it). Before the hold ends, the lapse will count for nothing; reported after
+// the hold ended, the miss that offer recorded is taken back. Either way the call waits for operations' re-offer to that membership.
+export async function openFailed(env, m, seatId, b) {
+  for (const k of Object.keys(b || {})) if (k !== 'why') throw fixable('unknown_field', k, 'Send {"why": "what happened"}.', null);
+  const why = b && b.why !== undefined ? String(b.why).replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  const s = await env.DB.prepare('SELECT * FROM seats WHERE id = ?').bind(String(seatId || '')).first();
+  if (!s) throw notFixable(404, 'not_found', 'No offer of yours has that id.');
+  const now = nowMs();
+  const live = s.state === 'offered' && s.offered_to === m.id;
+  const missed = !live && await env.DB.prepare('SELECT id, received_at FROM events WHERE seat_id = ? AND body_json LIKE \'{"missed_by"%\' AND json_extract(body_json, \'$.missed_by\') = ? ORDER BY received_at DESC LIMIT 1').bind(s.id, m.id).first();
+  if (!live && !missed) throw notFixable(404, 'not_found', 'No offer of yours has that id.');
+  const twice = await env.DB.prepare(`SELECT 1 AS x FROM events e JOIN seats s2 ON s2.id = e.seat_id WHERE s2.call_id = ? AND e.body_json LIKE '{"open_failed"%' AND json_extract(e.body_json, '$.open_failed') = ? LIMIT 1`).bind(s.call_id, m.id).first();
+  if (twice) throw notFixable(409, 'conflict', 'A failed open was already reported for this call; it is reported once per call.');
+  await env.DB.prepare('INSERT INTO events (seat_id, received_at, body_json) VALUES (?,?,?)').bind(s.id, now, JSON.stringify({ open_failed: m.id, why: why || null })).run();
+  if (missed) {   // after the hold: that lapse is taken back (not a miss, no step toward Off), and the call waits for the re-offer
+    await env.DB.batch([
+      env.DB.prepare('UPDATE events SET body_json = ? WHERE id = ?').bind(JSON.stringify({ open_failed_lapse: m.id, was: 'missed_by' }), missed.id),
+      env.DB.prepare('UPDATE members SET missed_rings = CASE WHEN missed_rings > 0 THEN missed_rings - 1 ELSE 0 END WHERE id = ?').bind(m.id),
+    ]);
+  }
+  return { seat_id: s.id, recorded: true, note: 'This offer will not count against you. The call is offered to you again once the app can open it (operations re-offers it), while you are On.' };
+}
+// OWNER_router_22: operations re-offers a seat (POST /internal/seats/{seat_id}/reoffer {"member_id"?}): to the membership named, or the
+// one that reported the failed open; it is offered when that membership can be rung (On, outside quiet hours), with a fresh hold
+export async function reofferSeat(env, seatId, b) {
+  for (const k of Object.keys(b || {})) if (k !== 'member_id') throw fixable('unknown_field', k, 'Send {"member_id"} or nothing.', null);
+  const s = await env.DB.prepare('SELECT * FROM seats WHERE id = ?').bind(String(seatId || '')).first();
+  if (!s) throw notFixable(404, 'not_found', 'No seat has that id.');
+  const call = await env.DB.prepare('SELECT * FROM calls WHERE id = ?').bind(s.call_id).first();
+  const now = nowMs();
+  if (!call || !['open', 'enough'].includes(liveStatus(call, now))) throw notFixable(409, 'conflict', 'That call is not open.');
+  if (!['waiting', 'offered'].includes(s.state)) throw notFixable(409, 'conflict', `That seat is ${s.state}; only a waiting or offered seat is re-offered.`);
+  let to = b && b.member_id ? String(b.member_id) : null;
+  if (!to) { const e = await env.DB.prepare(`SELECT json_extract(e.body_json, '$.open_failed') AS mb FROM events e JOIN seats s2 ON s2.id = e.seat_id WHERE s2.call_id = ? AND e.body_json LIKE '{"open_failed"%' ORDER BY e.received_at DESC LIMIT 1`).bind(call.id).first(); to = e && e.mb; }
+  if (!to) throw fixable('missing_field', 'member_id', 'Name the membership to offer it to (no failed open was reported on this call).', 'mb_...');
+  const m = await env.DB.prepare('SELECT * FROM members WHERE id = ? AND panel_id = ? AND left_at IS NULL').bind(to, call.panel_id).first();
+  if (!m) throw notFixable(404, 'not_found', 'That membership is not on this call\'s panel.');
+  // operations' re-offer after our own fault: the person must be On and outside quiet hours; the 30 minutes between rings (RING_RULES 1)
+  // does not hold this back, since the lapse was not theirs
+  const { ringDecision } = await import('./rings.js');
+  const can = ringDecision({ ...m, last_ring_at: null }, now, []);
+  await env.DB.prepare('INSERT INTO events (seat_id, received_at, body_json) VALUES (?,?,?)').bind(s.id, now, JSON.stringify({ reoffer: m.id })).run();
+  if (!can.ok) {
+    if (s.state === 'offered' && s.offered_to === m.id) return { seat_id: s.id, member_id: m.id, offered: true, held_until: iso(s.offer_expires_at), note: 'It is already offered to that membership.' };
+    return { seat_id: s.id, member_id: m.id, offered: false, why: can.why, note: 'That membership cannot be rung now (' + (can.why === 'off' ? 'Off' : can.why === 'quiet_hours' ? 'quiet hours' : can.why) + '); it is offered to them first once it can be.' };
+  }
+  const pk = await env.DB.prepare('SELECT kind FROM panels WHERE id = ?').bind(call.panel_id).first();
+  const privatePanel = !!(pk && pk.kind === 'private'), hold = privatePanel ? PRIVATE_HOLD_MS : m.slow_hold ? 180000 : 60000;
+  const r = await env.DB.prepare('UPDATE seats SET state = \'offered\', offered_to = ?, offer_expires_at = ?, due_at = ? WHERE id = ? AND state IN (\'waiting\', \'offered\')').bind(m.id, now + hold, now + hold, s.id).run();
+  if (r.meta.changes !== 1) throw notFixable(409, 'conflict', 'That seat changed just now; nothing was re-offered.');
+  await env.DB.prepare('UPDATE members SET last_ring_at = ? WHERE id = ?').bind(now, m.id).run();
+  const web = await ringMember(env, m);
+  const apple = m.apns_token ? await appleRing(env, m, call, s, now + hold, privatePanel && !call.asker_name) : null;
+  const rr = apple && apple.ok && !web.ok ? apple : web;
+  if (!rr || !rr.ok) await env.DB.prepare('UPDATE members SET last_ring_at = ? WHERE id = ? AND last_ring_at = ?').bind(m.last_ring_at || null, m.id, now).run();
+  try { await env.DB.prepare('INSERT INTO events (seat_id, received_at, body_json) VALUES (?,?,?)').bind(s.id, now, JSON.stringify({ ring: { ok: !!(rr && rr.ok), status: (rr && rr.status) || 0, why: (rr && rr.why) || null, real: !!m.is_real, to: m.id,
+    ...(apple ? { apple: { ok: !!apple.ok, status: apple.status || 0, why: apple.why || null } } : {}) } })).run(); } catch { }
+  return { seat_id: s.id, member_id: m.id, offered: true, held_until: iso(now + hold), rang: !!(rr && rr.ok), note: 'Offered to that membership with a fresh hold' + (rr && rr.ok ? ', and rung.' : '; the ring reached no phone, so it shows when their page or app is open.') };
+}
 // Offer a waiting seat on a panel to one eligible member, held for that person for one minute (FAIR-3); 15 on a private panel.
 async function offerSeat(env, call, s, now) {
   if (call.reported_at) { await env.DB.prepare('UPDATE seats SET due_at = NULL WHERE id = ?').bind(s.id).run(); return; }
@@ -837,7 +918,10 @@ async function offerSeat(env, call, s, now) {
       AND m.id NOT IN (SELECT COALESCE(json_extract(e.body_json, '$.declined_by'), json_extract(e.body_json, '$.missed_by'), '') FROM events e JOIN seats s2 ON s2.id = e.seat_id
                        WHERE s2.call_id = ? AND (e.body_json LIKE '{"declined_by"%' OR e.body_json LIKE '{"missed_by"%'))
       AND m.id NOT IN (SELECT member_id FROM blocks WHERE principal_id = ?)   -- OWNER_router_4 item 1: a person who blocked this asker is never offered its calls
-      ORDER BY COALESCE(m.last_ring_at, 0) LIMIT 20`).bind(call.panel_id, call.id, call.id, call.id, call.principal_id).all()).results || [];
+      AND m.id NOT IN (SELECT json_extract(e.body_json, '$.open_failed_lapse') FROM events e JOIN seats s3 ON s3.id = e.seat_id WHERE s3.call_id = ? AND e.body_json LIKE '{"open_failed_lapse"%'
+                       AND NOT EXISTS (SELECT 1 FROM events e2 JOIN seats s4 ON s4.id = e2.seat_id WHERE s4.call_id = ? AND e2.body_json LIKE '{"reoffer"%' AND json_extract(e2.body_json, '$.reoffer') = json_extract(e.body_json, '$.open_failed_lapse') AND e2.received_at >= e.received_at))
+      ORDER BY (m.id = (SELECT json_extract(e.body_json, '$.reoffer') FROM events e JOIN seats s5 ON s5.id = e.seat_id WHERE s5.call_id = ? AND e.body_json LIKE '{"reoffer"%' ORDER BY e.received_at DESC LIMIT 1)) DESC,
+        COALESCE(m.last_ring_at, 0) LIMIT 20`).bind(call.panel_id, call.id, call.id, call.id, call.principal_id, call.id, call.id, call.id).all()).results || [];   // OWNER_router_22
   // RING_RULES rule 11 (trust R12): a person is offered a call at most once; after declining it or letting it lapse, never again
   const { canRing } = await import('./rings.js');
   const eligible = botsOnly ? members.filter(m => !m.is_real) : members;

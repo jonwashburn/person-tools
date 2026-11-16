@@ -22,6 +22,8 @@ tags:
   - name: receipts
   - name: keys
   - name: discovery
+  - name: member
+    description: The person client (section 26).
 paths:
   /v1/quotes:
     post:
@@ -365,17 +367,558 @@ paths:
             application/json:
               schema: {$ref: "./schemas/discovery.json"}
         default: {$ref: "#/components/responses/Error"}
+  /v1/member/tasks:
+    get:
+      operationId: memberTasks
+      tags: [member]
+      summary: The asks of one membership, open and answered (section 26.5).
+      description: A 404 here, and only here, means the credential no longer works (MEMBER-3).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {name: history, in: query, required: false, description: "At most this many answered asks (0 to 200); 50 when absent.", schema: {type: integer, minimum: 0, maximum: 200}}]
+      responses:
+        "200": {description: The list., content: {application/json: {schema: {$ref: "./schemas/member_tasks.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/tasks/{task_id}:
+    post:
+      operationId: memberAnswer
+      tags: [member]
+      summary: Answer an ask, or send a note alone (section 26.5). No route takes an answer back.
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/TaskId"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_answer_request.json"}}}}
+      responses:
+        "200": {description: The ask's state with the reply, or with the note thread after a note alone., content: {application/json: {schema: {$ref: "./schemas/member_answer_response.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/member/tasks/{task_id}/media:
+    get:
+      operationId: memberTaskMedia
+      tags: [member]
+      summary: The ask's photo or clip (section 26.5). Shown from memory, never stored (CLIENT-4).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/TaskId"}]
+      responses:
+        "200": {description: "The bytes, with their content type and cache-control: no-store, private (MEMBER-8).", content: {"image/*": {schema: {type: string, format: binary}}, "video/*": {schema: {type: string, format: binary}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/settings:
+    get:
+      operationId: memberSettings
+      tags: [member]
+      summary: The membership's settings (section 26.8).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The settings., content: {application/json: {schema: {$ref: "./schemas/member_settings.json"}}}}
+    patch:
+      operationId: memberSettingsChange
+      tags: [member]
+      summary: Change any of the settings; answers with them all (section 26.8).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_settings_request.json"}}}}
+      responses:
+        "200": {description: The settings., content: {application/json: {schema: {$ref: "./schemas/member_settings.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/on:
+    post:
+      operationId: memberOn
+      tags: [member]
+      summary: Say whether calls may reach the person now; On ends by itself, at most after 12 hours (section 26.7).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_on_request.json"}}}}
+      responses:
+        "200": {description: The On state., content: {application/json: {schema: {$ref: "./schemas/member_on.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/offers:
+    get:
+      operationId: memberOffers
+      tags: [member]
+      summary: The person's ring state and the calls held for them (section 26.7).
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The ring state and offers., content: {application/json: {schema: {$ref: "./schemas/member_offers.json"}}}}
+  /v1/seats/{seat_token}:
+    get:
+      operationId: seatRead
+      tags: [member]
+      summary: What a client shows before the person takes the seat (section 26.7; CLIENT-6). The seat token is the only authority.
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/SeatToken"}]
+      responses:
+        "200": {description: The seat., content: {application/json: {schema: {$ref: "./schemas/member_seat.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/seats/{seat_token}/stop:
+    post:
+      operationId: seatDecline
+      tags: [member]
+      summary: 'Decline an offered call with {"reason": "decline"}: free, no mark, not offered again (section 26.7; MEMBER-12).'
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/SeatToken"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string, examples: [decline]}}}}}}
+      responses:
+        "200": {description: The seat as it now is., content: {application/json: {schema: {type: object}}}}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/member/connections:
+    get:
+      operationId: memberConnections
+      tags: [member]
+      summary: "The person's AIs, with asks waiting and last use (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_connections.json"}}}}
+    post:
+      operationId: memberConnect
+      tags: [member]
+      summary: "Connect an AI: its key, link and webhook secret are shown once (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_connection_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_connection_created.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/connections/{connection_id}:
+    patch:
+      operationId: memberConnectionChange
+      tags: [member]
+      summary: "Quiet, block or limit the urgencies of one of the person's AIs (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/ConnectionId"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_connection_change.json"}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_connection.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: memberConnectionRevoke
+      tags: [member]
+      summary: "Revoke: the key stops at once and its open asks leave the list (MEMBER-14)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/ConnectionId"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_connection_revoked.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/blocks:
+    get:
+      operationId: memberBlocks
+      tags: [member]
+      summary: "The askers this person blocked (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_blocks.json"}}}}
+    post:
+      operationId: memberBlock
+      tags: [member]
+      summary: "Block the asker of a call or an ask; it is told only that the person is not available (MEMBER-15)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_block_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_block.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/blocks/{block_id}:
+    delete:
+      operationId: memberUnblock
+      tags: [member]
+      summary: "Unblock (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/BlockId"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_block_removed.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/mutes:
+    get:
+      operationId: memberMutes
+      tags: [member]
+      summary: "The people this person muted (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_mutes.json"}}}}
+    post:
+      operationId: memberMute
+      tags: [member]
+      summary: "Mute a person: their asks never ring and are still listed (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_mute_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_mute.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/mutes/{mute_id}:
+    delete:
+      operationId: memberUnmute
+      tags: [member]
+      summary: "Unmute (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/MuteId"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_mute_removed.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/limits:
+    get:
+      operationId: memberLimits
+      tags: [member]
+      summary: "How many asks any one person may send this person a day (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_limits.json"}}}}
+    post:
+      operationId: memberLimitsSet
+      tags: [member]
+      summary: "Set the daily limit, 0 to 100 (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_limits_request.json"}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_limits.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/people:
+    get:
+      operationId: memberPeople
+      tags: [member]
+      summary: "The person's own people: who joined and who has not yet (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_people.json"}}}}
+  /v1/member/people/links:
+    post:
+      operationId: memberPeopleLink
+      tags: [member]
+      summary: "Make a join link for one person; it is shown once, and an older unused one for the same label stops (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_people_link_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_people_link.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/people/asks:
+    post:
+      operationId: memberPeopleAsk
+      tags: [member]
+      summary: "Send an ask to one or more of one's own people, one ask each (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_people_asks_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_people_asks.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /v1/member/people/notice:
+    post:
+      operationId: memberPeopleNotice
+      tags: [member]
+      summary: "OK on the one-time notice: from now on asks from people are listed (MEMBER-18)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, maxProperties: 0}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/sent:
+    get:
+      operationId: memberSent
+      tags: [member]
+      summary: "What this person sent and passed on, each with its thread (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_sent.json"}}}}
+  /v1/member/sent/read:
+    post:
+      operationId: memberSentRead
+      tags: [member]
+      summary: "Mark threads read on every device, at most 80 at a time (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_sent_read_request.json"}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_sent_read.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/sent/{task_id}/notes:
+    post:
+      operationId: memberSentNote
+      tags: [member]
+      summary: "The sender's note on a thread, while the ask is open (MEMBER-7)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/TaskId"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 2000}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/member/tasks/{task_id}/pass:
+    post:
+      operationId: memberPass
+      tags: [member]
+      summary: "Pass an ask on to one of the person's own people (section 26.10)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/TaskId"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [to], additionalProperties: false, properties: {to: {$ref: "./schemas/common.json#/$defs/id"}, note: {type: string, minLength: 1, maxLength: 2000}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [task_id, passed_to], properties: {task_id: {$ref: "./schemas/common.json#/$defs/id"}, passed_to: {type: object, properties: {member_id: {$ref: "./schemas/common.json#/$defs/id"}, name: {type: string}}}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/member/tasks/{task_id}/alert:
+    get:
+      operationId: memberAlertLine
+      tags: [member]
+      summary: "Who is asking, and the first line only when the person turned words in alerts on (MEMBER-13)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}, {$ref: "#/components/parameters/TaskId"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [from], additionalProperties: false, properties: {from: {type: string}, passed_on_by: {type: string}, note: {type: string}, line: {type: string, maxLength: 80}}}}}}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/member/devices:
+    post:
+      operationId: memberDevice
+      tags: [member]
+      summary: "Register an Apple device for alerts (section 26.7)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [apns_token], additionalProperties: false, properties: {apns_token: {type: string, minLength: 1}, environment: {enum: [production, sandbox]}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/receipts:
+    get:
+      operationId: memberReceipts
+      tags: [member]
+      summary: "The person's signed receipts (section 15; 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [member_id, receipts], properties: {member_id: {$ref: "./schemas/common.json#/$defs/id"}, receipts: {type: array, items: {type: object}}, verify: {type: string}, test_money: {type: boolean}}}}}}
+  /v1/member/feedback:
+    post:
+      operationId: memberFeedback
+      tags: [member]
+      summary: "Tell the people who run the server something (section 26.8)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_feedback_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_feedback.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/member/leave:
+    post:
+      operationId: memberLeave
+      tags: [member]
+      summary: "Leave for good; the credential then answers 404 everywhere (MEMBER-16)."
+      security: [{member: []}]
+      parameters: [{$ref: "#/components/parameters/PersonMember"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_leave_request.json"}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_leave.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+  /v1/join/{code}:
+    get:
+      operationId: joinRead
+      tags: [member]
+      summary: "What a panel is and who asks through it, before joining (section 26.9)."
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/JoinCode"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_join.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+    post:
+      operationId: join
+      tags: [member]
+      summary: "Join, with the attestations the join page named; returns the member credential (section 26.9)."
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/JoinCode"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/member_join_request.json"}}}}
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_join_response.json"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /v1/account:
+    get:
+      operationId: account
+      tags: [member]
+      summary: "A person's account: memberships, passkeys and devices (section 26.11)."
+      security: [{member: []}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/member_account.json"}}}}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/account/login/options:
+    post:
+      operationId: accountLoginOptions
+      tags: [member]
+      summary: "WebAuthn request options for a passkey sign-in (section 26.11)."
+      security: [{}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [challenge_id, publicKey], properties: {challenge_id: {type: string}, publicKey: {type: object}}}}}}
+  /v1/account/login:
+    post:
+      operationId: accountLogin
+      tags: [member]
+      summary: "Sign in with a passkey; returns an account session (section 26.11)."
+      security: [{}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [challenge_id, credential], properties: {challenge_id: {type: string}, credential: {type: object}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [session], properties: {session: {type: string}, person_id: {type: string}, expires_at: {type: string}, note: {type: string}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /v1/account/logout:
+    post:
+      operationId: accountLogout
+      tags: [member]
+      summary: "End an account session (section 26.11)."
+      security: [{member: []}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+  /v1/account/passkey/options:
+    post:
+      operationId: accountPasskeyOptions
+      tags: [member]
+      summary: "WebAuthn creation options for adding a passkey (section 26.11)."
+      security: [{member: []}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [challenge_id, publicKey], properties: {challenge_id: {type: string}, publicKey: {type: object}}}}}}
+        "401": {$ref: "#/components/responses/Error"}
+  /v1/account/passkey:
+    post:
+      operationId: accountPasskeyAdd
+      tags: [member]
+      summary: "Add a passkey to the account (section 26.11)."
+      security: [{member: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [challenge_id, credential], properties: {challenge_id: {type: string}, credential: {type: object}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /v1/account/memberships:
+    post:
+      operationId: accountMembershipAdd
+      tags: [member]
+      summary: "Join another membership to the account by its own credential, never by a name (section 26.11)."
+      security: [{member: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [member_credential], additionalProperties: false, properties: {member_credential: {type: string, minLength: 1}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /v1/desk/sign_in:
+    post:
+      operationId: computerSignIn
+      tags: [member]
+      summary: "Ask for a code to show on a computer (section 26.11)."
+      security: [{}]
+      responses:
+        "201": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/desk_sign_in.json"}}}}
+        "429": {$ref: "#/components/responses/Error"}
+  /v1/desk/sign_in/{poll}:
+    get:
+      operationId: computerSignInPoll
+      tags: [member]
+      summary: "202 until the code is approved; 200 with a computer session once; 410 when it ended (section 26.11)."
+      security: [{}]
+      parameters: [{$ref: "#/components/parameters/Poll"}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {$ref: "./schemas/desk_sign_in_poll.json"}}}}
+        "410": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /v1/desk/sign_out:
+    post:
+      operationId: computerSignOut
+      tags: [member]
+      summary: "End this computer session (section 26.11)."
+      security: [{member: []}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+  /v1/member/desk/approve:
+    post:
+      operationId: computerApprove
+      tags: [member]
+      summary: "From the device that holds the membership: approve a code with the number the computer shows; a wrong or missing number stops it (MEMBER-21)."
+      security: [{member: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [code, number], additionalProperties: false, properties: {code: {type: string}, number: {type: integer, minimum: 0, maximum: 99}}}}}}
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object}}}}
+        "403": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+        "410": {$ref: "#/components/responses/Error"}
+  /v1/member/desk/sessions:
+    get:
+      operationId: computerSessions
+      tags: [member]
+      summary: "The computers signed in for this membership (section 26.11)."
+      security: [{member: []}]
+      responses:
+        "200": {description: The answer., content: {application/json: {schema: {type: object, required: [sessions], properties: {sessions: {type: array, items: {type: object}}}}}}}
 components:
   schemas:
     JWKS:
       description: The document at discovery's jwks_uri (its address is the server's own, so it has no path here).
       $ref: "./schemas/jwks.json"
   securitySchemes:
+    member:
+      type: http
+      scheme: bearer
+      description: "Section 26.2: the member credential (from a join), an account session (from a passkey sign-in; name the membership in X-Person-Member) or a computer session (from a code approved on a device that holds the membership). Never in an address (CLIENT-1)."
     bearer:
       type: http
       scheme: bearer
       description: "A key: test_... reaches the simulated pool, any test panels a server names, and the panels its own principal made where the server lets test keys make panels; a live key may reach real people (section 6)."
   parameters:
+    ConnectionId:
+      name: connection_id
+      in: path
+      required: true
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+    BlockId:
+      name: block_id
+      in: path
+      required: true
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+    MuteId:
+      name: mute_id
+      in: path
+      required: true
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+    JoinCode:
+      name: code
+      in: path
+      required: true
+      description: The code at the end of a join link.
+      schema: {type: string, minLength: 1, maxLength: 256}
+    Poll:
+      name: poll
+      in: path
+      required: true
+      description: The poll value of a computer sign-in, kept in memory only (CLIENT-14).
+      schema: {type: string, minLength: 1, maxLength: 256}
+    PersonMember:
+      name: X-Person-Member
+      in: header
+      required: false
+      description: With an account session, the membership the request acts for (MEMBER-20); not sent with a member credential or a computer session.
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: {$ref: "./schemas/common.json#/$defs/id"}
+    SeatToken:
+      name: seat_token
+      in: path
+      required: true
+      description: The seat token from the offer; it names one seat and may travel in an address (SEC-3).
+      schema: {type: string, minLength: 1, maxLength: 512}
     Version:
       name: "{{wire_prefix}}-version"
       in: header

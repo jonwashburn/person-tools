@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_offers.json",
+  "title": "The person's ring state and the calls held for them: GET /v1/member/offers (section 26.7)",
+  "type": "object",
+  "required": [
+    "member_id",
+    "on",
+    "offers",
+    "look_again_after_seconds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "member_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "on": {
+      "enum": [
+        "on_until",
+        "off"
+      ]
+    },
+    "on_until": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quiet": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "tz"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "tz": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Quiet hours: no call reaches the person between start and end, in tz."
+    },
+    "settings": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "longer_hold": {
+          "type": "boolean"
+        },
+        "sounds": {
+          "type": "boolean"
+        }
+      }
+    },
+    "silent": {
+      "type": "boolean"
+    },
+    "ring_cap": {
+      "type": "object",
+      "required": [
+        "used",
+        "limit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "used": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "limit": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "resets_at": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "applies": {
+          "type": "boolean"
+        }
+      }
+    },
+    "missed_rings": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "quiet_now": {
+      "type": "boolean"
+    },
+    "next_ring_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "calls_waiting": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "calls_not_reached": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "offers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/offer"
+      }
+    },
+    "checked_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "look_again_after_seconds": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "offer": {
+      "type": "object",
+      "required": [
+        "seat_id",
+        "call_id",
+        "state",
+        "ask",
+        "kind",
+        "minutes",
+        "pay",
+        "asker",
+        "held_until",
+        "seat_token",
+        "seat_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "seat_id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "call_id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "state": {
+          "$ref": "common.json#/$defs/seat_status"
+        },
+        "ask": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "common.json#/$defs/kind"
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pay": {
+          "type": "object",
+          "required": [
+            "per_person_usd",
+            "unpaid_test"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "per_person_usd": {
+              "$ref": "common.json#/$defs/money"
+            },
+            "unpaid_test": {
+              "type": "boolean"
+            }
+          }
+        },
+        "asker": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "notification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "held_until": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seat_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seat_url": {
+          "$ref": "common.json#/$defs/https_url"
+        }
+      }
+    }
+  }
+}

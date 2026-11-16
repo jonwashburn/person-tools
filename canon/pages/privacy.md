@@ -2,7 +2,7 @@
 
 person.tools is run by **Hammer Corp., 1401 Lavaca St #41100, Austin, TX 78701**. Questions, requests and deletions:
 **hello@person.tools**. This page covers the service at person.tools, its API and the person.tools app. The service is a
-preview: nothing is charged, and every amount in it is test money. Version 1, 15 November 2026.
+preview: nothing is charged, and every amount in it is test money. Version 2, 16 November 2026.
 
 ## In short
 
@@ -23,13 +23,16 @@ contacts.
 that is different for every asker. Never anything that says who you are, and never the step-by-step log of each play, pause and
 skip. Each call says, before you take it, whether the asker may use your written answers to train AI.
 
-**What we keep about you:** the panels you joined, the alias you choose, when you can be rung (On or Off, quiet hours, sounds),
+**What we keep about you:** the panels you joined, the alias you choose, when you can be rung (On or Off, quiet hours, sounds,
+and whether your alerts show an ask's first line),
 and your answers and receipts. A key or token pasted into an answer is stored as "[removed]". If you use the app: your phone's
 notification token, so a call can reach you, and the public half of its device key, which lets us check that an answer was
-approved on that phone.
+approved on that phone. If you sign in with a passkey: its public half and your sign-in sessions. Computers you signed in to the
+Desk with your phone, with roughly where each one was (city and region) and its browser, until you sign it out. The people you
+muted or blocked, and the daily limit you set for asks.
 
 **In public:** for calls our own programs make, the proof page shows when each was answered, what kind of call it was, how many
-people answered, and what it changed. Never your name, and never your words.
+people answered, and what it changed. Never your name, and never your words, unless you say yes to that quote.
 
 ## If you ask (an AI agent or the person behind it)
 
@@ -45,6 +48,22 @@ A connection is made by you, for one AI, and does one thing: it places asks to y
 asks are withdrawn. What it sends you is not read by a model, not put in a review queue and not shown to anyone at person.tools;
 photos and clips are encrypted, shown only to you, and deleted seven days after they arrive unless you choose otherwise.
 
+## Asks from a person you know
+
+When a person's panel is made theirs, they can send asks to the people who joined it, and pass on asks they received. They see
+your answer and your notes under the name you joined with; that is the point, since you know each other. When they pass on
+someone else's ask, that first asker gets your answer, never your name. person.tools checks each ask's size, its links and that
+it carries no key or password; nobody at person.tools reads what you send each other. You set how many asks one person may send
+you in a day, and you can mute, block or leave at any time.
+
+## What an alert shows
+
+An alert for an ask, from your own AI or from a person you know, says only who is asking. If you turn on "Show the ask in my alerts"
+in your settings, it also shows the ask's first line (at most 80 characters, never the whole ask and never a photo or clip). It is
+off unless you turn it on, only you can turn it on, and you can turn it off at any time. The words never travel inside the alert, so Apple and your browser's push
+service never carry them: when the alert arrives, your phone fetches the line from us. Your phone's own setting for showing
+previews still decides whether anything appears on your lock screen.
+
 ## How long things are kept
 
 | What | How long |
@@ -53,7 +72,11 @@ photos and clips are encrypted, shown only to you, and deleted seven days after 
 | The detailed record of a call (each play, pause, seek) | 30 days |
 | Material sent for a call | until the last call using it closes, plus 30 days |
 | Photos and clips your own AIs send you | 7 days, or the schedule you set |
-| Tasks for you | open ones up to 30 days; answered ones 180 days, or until you delete them |
+| Tasks for you | open until answered or until the ask's own time runs out (60 seconds to 30 days, set by the asker); then it lapses and is never answered for you; answered ones 180 days, or until you delete them |
+| Asks from a person you know, and asks passed on to you | as tasks for you (open until answered or their time runs out; answered ones 180 days, or until you delete them) |
+| Mutes, blocks and your daily limit | until you remove them or leave |
+| Desk sign-ins (which computer, roughly where) | until you sign it out, or 30 days unused |
+| Passkey sign-in sessions | 30 days, or until you sign out |
 | A connection you revoked (what it sent) | 30 days |
 | Answers sent back to your AI (delivery records) | 7 days |
 | Data made only by a test key | 30 days after the key was last used |

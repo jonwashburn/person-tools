@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_join_request.json",
+  "title": "Join a panel: POST /v1/join/{code} (section 26.9)",
+  "type": "object",
+  "required": [
+    "adult",
+    "notice_accepted",
+    "notice_id"
+  ],
+  "properties": {
+    "adult": {
+      "const": true
+    },
+    "notice_accepted": {
+      "const": true
+    },
+    "notice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner_line_seen": {
+      "const": true
+    },
+    "alias": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "tz": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quiet_start": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    },
+    "quiet_end": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    }
+  },
+  "additionalProperties": {
+    "type": [
+      "boolean",
+      "string"
+    ]
+  },
+  "description": "The attestations' send object as the join page gave it, after the person said each thing in it is true; a server may name other statements there (such as us_resident)."
+}

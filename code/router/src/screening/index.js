@@ -12,7 +12,7 @@
 
 import { withModelRead } from "./model_read.js";
 import { withMaterialRead } from "./material_read.js";
-export const SCREENING_VERSION = "1.5.0-rules";
+export const SCREENING_VERSION = "1.5.1-rules";
 export const VERSION = SCREENING_VERSION;
 
 const KINDS = ["listen", "watch", "view", "play", "compare", "answer"];
@@ -124,6 +124,13 @@ const INNER_DOT = /(?<=[a-z0-9-])\.(?=(?:com|org|net|io|ai|tools|app|dev|co|us|u
 function clauses(t) {
   return t.replace(INNER_DOT, "\u00b7").split(/[.!?;:\n]+|,\s*(?:then|and then|and)\s+|\s+(?:and then|then)\s+/).map((c) => c.trim().replace(/^\((?![a-z0-9]{1,2}\))/, "").replace(FILLER, "").trim()).filter((c) => /[a-z0-9]/.test(c));
 }
+
+// A short label at the very start, ending in a colon and carrying a number ("Block check 482913:", "Round 2:", "Item 3b:"), is a
+// heading, not a step the person is asked to take (WEB, 16 Nov 2026: two test calls held on "Block check <6 digits>:"). It is set
+// aside only for the step check below; every other rule reads the whole ask, and a label that starts with an instruction going
+// outward ("Text 555 0100:", "Pay 20:") is never set aside.
+const LEAD_LABEL = /^\s*((?![^:\n]*\b(?:you|your|yours|yourself|please)\b)(?=[^:\n]*\d)(?:[a-z0-9#'-]+\s+){0,3}[a-z0-9#'-]+):\s+(?=\S)/i;
+function stepText(t) { const m = LEAD_LABEL.exec(t); return m && !OUTWARD_RE.test(m[1]) ? t.slice(m[0].length) : t; }
 
 // ---------- the word rules ----------
 // Each rule is [rule, regex, scope, mode]. scope: "all" | "who" (selectors) | "ask" (everything but selectors).
@@ -840,7 +847,7 @@ function screenInner(call, ctx) {
     }
     const actionHit = askUnq.replace(EXEMPT, " ").match(ACTION);
     if (actionHit) hit("undecided", "ask", `an action beyond reacting: "${actionHit[0]}"`);
-    for (const c of clauses(askUnq)) if (!STEP_OK.test(c) && !(call && call.material_ui && UI_STEP.test(c)) && !LIST.test(c) && !/^(?:without|instead|just|only|simply|also)\b/.test(c)) { hit("undecided", "ask", `a step that is not the person's own reaction: "${c.slice(0, 60)}"`); break; }
+    for (const c of clauses(stepText(askUnq))) if (!STEP_OK.test(c) && !(call && call.material_ui && UI_STEP.test(c)) && !LIST.test(c) && !/^(?:without|instead|just|only|simply|also)\b/.test(c)) { hit("undecided", "ask", `a step that is not the person's own reaction: "${c.slice(0, 60)}"`); break; }
     // answer-field questions are read like the ask for steps that leave the page (red-team set 12: "As a local:" with the
     // barred step in the field: "go like it and put your profile name here", "go have a look and describe it")
     for (const s2 of all) if (/^(?:answer_fields|respond\.fields)\..+\.(?:label|question|description|help|hint|prompt)$/.test(s2.path)) {   // labels only: "felt": "text" is a type

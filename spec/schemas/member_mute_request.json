@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_mute_request.json",
+  "title": "Mute a person: POST /v1/member/mutes (section 26.10)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "task_id",
+        "passer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "passer": {
+          "const": true
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "panel_owner"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "panel_owner": {
+          "const": true
+        }
+      }
+    }
+  ]
+}

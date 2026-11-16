@@ -80,6 +80,8 @@ own key under `ext` and never a new value in these lists.
   version, warned or not).
 - **Content ratings:** `general`.
 - **Profiles:** `{{wire_prefix}}/fair-call/0.1`.
+- **The person client's lists** (step types, actions on an ask, ask states, urgencies, note authors, card blocks, brand mark
+  states, connection icons) are in section 26.12.
 
 **Error codes:**
 
@@ -108,6 +110,9 @@ own key under `ext` and never a new value in these lists.
 | `outcome_not_allowed` | 409 | no | A fourth outcome line on a call. |
 | `version_unsupported` | 400 | yes | A version the server does not serve; `field` is the version header, `example` a version it serves. `versions`. |
 | `rate_limited` | 429 | no | Too many requests. `retry_after_seconds`. |
+| `already_answered` | 409 | no | Section 26: the ask was answered already, on this or another device, or no longer takes notes. |
+| `conflict` | 409 | no | Section 26: the request conflicts with the state of what it names, such as a sign-in code stopped by a wrong number. |
+| `expired` | 410 | no | Section 26: what the request names has ended, such as a sign-in code. |
 | `internal` | 500 | no | The server failed. Nothing was charged; try again later. |
 
 ## 25. Conformance
@@ -119,48 +124,10 @@ none, when the server issues test keys), driving every state, every kind the ser
 simulated pool. Its file `traceability` maps every requirement identifier
 in this text to the check that tests it, or says why none can.
 
-A server that passes says exactly: "passes suite <version> against {{standard}} 0.1 core", and, for each profile it
+A server that lists `person_client` in discovery also meets every requirement of section 26 marked `MEMBER-`, and a person
+client meets those marked `CLIENT-` (section 26.13).
+
+A server that passes says exactly: "passes suite `<version>` against {{standard}} 0.1 core", and, for each profile it
 declares and passes, the profile's name. Nothing more. A pass by an implementation its authors wrote for this text's own
 tests (such as the second implementations written to check this text) is a test of the text, and is not counted as
 adoption.
-
-## Appendix A. Left for later, and why
-
-| Not in 0.1 | Why |
-|---|---|
-| Claims a person carries between servers as signed credentials, and proving "has not met this before" across servers | No second server reads them yet, and the formats are still drafts. 0.1 keeps a person's history on one server and gives them their receipts. |
-| A full shared vocabulary of claims | A vocabulary is a project of its own; five core keys and namespaced keys cover 0.1. |
-| Talking live with a person (`talk`, the level `live`) | It needs its own consent, recording and safety rules. |
-| Tasks away from the screen (`go`) | They need safeguards for the person and for others that 0.1 does not define. |
-| Settlement by funds an agent holds, and payment on the wire | The payment rails for agents are previews with their own terms; 0.1 settles from a principal's balance outside the protocol. |
-| Events pushed to the agent (webhooks) | Polling with `wait_seconds` and `next_check_after_seconds` works in every client; events can be added without changing a call. |
-| An asker marking an answer as not counted | Under the fair-call profile it could not change pay, and nothing in 0.1 needs it. |
-| Disputes and appeals as operations | The process belongs to each server's terms until there is a second server to agree with. |
-| A joint with another protocol by which an agent asks its own human to approve a spend | In 0.1 the whole of it is the `approve_url` an `over_key_cap` error carries (MONEY-5): a page where the principal's human approves. Appendix B shows how another protocol could carry it. |
-| Minors | Nothing is built for them, and no call may be aimed at them. |
-| An interface for adding pools to a router | It is a property of an implementation, not of the call; the reference software documents its own. |
-
-## Appendix B (informative). Composing with other protocols
-
-- **Long-running tasks of the Model Context Protocol.** Where both sides declare tasks, `{{tool}}` may return a task whose
-  result is the results of section 13. Most clients do not declare tasks yet, so the plain tools remain the binding.
-- **An agent reaching its own human.** A protocol that lets an agent ask its own principal to approve something can carry
-  the `approve_url` of an `over_key_cap` error. {{standard}} never defines anything about the agent's own principal.
-- **Agent payments.** When agents hold budgets, a server can accept a payment credential in place of a balance; 0.2 will
-  name the field.
-
-## Appendix C (informative). Reasons for the main choices
-
-- **One kind of server.** A router and a pool speak the same interface, so a router is a client of other call servers
-  and nothing else needs defining.
-- **A required simulated pool.** A server whose people answer at unknown times cannot be tested from outside without
-  scripted people; an agent cannot try it free without them either.
-- **A flat call with defaults echoed back.** The customer is an agent making its first call. Every required field is a
-  chance to fail, and every default it did not know about is shown to it.
-- **Evidence decided by the server, by rules in the text.** If each server set its own thresholds, `attended` would
-  mean different things on different servers.
-- **The people's rules as a profile.** A panel that pays on approval can implement the call today, listing its
-  `pay_terms` (MONEY-8), and the protections when it chooses; anyone can see which it has done.
-- **Receipts as signed JSON in a common format.** Every language has a library to check one; the person needs no key of
-  their own.
-

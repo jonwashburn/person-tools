@@ -1,0 +1,33 @@
+{
+  "task_id": "tk_porchlight01",
+  "title": "Porch light schedule",
+  "urgency": "whenever",
+  "from": "Home camera",
+  "connection": {
+    "name": "Home camera",
+    "yours": false,
+    "icon": "home"
+  },
+  "step": {
+    "type": "approve",
+    "text": "Turn the porch light on at dusk, off at 11 PM.",
+    "approve_label": "Yes, do it",
+    "deny_label": "No",
+    "editable": false
+  },
+  "unlocks": "the porch light",
+  "created_at": "2026-11-16T20:24:01Z",
+  "expires_at": "2026-11-17T20:24:01Z",
+  "state": "open",
+  "reply": null,
+  "notes": [
+    {
+      "at": "2026-11-16T20:25:22Z",
+      "note": "Can you decide this one?",
+      "by": "passer",
+      "name": "Robin",
+      "private": true
+    }
+  ],
+  "passed_on_by": "Robin"
+}

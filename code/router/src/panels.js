@@ -11,6 +11,7 @@ export function requireListedReal(key, what) {
 export const OWN_PANELS_PER_PRINCIPAL = 3, LIVE_PANELS_PER_PRINCIPAL = 5;   // OWN_PANELS.md rule 1 (TRUST 4:26 AM CT)
 export const OWN_PANEL_MAX_MEMBERS = 50, LIVE_PANEL_MAX_MEMBERS = 200, OWN_LINK_JOINS_PER_DAY = 25;   // rule 4
 export const OWN_NOTICE_IDS = ['tester-notice-own-1'];   // legal/tester_notice_own.json (TRUST 4:13 AM CT)
+export const PEOPLE_NOTICE_IDS = ['tester-notice-people-2', 'tester-notice-people-1'];   // TRUST 1:55 PM CT 16 Nov: people-2 adds the alerts sentence; people-1 still accepted   // legal/tester_notice_people.json (TRUST 8:19 PM CT 15 Nov; OWNER_router_23)
 // rule 12: the name a principal gives itself, as people read it everywhere
 export const askerDisplay = (n) => `${n} (named by the asker; not checked by person.tools)`;
 import * as SCREENING from './screening/index.js';
@@ -50,6 +51,13 @@ export async function isOwnPanel(env, p) {
   if (!p || p.kind !== 'private') return false;
   const pr = await env.DB.prepare('SELECT class FROM principals WHERE id = ?').bind(p.principal_id).first();
   return !!(pr && pr.class !== 'real');
+}
+// OWNER_router_23 (TRUST 8:19 PM CT, operations 8:25): a panel made for one person's people (its principal is a person's, with no keys)
+// has its own notice: who asks, that the owner sees each person's name beside their answers, the daily limit, mute, block, leave
+export async function isPeoplePanel(env, p) {
+  if (!p || p.kind !== 'private') return false;
+  const r = await env.DB.prepare('SELECT 1 AS x FROM principals pr WHERE pr.id = ? AND pr.owner = \'person\' AND NOT EXISTS (SELECT 1 FROM keys k WHERE k.principal_id = pr.id)').bind(p.principal_id).first().catch(() => null);
+  return !!r;
 }
 // The gate (OWNER_all_6: chief/PERSON_READY.md all SEEN, TRUST names what is unseen, the owner's yes): members of a panel a
 // test key made are offered calls only once the operator opens it (meta own_panels_ring = open; bin/own_panels_ring).
@@ -217,6 +225,12 @@ export async function joinInfo(env, request, code) {
   const { p } = await panelByCode(env, code);
   if (!p) throw notFixable(404, 'not_found', 'This join link is not valid.');
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE panel_id = ? AND left_at IS NULL').bind(p.id).first();
+  if (await isPeoplePanel(env, p)) {   // OWNER_router_23: the people notice, with the owner's checked name
+    const o = await env.DB.prepare('SELECT name FROM panel_owners WHERE panel_id = ?').bind(p.id).first().catch(() => null);
+    if (!o) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: it has no owner.');
+    return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, people: true, owner_name: o.name,
+      notice_id: PEOPLE_NOTICE_IDS[0], accepted_notice_ids: PEOPLE_NOTICE_IDS, notice_url: '/tester_notice_people.json', attestations: attest(PEOPLE_NOTICE_IDS[0]) };
+  }
   if (await isOwnPanel(env, p)) {
     if (!p.asker_name) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: whoever made it has not named themselves.');
     return { panel: { name: p.name, members: n.n, anonymous: n.n >= 5 }, own: true, asker: askerDisplay(p.asker_name), principal_name: p.asker_name,
@@ -234,9 +248,10 @@ export async function joinPanel(env, request, code, body) {
   if (!p) throw notFixable(404, 'not_found', 'This join link is not valid.');
   if (!body || body.adult !== true) throw fixable('invalid_field', 'adult', 'Only adults may join. Confirm you are 18 or older.', true);
   if (body.notice_accepted !== true) throw fixable('invalid_field', 'notice_accepted', 'Read and accept the notice first.', true);
-  const own = await isOwnPanel(env, p);
+  const own = await isOwnPanel(env, p), people = await isPeoplePanel(env, p);
   if (own && !p.asker_name) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: whoever made it has not named themselves.');
-  const notices = own ? OWN_NOTICE_IDS : ACCEPTED_NOTICES;
+  if (people && !(await env.DB.prepare('SELECT 1 AS x FROM panel_owners WHERE panel_id = ?').bind(p.id).first().catch(() => null))) throw notFixable(404, 'not_found', 'This panel is not open for joining yet: it has no owner.');
+  const notices = people ? PEOPLE_NOTICE_IDS : own ? OWN_NOTICE_IDS : ACCEPTED_NOTICES;   // OWNER_router_23: a people panel takes only its own notice
   if (!notices.includes(body.notice_id)) throw fixable('invalid_field', 'notice_id', 'The notice accepted is not the current one; read the current notice and accept it.', notices[0]);
   if (!own && p.kind === 'private') {   // rule 4: a live key's panel holds 200
     const m = await env.DB.prepare('SELECT COUNT(*) AS n FROM members WHERE panel_id = ? AND left_at IS NULL').bind(p.id).first();

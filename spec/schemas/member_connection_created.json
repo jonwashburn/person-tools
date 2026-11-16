@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_connection_created.json",
+  "title": "A new connection, with what is shown once (section 26.8)",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "made_at",
+    "quiet",
+    "blocked",
+    "revoked_at",
+    "urgencies",
+    "key",
+    "link",
+    "webhook_secret",
+    "how"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "connection_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "icon": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "made_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "last_used_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quiet": {
+      "type": "boolean"
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "revoked_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lab": {
+      "type": "boolean"
+    },
+    "urgencies": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "now",
+          "today",
+          "whenever"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "icon_url": {
+      "$ref": "common.json#/$defs/https_url"
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "link": {
+      "$ref": "common.json#/$defs/https_url"
+    },
+    "webhook_secret": {
+      "type": "string",
+      "minLength": 1
+    },
+    "note": {
+      "type": "string"
+    },
+    "how": {
+      "type": "object",
+      "required": [
+        "key_use"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key_use": {
+          "type": "string",
+          "minLength": 1
+        },
+        "link_use": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step_examples": {
+          "type": "array",
+          "items": {
+            "$ref": "member_task.json#/$defs/step"
+          }
+        }
+      }
+    }
+  }
+}

@@ -69,7 +69,7 @@ codes from this file; runner shows what it says. Each numbered rule is one thing
     never earns or loses calls for what they said.
 11. **How many are rung at once.** As many offers as there are open seats, no more. When an offer lapses or is declined,
     the next person is offered that seat. A person is offered a call at most once: after they decline it or let its
-    offer lapse, that call never rings them again (it goes to someone else, or waits). No ring is sent after the call's deadline, and open offers end at the
+    offer lapse, that call never rings them again (it goes to someone else, or waits), except an offer they tried to open and could not (rule 15). No ring is sent after the call's deadline, and open offers end at the
     deadline.
 12. **No ring for a held, refused, complete, expired or cancelled call.** Cancelling withdraws every open offer at once
     (people already in a seat may finish: `PAY_RULES.md`).
@@ -78,6 +78,18 @@ codes from this file; runner shows what it says. Each numbered rule is one thing
     The simulated mode keeps working.
 14. **Leaving.** Turning Off, leaving a panel and deleting the account each stop all rings at once and withdraw any open
     offer.
+
+15. **An offer the person could not open is offered again** (the CEO, about 6:30 PM CT, 15 Nov 2026: "a lapse caused by our own fault
+    is not his 'no'"). When the person's own app or page reports that it tried to open an offer and couldn't (POST
+    /v1/member/offers/{seat_id}/open_failed, with the reason), that offer's lapse is not a miss under rule 6 and not a no under rule
+    11: the same call is offered again, with a fresh hold, once the person is On. A client may report this at most once per call and
+    only for an offer made to that member; a second report is refused, so it can never be used to dodge the two-misses rule.
+
+16. **A person's own page, where only their own AIs ask.** On a page a person makes for themselves (`POST /v1/account/start`),
+    nobody else can join and only the AIs they connect can ask them. There On starts on, with no end unless the person sets one,
+    because every ask comes from something they connected; they can turn Off at any time. Quiet hours (rule 4), rule 5 and
+    `policy/TASKS.md` rule 6 still hold. The notice they accept says so (`legal/tester_notice_self.json`). Everywhere else, rule
+    3's On, with its end, holds.
 
 ## Worked checks (router: each is a line in the baseline)
 

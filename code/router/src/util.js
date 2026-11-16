@@ -20,6 +20,20 @@ export function teamCheck(env, request) {
   let d = 0; for (let i = 0; i < want.length; i++) d |= want.charCodeAt(i) ^ got.charCodeAt(i);
   return d === 0;
 }
+// OWNER_router_16: an address our own servers used with the team header (meta team_ip:<hash>, written by app.js rememberTeamAddress, which
+// never records a Cloudflare function's shared address) makes what it creates ours, header or not: a real outsider never comes from our servers
+export async function ourAddress(env, ipHash) {
+  if (!ipHash || !env || !env.DB) return false;
+  try { return !!(await env.DB.prepare('SELECT 1 AS x FROM meta WHERE k = ?').bind('team_ip:' + ipHash).first()); } catch { return false; }
+}
+export const FROM_OUR_ADDRESS = 'made from our own address';
+// OWNER_router_21: one of our own servers (meta team_server_ip:<hash>, enrolled by POST /internal/team_server called from that server).
+// The rule above (team_ip:*, learned from any request that sent the team header) is no longer used by anything.
+export async function ourServer(env, ipHash) {
+  if (!ipHash || !env || !env.DB) return false;
+  try { return !!(await env.DB.prepare('SELECT 1 AS x FROM meta WHERE k = ?').bind('team_server_ip:' + ipHash).first()); } catch { return false; }
+}
+
 export function iso(ms) { return ms == null ? null : new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
 
 // Money: integer cents inside, "12.34" strings on the wire (chief D5).

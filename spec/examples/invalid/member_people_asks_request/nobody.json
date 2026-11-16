@@ -1,0 +1,12 @@
+{
+  "to": [],
+  "title": "Tea or coffee",
+  "step": {
+    "type": "question",
+    "text": "Tea or coffee?",
+    "choices": [
+      "Tea",
+      "Coffee"
+    ]
+  }
+}

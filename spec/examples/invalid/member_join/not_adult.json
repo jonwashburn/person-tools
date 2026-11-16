@@ -1,0 +1,34 @@
+{
+  "panel": {
+    "name": "Robin's people",
+    "members": 3,
+    "anonymous": false
+  },
+  "own": true,
+  "asker": "Robin",
+  "principal_name": "Robin",
+  "notice_id": "notice-people-1",
+  "accepted_notice_ids": [
+    "notice-people-1"
+  ],
+  "notice_url": "/notice_people.json",
+  "attestations": {
+    "send": {
+      "adult": false,
+      "us_resident": true,
+      "notice_accepted": true,
+      "notice_id": "notice-people-1"
+    },
+    "optional": [
+      "alias",
+      "tz",
+      "quiet_start"
+    ],
+    "means": "adult: you are 18 or older; us_resident: you live in the United States; notice_accepted with notice_id: you read this notice and accept it"
+  },
+  "owner": {
+    "name": "Robin",
+    "line": "Robin can send you tasks and questions here; you can mute or leave at any time.",
+    "shown": "Show this line before anyone joins, then send \"owner_line_seen\": true with the join."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_block_request.json",
+  "title": "Block the asker of a call or an ask: POST /v1/member/blocks (section 26.8)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "call_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      }
+    }
+  ]
+}

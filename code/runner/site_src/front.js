@@ -423,6 +423,7 @@
     var PICK = { ask: "Which first line should this page show you?", kind: "answer", people: 1, pool: "self", max_total_usd: "0.00",
       answer_fields: { line: { type: "choice", label: "Which first line should this page show you?", choices: ["A", "B"] } } };
     var h1 = $("h1"), first = h1 ? h1.innerHTML : "";
+    if (h1 && h1.textContent.trim()) LINES.A = h1.textContent.replace(/\s+/g, " ").trim();   // A is this page's own first line, as written (REACH 12:34 PM CT 16 Nov)
     function showLine(c) {
       if (!h1 || !LINES[c]) return;
       if (c === "A") h1.innerHTML = first; else h1.replaceChildren(h("span", { class: "ln" }, LINES[c]));

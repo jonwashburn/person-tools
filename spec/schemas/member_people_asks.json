@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_people_asks.json",
+  "title": "What sending returns (section 26.10)",
+  "type": "object",
+  "required": [
+    "from",
+    "sent"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "from": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sent": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "to",
+          "task_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "to": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "task_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "waits_until": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "not_sent": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "to",
+          "why"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "to": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "read": {
+      "type": "string"
+    }
+  }
+}

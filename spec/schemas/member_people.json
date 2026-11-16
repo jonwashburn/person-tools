@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_people.json",
+  "title": "The person's own people: GET /v1/member/people (section 26.10)",
+  "type": "object",
+  "required": [
+    "people",
+    "waiting"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "people": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "member_id",
+          "name",
+          "state"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "member_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "joined_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "state": {
+            "const": "joined"
+          }
+        }
+      }
+    },
+    "waiting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "state"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sent_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "state": {
+            "const": "not yet"
+          },
+          "resend": {
+            "type": "object",
+            "required": [
+              "method",
+              "path",
+              "body"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "method": {
+                "const": "POST"
+              },
+              "path": {
+                "const": "/v1/member/people/links"
+              },
+              "body": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

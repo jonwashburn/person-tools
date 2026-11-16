@@ -1,0 +1,59 @@
+{
+ "id": "tester-notice-people-2",
+ "in_force": "for people who join a person's people-only panel (OWNER_router_23; policy/TASKS.md rules 9 to 15), from 15 Nov 2026",
+ "owner": "TRUST; the person's pages render it verbatim; the .md beside it is generated from this file",
+ "title": "Before you join: {owner} can send you tasks and questions",
+ "lede": "{owner} uses person.tools, a service that is not launched yet, to send short tasks and questions to people they know. {owner} sent you this link. ({owner} is the name on their account, checked by person.tools.)",
+ "sections": [
+  {
+   "label": "Unpaid",
+   "text": "Nobody is paid here, and no ask here may ask you for money."
+  },
+  {
+   "label": "Who asks",
+   "text": "Only {owner}. Each ask is one question with a few choices, one link to open or one step to do. {owner} can also pass on an ask they received; it then shows who asked it first and that {owner} passed it on. Nobody else can call you or send you asks through this panel."
+  },
+  {
+   "label": "What {owner} sees",
+   "text": "Your answer, any note you add, and when you answered, under the name this link was made for (or the one you choose when you join). {owner} knows it is you; that is the point of this panel. When {owner} passes on someone else's ask, the first asker gets your answer, never your name."
+  },
+  {
+   "label": "What person.tools checks",
+   "text": "Each ask's size, its links and that it carries no password or key. Every link shows the real address it goes to, and a link to a sign-in page is marked as one. person.tools does not screen what {owner} asks you the way it screens calls from strangers."
+  },
+  {
+   "label": "How many",
+   "text": "You choose how many asks {owner} may send you in a day: 20 unless you change it, from 0 to 100. Over that, an ask waits until your next day."
+  },
+  {
+   "label": "When you are rung",
+   "text": "Only an ask marked \"now\" rings, once, while you are On and outside your quiet hours (no rings between 9 PM and 8 AM your time unless you change it). Every other ask waits on your list. Mute {owner} and nothing rings, but asks still arrive. An ask's alert says only who is asking, never what they wrote, unless you turn on “Show the ask in my alerts” in your settings; then it may show the ask's first line, up to 80 characters. Your phone's own preview setting still decides what shows on a locked screen."
+  },
+  {
+   "label": "Stop, leave, delete",
+   "text": "Mute, block or leave at any time. Leaving ends your membership. On your page, one tap deletes your account, your answers and their records. They are deleted from the service at once, and from every copy within 30 days."
+  },
+  {
+   "label": "How long we keep it",
+   "text": "An open ask waits until you answer it or its time runs out (at most 30 days). Answered asks stay in your history for 180 days, or less if you delete them. A photo or clip in an ask is deleted on the schedule you set (7 days unless you change it, from 1 to 30)."
+  },
+  {
+   "label": "Who to reach",
+   "text": "Write to hello@person.tools. It reaches person.tools's operator, not {owner}."
+  },
+  {
+   "label": "Adults only",
+   "text": "This panel is for adults in the United States."
+  }
+ ],
+ "footnote": "This notice is what holds while person.tools is in its preview, and every promise on it is kept. The service's longer terms and privacy notice are still drafts and are not in force.",
+ "accept": "I am 18 or over, I live in the United States, and I agree to join {owner}'s panel",
+ "decline": "Not now",
+ "record_on_accept": [
+  "notice id",
+  "time accepted (router clock)",
+  "the adult statement"
+ ],
+ "previous_id": "tester-notice-people-1",
+ "changed": "tester-notice-people-2 (16 Nov 2026, OWNER_router_25): 'When you are rung' adds the alert sentence of tester-notice-8, word for word."
+}

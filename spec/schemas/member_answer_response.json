@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_answer_response.json",
+  "title": "What an answer or a note returns (section 26.5)",
+  "type": "object",
+  "required": [
+    "task_id",
+    "state"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "state": {
+      "enum": [
+        "open",
+        "answered",
+        "done",
+        "not_now",
+        "lapsed"
+      ]
+    },
+    "reply": {
+      "$ref": "member_task.json#/$defs/reply"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "member_task.json#/$defs/note"
+      }
+    }
+  }
+}

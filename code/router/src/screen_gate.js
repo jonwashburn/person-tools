@@ -12,8 +12,11 @@ const TIMEOUT_WITH_MODEL_MS = 10000;   // trust 6:36 PM CT: the model read has 8
 const TIMEOUT_WITH_MATERIAL_MS = 30000;   // trust 3:04 AM CT 15 Nov: the material read has 20 seconds of its own, after the call read
 
 export async function runScreening(spec, ctx, mod = S) {
+  // OWNER_router_9: a card's words are read as the ask's own words
+  const cardWords = spec.card && Array.isArray(spec.card.blocks) ? spec.card.blocks.flatMap((b) => [b.headline, b.text, ...(b.facts || []).flatMap((r) => [r.label, r.value]), b.price && b.price.label,
+    b.when_where && b.when_where.when, b.when_where && b.when_where.where, ...(b.choices || []), b.input && b.input.label, b.input && b.input.placeholder]).filter(Boolean) : [];
   const view = {
-    ask: spec.ask, kind: spec.kind, content: spec.content, answer_fields: spec.answer_fields, pool: spec.pool,
+    ask: cardWords.length ? spec.ask + '\n' + cardWords.join('\n') : spec.ask, kind: spec.kind, content: spec.content, answer_fields: spec.answer_fields, pool: spec.pool,
     people: spec.people, pay_per_person_cents: spec.pay_cents, estimated_minutes: spec.estimated_minutes,
     content_rating: spec.content_rating, deadline_minutes: spec.deadline_minutes,
   };

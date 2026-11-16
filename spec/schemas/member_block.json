@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_block.json",
+  "title": "A new block (section 26.8)",
+  "type": "object",
+  "required": [
+    "block_id",
+    "name",
+    "since"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "block_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "since": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "covers": {
+      "$ref": "common.json#/$defs/count"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

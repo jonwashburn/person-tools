@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_sent.json",
+  "title": "What the person sent and passed on: GET /v1/member/sent (section 26.10)",
+  "type": "object",
+  "required": [
+    "sent"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sent": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "to",
+          "title",
+          "state",
+          "reply",
+          "notes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "to": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "member_id": {
+                "$ref": "common.json#/$defs/id"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "step": {
+            "$ref": "member_task.json#/$defs/step"
+          },
+          "urgency": {
+            "enum": [
+              "now",
+              "today",
+              "whenever"
+            ]
+          },
+          "created_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "expires_at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "open",
+              "answered",
+              "done",
+              "not_now",
+              "lapsed"
+            ]
+          },
+          "reply": {
+            "oneOf": [
+              {
+                "$ref": "member_task.json#/$defs/reply"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answered_at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "member_task.json#/$defs/note"
+            }
+          },
+          "new": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "passed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "to",
+          "title",
+          "state",
+          "reply",
+          "passed_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "to": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "member_id": {
+                "$ref": "common.json#/$defs/id"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "step": {
+            "$ref": "member_task.json#/$defs/step"
+          },
+          "urgency": {
+            "enum": [
+              "now",
+              "today",
+              "whenever"
+            ]
+          },
+          "created_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "expires_at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "open",
+              "answered",
+              "done",
+              "not_now",
+              "lapsed"
+            ]
+          },
+          "reply": {
+            "oneOf": [
+              {
+                "$ref": "member_task.json#/$defs/reply"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answered_at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "member_task.json#/$defs/note"
+            }
+          },
+          "new": {
+            "type": "boolean"
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "passed_at": {
+            "$ref": "common.json#/$defs/time"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_connection_change.json",
+  "title": "Quiet, block or limit one of the person's AIs: PATCH /v1/member/connections/{id} (section 26.8)",
+  "type": "object",
+  "required": [],
+  "additionalProperties": false,
+  "properties": {
+    "quiet": {
+      "type": "boolean"
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "urgencies": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "now",
+          "today",
+          "whenever"
+        ]
+      },
+      "uniqueItems": true
+    }
+  },
+  "minProperties": 1
+}

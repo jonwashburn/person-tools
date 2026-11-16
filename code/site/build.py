@@ -24,6 +24,17 @@ for c in (os.path.join(HERE, 'human'),):  # inside bin/golive's build copy this 
         human = c; break
 src = human
 if src: shutil.copytree(src, out, dirs_exist_ok=True)
+# an address in a human page stays readable: the edge's email obfuscation would turn it into a /cdn-cgi link that 404s for
+# agents and the link check (15 Nov 2026), so each one is wrapped in email_off, the edge's own marker (not twice)
+import re as _re
+if src:
+    for _d, _, _fs in os.walk(out):
+        for _f in _fs:
+            if not _f.endswith('.html'): continue
+            _p = os.path.join(_d, _f); _h = open(_p, encoding='utf-8').read()
+            if 'email_off' in _h: continue
+            _h2 = _re.sub(r'(<a [^>]*href="mailto:[^"]+"[^>]*>.*?</a>)', r'<!--email_off-->\1<!--/email_off-->', _h, flags=_re.S)
+            if _h2 != _h: open(_p, 'w', encoding='utf-8').write(_h2)
 human_files = set()
 for d, _, fs in os.walk(out):
     for f in fs: human_files.add(os.path.relpath(os.path.join(d, f), out))

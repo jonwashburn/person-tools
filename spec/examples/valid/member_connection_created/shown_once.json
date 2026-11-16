@@ -1,0 +1,44 @@
+{
+  "connection_id": "cn_shapes01",
+  "id": "cn_shapes01",
+  "name": "Garden sensor",
+  "icon": "lab",
+  "made_at": "2026-11-16T20:24:01Z",
+  "last_used_at": null,
+  "quiet": false,
+  "blocked": false,
+  "revoked_at": null,
+  "lab": false,
+  "urgencies": [
+    "now",
+    "today",
+    "whenever"
+  ],
+  "key": "conn_example_key_shown_once",
+  "link": "https://api.example.com/v1/c/conn_example_link",
+  "webhook_secret": "whsec_example_shown_once",
+  "how": {
+    "key_use": "Send \"Authorization: Bearer <key>\" with POST https://api.example.com/v1/tasks {\"title\", \"step\", \"urgency\"} to ask this person one thing; GET /v1/tasks/{task_id} reads the reply. That is all this key does.",
+    "link_use": "Or POST the same body to the link, and GET <link>/<task_id> for the reply: for an AI that can only call an address.",
+    "step_examples": [
+      {
+        "type": "question",
+        "text": "Someone is at the front door. Let them in?",
+        "choices": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "type": "link",
+        "url": "https://example.com/report",
+        "text": "Read the report."
+      },
+      {
+        "type": "command",
+        "command": "echo ready",
+        "where": "your laptop"
+      }
+    ]
+  }
+}

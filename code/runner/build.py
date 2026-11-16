@@ -57,6 +57,19 @@ if os.path.exists(_tno):
     _own = _fill_network(json.load(open(_tno)))
     assert "{network}" not in json.dumps(_own), "an unfilled {network} in the own-panel notice"
     json.dump(_own, open(os.path.join(HERE, "public", "tester_notice_own.json"), "w"), indent=1, ensure_ascii=False)
+# 1b''. the notice for joining a person's people-only panel (OWNER_router_23; legal/tester_notice_people.json, TRUST 8:19 PM CT 15 Nov):
+# {network} is filled here; {owner} stays, and the join page fills it with the owner's checked name from the join info
+_tnp = os.path.join(WORK, "legal", "tester_notice_people.json")
+if os.path.exists(_tnp):
+    _ppl = _fill_network(json.load(open(_tnp)))
+    assert "{network}" not in json.dumps(_ppl), "an unfilled {network} in the people notice"
+    json.dump(_ppl, open(os.path.join(HERE, "public", "tester_notice_people.json"), "w"), indent=1, ensure_ascii=False)
+# 1b'''. the notice for a page made at /start (TRUST 3:08 PM CT 16 Nov; legal/tester_notice_self.json): {network} is filled here
+_tns = os.path.join(WORK, "legal", "tester_notice_self.json")
+if os.path.exists(_tns):
+    _slf = _fill_network(json.load(open(_tns)))
+    assert "{network}" not in json.dumps(_slf), "an unfilled {network} in the own-page notice"
+    json.dump(_slf, open(os.path.join(HERE, "public", "tester_notice_self.json"), "w"), indent=1, ensure_ascii=False)
 
 # 1c. the recording release: trust's legal/recording_release.json is the one record (since 14 Nov 2:23 AM CT); copied as is.
 #     The older path below (parsing legal/RECORDING_RELEASE.md) runs only if that file is missing.
@@ -144,6 +157,9 @@ def build_site(out, extra_hosts=()):
         "{{csp}}": csp, "{{v}}": v, "{{network}}": html.escape(names["network"]), "{{network_upper}}": html.escape(names["network"].upper()),
         "{{tool}}": html.escape(names["tool"]), "{{one_sentence}}": html.escape(fill(canon["identity"]["one_sentence"])),
         "{{status_plain}}": html.escape(fill(canon["status"]["plain"])),
+        # REACH 4:02 PM CT 15 Nov (OWNER_market_7 item 1): the operator named on the page an agent reads, from the canon
+        "{{run_by}}": ('Run by ' + html.escape((canon.get("operator") or {}).get("name") or "") + ', Austin, Texas &middot; <a href="mailto:' + html.escape((canon.get("contact") or {}).get("value") or "") + '">'
+                       + html.escape((canon.get("contact") or {}).get("value") or "") + '</a> &middot; <a href="/privacy">Privacy</a>') if (canon.get("operator") or {}).get("name") else "",
         # REACH 10:34 AM CT 15 Nov (OWNER_market_4): the first real call, from the canon; its outcome is read live from /v1/proof
         # HOLD (the CEO 11:00 AM CT, OWNER_all_9 item 7): off until the owner has settled the public repository; FIRST_CALL_ON = True brings it back.
         # The outcome is the canon's third-person line (REACH 11:01), shown once /v1/proof has the call's outcome; never the raw line

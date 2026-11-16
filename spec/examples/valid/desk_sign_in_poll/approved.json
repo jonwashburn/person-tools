@@ -1,0 +1,5 @@
+{
+  "session": "ds_example_session",
+  "member_id": "mb_robin01",
+  "note": "Send it as a bearer credential to /v1/member/...; never in an address."
+}

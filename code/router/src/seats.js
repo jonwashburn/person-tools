@@ -77,6 +77,7 @@ async function card(env, request, seat, call, mb) {
     simulated_person: false,
     deadline: iso(call.deadline_at),
     report: 'POST /v1/seats/{token}/stop with {"reason":"upset"} stops the call for everyone and reaches the operator; you are paid in full.',
+    ...(spec.card ? { card: spec.card } : {}),   // OWNER_router_9: drawn by the client within its limits; "asker" stays the service's own
   };
 }
 

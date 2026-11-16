@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_leave.json",
+  "title": "What leaving deleted and kept (section 26.8)",
+  "type": "object",
+  "required": [
+    "left",
+    "deleted"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "left": {
+      "const": true
+    },
+    "deleted": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "records": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "receipts": {
+          "$ref": "common.json#/$defs/count"
+        },
+        "feedback": {
+          "$ref": "common.json#/$defs/count"
+        }
+      }
+    },
+    "link": {
+      "type": "string"
+    },
+    "kept": {
+      "type": "string"
+    }
+  }
+}

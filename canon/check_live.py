@@ -101,7 +101,7 @@ def main():
     r = subprocess.run([sys.executable, W + '/canon/gen_site.py', '--out', tmp], capture_output=True, text=True)
     if r.returncode: fail('generator', r.stderr[-300:])
     # an unfilled format placeholder in a generated page (15 Nov 2026: an inline comment cut a '%' line and /start showed '%s')
-    _bad = [fn for fn in os.listdir(tmp) if fn.endswith(('.html', '.md', '.txt')) and re.search(r'%[sd]\b|%\(\w+\)s', open(os.path.join(tmp, fn), errors='replace').read())]
+    _bad = [fn for fn in os.listdir(tmp) if fn.endswith(('.html', '.md', '.txt')) and re.search(r'%[sd]\b|%\(\w+\)s|(?<!%)%(API|SITE|SPEC|RUN)%(?!%)', open(os.path.join(tmp, fn), errors='replace').read())]
     if _bad: fail('generator', 'unfilled placeholders in %s' % ', '.join(sorted(_bad)))
     for f in (['llms.txt', 'price.json', 'canon.json', 'promise.json', 'promise.txt', 'tools.json', 'questions.md', 'start.md'] if SITE else []):
         exp = open(os.path.join(tmp, f)).read()

@@ -7,7 +7,8 @@ operator of a pool are both call servers; a router reaches another call server t
 0.1 defines: the call, the quote, the response and its record, the states of a call and of a person's seat, evidence
 levels, receipts, errors, idempotency, authentication, discovery, a required simulated pool, the HTTP binding and the
 mapping to tools of the Model Context Protocol. It defines a profile of rules that protect the people called (section
-23), which a server may declare and a separate set of checks tests. What 0.1 leaves for later is in Appendix A, each item
+23), which a server may declare and a separate set of checks tests, and the interface a server offers to the app a person
+answers in, the person client (section 26), which a server may offer and any app may implement. What 0.1 leaves for later is in Appendix A, each item
 with its reason.
 
 Each requirement carries an identifier in brackets, such as `[CALL-3]`. The conformance suite maps every identifier to
@@ -90,7 +91,7 @@ JSON, without authentication:
   The core is `listen`, `view` (with `{text}` content at least) and `answer`; a server MUST accept those three.
 - `features` lists the optional parts of this text the server offers: `keyless` (AUTH-5), `url_content` (https
   addresses as content, section 9.1), `media_upload` (`POST /v1/media`), `outcome` (section 15.2), `voice` (spoken
-  answers), `panels` (section 16.1). **[DISC-5]** A server MUST offer every feature it lists, and MUST answer a request
+  answers), `panels` (section 16.1), `person_client` (the member interface of section 26). **[DISC-5]** A server MUST offer every feature it lists, and MUST answer a request
   that needs a feature it does not list with `unsupported_feature` (a request without a key, where `keyless` is not
   listed, is `unauthorized`), fixable where a change to the call avoids it. A
   server that offers only the core and the simulated pool conforms: it is a call server whose people are all scripted,

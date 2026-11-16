@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_connection.json",
+  "title": "One of the person's AIs (section 26.8)",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "made_at",
+    "quiet",
+    "blocked",
+    "revoked_at",
+    "urgencies"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "connection_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "icon": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "made_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "last_used_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quiet": {
+      "type": "boolean"
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "revoked_at": {
+      "oneOf": [
+        {
+          "$ref": "common.json#/$defs/time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lab": {
+      "type": "boolean"
+    },
+    "urgencies": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "now",
+          "today",
+          "whenever"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "icon_url": {
+      "$ref": "common.json#/$defs/https_url"
+    }
+  }
+}

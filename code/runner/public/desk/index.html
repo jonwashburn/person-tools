@@ -8,10 +8,14 @@
 <meta name="referrer" content="no-referrer">
 <meta name="desk-api" content="https://api.person.tools">
 <meta name="desk-passkey" content="on">
+<meta name="desk-qr" content="on">
+<meta name="desk-send" content="on">
+<meta name="desk-pass" content="on">
 <title>Desk · person.tools</title>
 <link id="favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' fill='%23faf8f3' stroke='%231d1d1b' stroke-width='3'/%3E%3C/svg%3E">
-<link rel="preload" href="fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/InterVariable-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="desk.css">
+<script src="vendor/qrcode.js" defer></script>
 <script src="desk.js" defer></script>
 </head>
 <body>
@@ -23,39 +27,84 @@
   <div class="signin-sheet">
     <p class="wordmark">person.tools <span>Desk</span></p>
     <h1 class="signin-h">Answer your AIs from this computer.</h1>
-    <p class="signin-lede">The asks your AIs send you, in one list, with the keyboard. Nothing makes a sound.</p>
+    <p class="signin-lede">The asks your AIs send you, in one list, with the keyboard. Nothing makes a sound: the tab's icon shows
+      how many are waiting.</p>
+    <section id="qr-box" class="qr-box" aria-labelledby="qr-h" hidden>
+      <div id="qr-code" class="qr-code" role="img" aria-label="A sign-in code to scan with the person.tools app"></div>
+      <div class="qr-text">
+        <h2 id="qr-h" class="qr-h">Scan it with your phone</h2>
+        <ol class="qr-steps">
+          <li>Open the person.tools app.</li>
+          <li>Tap <b>Menu</b>, then <b>Use on a computer</b>.</li>
+          <li>Point the camera at this code<span id="qr-pick-step" hidden>, pick the number below</span>, and confirm.</li>
+        </ol>
+        <p id="qr-number" class="qr-number" hidden><span class="label">Pick on your phone</span><b id="qr-digits"></b></p>
+        <p class="help">This page opens by itself when you confirm. Picking a different number stops the code, and a new one
+          appears here.</p>
+        <p id="qr-timer" class="help"></p>
+        <p id="qr-status" class="help" role="status"></p>
+      </div>
+    </section>
+    <p id="qr-or" class="signin-or" hidden><span>or paste your page link</span></p>
     <form id="signin-form" class="signin-form" autocomplete="off">
       <label for="signin-link" class="label">Your person.tools page link</label>
       <input id="signin-link" name="link" type="password" inputmode="url" spellcheck="false" autocapitalize="off"
              placeholder="run.person.tools/m/…" aria-describedby="signin-help signin-error">
-      <p id="signin-help" class="help">It is the link that opens your own person.tools page: you got it when you joined.
-        It works like a key, so it is hidden as you paste it, and the Desk never puts it in the address bar.</p>
-      <label class="check"><input id="signin-remember" type="checkbox"> Remember this computer
-        <span class="help-inline">(otherwise this tab forgets it when it closes)</span></label>
+      <p id="signin-help" class="help">In the person.tools app it is on the List screen: <b>Copy my link</b>. It is the link
+        that opens your own page, so it works like a key: it is hidden as you paste it, and the Desk never puts it in the
+        address bar.</p>
       <p id="signin-error" class="error" role="alert" hidden></p>
-      <div id="signin-pick" class="pick" hidden></div>
       <button class="btn btn-you" type="submit">Open my Desk</button>
     </form>
-    <p id="signin-or" class="signin-or" hidden><span>or</span></p>
-    <button id="signin-passkey" class="btn" type="button" hidden>Sign in with a passkey</button>
+    <div id="passkey-way" class="passkey-way" hidden>
+      <p id="signin-or" class="signin-or"><span>or, if you added a passkey to your account</span></p>
+      <div class="row-l">
+        <button id="signin-passkey" class="btn" type="button">Sign in with a passkey</button>
+        <button id="passkey-cancel" class="linkish" type="button" hidden>Cancel</button>
+      </div>
+      <p id="passkey-status" class="help" role="status"></p>
+      <div id="signin-pick" class="pick" hidden></div>
+    </div>
+    <label class="check remember"><input id="signin-remember" type="checkbox"> Remember this computer
+      <span class="help-inline">(otherwise this tab forgets you when it closes)</span></label>
   </div>
 </main>
 
 <!-- The Desk -->
 <div id="desk" class="desk" hidden>
   <header class="top">
+    <div class="menu-wrap">
+      <button class="btn btn-quiet menu-btn" id="menu-open" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu">
+        <svg class="menu-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg>Menu<kbd>M</kbd></button>
+      <div id="menu" class="menu" role="menu" aria-label="Menu" hidden>
+        <button role="menuitem" type="button" data-go="people" class="send-only" hidden>My people</button>
+        <button role="menuitem" type="button" data-go="ais">Your AIs<kbd>A</kbd></button>
+        <button role="menuitem" type="button" data-go="history">History<kbd>H</kbd></button>
+        <button role="menuitem" type="button" data-go="settings">Settings<kbd>,</kbd></button>
+        <button role="menuitem" type="button" data-go="pages" class="pages-only" hidden>Switch page</button>
+        <button role="menuitem" type="button" data-go="computers">Computers signed in</button>
+        <button role="menuitem" type="button" data-go="feedback">Tell us what to change</button>
+        <button role="menuitem" type="button" data-go="keys">Keyboard keys<kbd>?</kbd></button>
+        <hr class="menu-rule">
+        <button role="menuitem" type="button" data-go="signout" class="menu-stop">Sign out</button>
+      </div>
+    </div>
     <h1 class="wordmark">person.tools <span>Desk</span></h1>
     <nav class="views" aria-label="Views">
       <button class="view on" data-view="asks" aria-current="page">Asks <span class="count" id="count-asks">0</span><kbd>I</kbd></button>
+      <button class="view send-only" data-view="sent" hidden>Sent <span class="count zero" id="count-sent">0</span><kbd>T</kbd></button>
       <button class="view" data-view="history">History<kbd>H</kbd></button>
       <button class="view" data-view="ais">Your AIs<kbd>A</kbd></button>
       <button class="view" data-view="settings">Settings<kbd>,</kbd></button>
     </nav>
     <div class="top-right">
+      <div class="on-wrap">
+        <button class="btn btn-quiet on-btn" id="on-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="on-menu">Calls: …</button>
+        <div id="on-menu" class="menu on-menu" role="menu" aria-label="When calls can ring you" hidden></div>
+      </div>
+      <button class="btn send-btn send-only" id="send-open" type="button" hidden><span aria-hidden="true">+</span> Send<kbd>S</kbd></button>
       <span class="checked" id="checked" aria-live="off"></span>
       <button class="btn btn-quiet" id="refresh" title="Look for new asks now">Refresh<kbd>R</kbd></button>
-      <button class="btn btn-quiet" id="keys-open" title="Every key">Keys<kbd>?</kbd></button>
-      <button class="btn btn-quiet" id="signout">Sign out</button>
     </div>
   </header>
 
@@ -94,6 +143,18 @@
     <section id="hcard" class="card-pane" aria-label="The answered ask" tabindex="-1"></section>
   </section>
 
+  <!-- Sent: what this person sent to their own people, a thread per person -->
+  <section id="view-sent" class="panes" hidden>
+    <aside class="list-pane" aria-label="What you sent">
+      <div class="list-head"><p class="help sent-head">What you sent your people. Each answer and note comes back here.</p></div>
+      <ol id="slist" class="list" role="listbox" aria-label="What you sent" tabindex="0"></ol>
+    </aside>
+    <section id="scard" class="card-pane" aria-label="The thread" tabindex="-1"></section>
+  </section>
+
+  <!-- My people -->
+  <section id="view-people" class="page" hidden></section>
+
   <!-- Your AIs -->
   <section id="view-ais" class="page" hidden></section>
 
@@ -106,9 +167,9 @@
 </div>
 
 <!-- Keys -->
-<div id="keys" class="overlay" role="dialog" aria-modal="true" aria-labelledby="keys-h" hidden>
+<div id="keys" class="overlay" role="dialog" aria-modal="false" aria-labelledby="keys-h" hidden>
   <div class="sheet">
-    <h2 id="keys-h" class="sheet-h">Keys</h2>
+    <h2 id="keys-h" class="sheet-h">Keyboard keys</h2>
     <p class="help">Every key has a button on the screen that does the same thing.</p>
     <dl class="keymap" id="keymap"></dl>
     <button class="btn" data-close>Close<kbd>Esc</kbd></button>
@@ -123,6 +184,64 @@
     <div class="row">
       <button class="btn" data-close>Keep it<kbd>Esc</kbd></button>
       <button class="btn btn-stop" id="confirm-yes"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Send an ask to your own people -->
+<div id="compose" class="overlay" role="dialog" aria-modal="true" aria-labelledby="compose-h" hidden>
+  <div class="sheet compose-sheet">
+    <h2 id="compose-h" class="sheet-h">Send to your people</h2>
+    <div id="compose-body"></div>
+  </div>
+</div>
+
+<!-- Pass an ask on to one of your people -->
+<div id="passon" class="overlay" role="dialog" aria-modal="true" aria-labelledby="passon-h" hidden>
+  <div class="sheet">
+    <h2 id="passon-h" class="sheet-h">Pass this ask on</h2>
+    <div id="passon-body"></div>
+  </div>
+</div>
+
+<!-- Leave the page: ends the membership and deletes what it holds (POST /v1/member/leave {"confirm": true}) -->
+<div id="leave" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="leave-h" hidden>
+  <div class="sheet">
+    <h2 id="leave-h" class="sheet-h">Leave this page?</h2>
+    <div id="leave-body"></div>
+  </div>
+</div>
+
+<!-- Computers signed in (read-only on the Desk) -->
+<div id="computers" class="overlay" role="dialog" aria-modal="true" aria-labelledby="computers-h" hidden>
+  <div class="sheet">
+    <h2 id="computers-h" class="sheet-h">Computers signed in</h2>
+    <p class="help">Computers you signed in by scanning a code with your phone. To sign one out, use your phone: Menu, Computers signed in.</p>
+    <div id="computers-list"></div>
+    <div class="row"><button class="btn" data-close>Close<kbd>Esc</kbd></button></div>
+  </div>
+</div>
+
+<!-- Your pages: a passkey that opens more than one -->
+<div id="pages" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pages-h" hidden>
+  <div class="sheet">
+    <h2 id="pages-h" class="sheet-h">Your pages</h2>
+    <p class="help">Your passkey opens more than one page, and the Desk shows one at a time. An answer still in its five seconds is sent before it switches.</p>
+    <div id="pages-list" class="pick"></div>
+    <div class="row"><button class="btn" data-close>Close<kbd>Esc</kbd></button></div>
+  </div>
+</div>
+
+<!-- Tell us what to change -->
+<div id="feedback" class="overlay" role="dialog" aria-modal="true" aria-labelledby="feedback-h" hidden>
+  <div class="sheet">
+    <h2 id="feedback-h" class="sheet-h">Tell us what to change</h2>
+    <p class="help">It goes to the people who run person.tools, never to any AI of yours.</p>
+    <div class="field"><textarea id="feedback-text" rows="5" maxlength="2000" aria-label="What should change"></textarea></div>
+    <p id="feedback-msg" class="help" role="status"></p>
+    <div class="row">
+      <button class="btn" data-close>Close<kbd>Esc</kbd></button>
+      <button class="btn btn-you" id="feedback-send" type="button">Send</button>
     </div>
   </div>
 </div>

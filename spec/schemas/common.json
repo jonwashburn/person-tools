@@ -198,7 +198,10 @@
         "outcome_not_allowed",
         "version_unsupported",
         "rate_limited",
-        "internal"
+        "internal",
+        "already_answered",
+        "conflict",
+        "expired"
       ]
     },
     "content_rating": {

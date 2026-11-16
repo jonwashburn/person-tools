@@ -1,0 +1,24 @@
+{
+  "task_id": "tk_backup01",
+  "title": "Back up the shop's files",
+  "urgency": "today",
+  "from": "Shop assistant",
+  "connection": {
+    "id": "cn_shop01",
+    "name": "Shop assistant",
+    "icon": "business",
+    "yours": true
+  },
+  "step": {
+    "type": "command",
+    "command": "rsync -a --delete ~/shop/ /Volumes/Backup/shop/",
+    "where": "Terminal on your laptop, with the backup drive plugged in"
+  },
+  "unlocks": "I mark last night's backup as done.",
+  "created_at": "2026-11-16T20:24:01Z",
+  "expires_at": "2026-11-17T20:24:01Z",
+  "state": "open",
+  "reply": null,
+  "notes": [],
+  "shell_only": "Only you can run this: copy the line and paste it where it says. The service cannot run it for you."
+}

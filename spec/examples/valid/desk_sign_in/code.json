@@ -1,0 +1,8 @@
+{
+  "code": "dc_example_code_01",
+  "qr": "dc_example_code_01",
+  "poll": "dp_example_poll_01",
+  "number": 55,
+  "expires_in": 60,
+  "note": "Draw qr (the code itself, nothing else) as the QR and show number beside it."
+}

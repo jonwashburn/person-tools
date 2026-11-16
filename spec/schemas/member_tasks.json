@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_tasks.json",
+  "title": "The asks of one membership: GET /v1/member/tasks (section 26.5)",
+  "type": "object",
+  "required": [
+    "open",
+    "history"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "open": {
+      "type": "array",
+      "items": {
+        "$ref": "member_task.json"
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "$ref": "member_task.json"
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "task_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "task_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "common.json#/$defs/id"
+            }
+          }
+        }
+      }
+    },
+    "notice": {
+      "type": "object",
+      "required": [
+        "text",
+        "from"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "read": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mute": {
+          "type": "object"
+        },
+        "leave": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Shown once, before any ask from a person is listed (MEMBER-18)."
+    },
+    "answers_to_read": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "reply"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reply": {
+            "oneOf": [
+              {
+                "$ref": "member_task.json#/$defs/reply"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "open",
+              "answered",
+              "done",
+              "not_now",
+              "lapsed"
+            ]
+          },
+          "at": {
+            "oneOf": [
+              {
+                "$ref": "common.json#/$defs/time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "description": "An answer to an ask this person sent, until it is marked read; read names where the whole thread is read."
+      }
+    },
+    "passed_on": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "passed_to",
+          "passed_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "$ref": "common.json#/$defs/id"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "passed_to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "passed_at": {
+            "$ref": "common.json#/$defs/time"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "answered",
+              "done",
+              "not_now",
+              "lapsed"
+            ]
+          },
+          "reply": {
+            "oneOf": [
+              {
+                "$ref": "member_task.json#/$defs/reply"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "An ask this person passed on."
+      }
+    }
+  }
+}

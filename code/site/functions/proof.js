@@ -19,13 +19,13 @@ export async function onRequest(ctx) {
   if (hit) data = await hit.json();
   else {
     try {
-      const r = await fetch(`https://${H.API}/v1/proof`, { headers: { 'user-agent': 'proof-page/1 (askpeople-site)' }, signal: AbortSignal.timeout(5000) });
+      const r = await fetch(`https://${H.API}/v1/proof`, { headers: { 'user-agent': 'proof-page/1 (askpeople-site)' }, signal: AbortSignal.timeout(15000) });   // /v1/proof took 5 to 9 s on 16 Nov; the page is cached 60 s, so a slow count costs one wait a minute
       if (r.ok) { data = await r.json(); ctx.waitUntil(cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60' } }))); }
     } catch (e) { data = null; }
   }
   if (asJson) {
     return new Response(JSON.stringify(data || { error: 'The API did not answer; try again in a minute.' }, null, 1),
-      { status: data ? 200 : 503, headers: { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=60' } });
+      { status: data ? 200 : 503, headers: { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*', 'cache-control': data ? 'public, max-age=60' : 'no-store' } });
   }
   // a count that contradicts itself is not shown (15 Nov 2026): an outsider's real call needs a key, so it cannot exist
   // without an outside principal; show nothing rather than a number that may be wrong
@@ -55,5 +55,5 @@ ${(ours || 0) > 0 && EXPECT.first_call && EXPECT.first_call.text ? `<h2>${esc(EX
 <h2>How it is counted</h2><p>${esc(data.how_counted || '')}</p>`;
   }
   const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proof: ${esc(EXPECT.network)}</title><link rel="stylesheet" href="/m.css"></head><body class="m-doc"><main><nav aria-label="Site"><a href="/">Home</a><a href="/start">First call</a><a href="/questions">Questions</a><a href="/status">Status</a><a href="/proof" aria-current="page">Proof</a></nav><div class="m-label">Proof</div>${main}<p class="m-status">${esc(EXPECT.status_plain)}</p><p class="m-src">As data: <a href="/proof.json">/proof.json</a> · from the API: <a href="https://${esc(H.API)}/v1/proof">/v1/proof</a></p><footer>${esc(EXPECT.network)}</footer></main></body></html>`;
-  return new Response(body, { status: data ? 200 : 503, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' } });
+  return new Response(body, { status: data ? 200 : 503, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': data ? 'public, max-age=60' : 'no-store' } });
 }

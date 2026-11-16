@@ -9,20 +9,27 @@ import { iso } from './util.js';
 
 const DAY = 86400000;
 // OWNER_router_5: the only test of ours and outside (a missing owner counts as outside: nothing is hidden)
-const OURS_P = `p.owner = 'team'`;
-const OUTSIDER_P = `COALESCE(p.owner, 'outside') = 'outside'`;
+const OURS_P = `(p.owner = 'team' AND p.test_run IS NULL)`;   // OWNER_router_16: a key a test run marked is never counted, either way
+// OWNER_router_16: the backstop: whatever a row says, a principal or a keyless asker made from one of our recorded addresses is never an outsider
+// OWNER_router_21: our servers only (meta team_server_ip:*, enrolled from each server); nothing learned from traffic
+const OUR_ADDRESSES = `(SELECT substr(k, 16) FROM meta WHERE k LIKE 'team_server_ip:%')`;
+const OUR_ANON = `(SELECT 'anon:' || substr(k, 16) FROM meta WHERE k LIKE 'team_server_ip:%')`;
+const OUTSIDER_P = `(COALESCE(p.owner, 'outside') = 'outside' AND p.test_run IS NULL AND (p.created_ip_hash IS NULL OR p.created_ip_hash NOT IN ${OUR_ADDRESSES}))`;
 // a request with a key reads its principal's owner (corrections included); without a key, or once the principal is gone, its own
-const ASKED_OUTSIDE = `COALESCE(p.owner, s.owner, 'outside') = 'outside'`;
-const ANSWERED = (call) => `EXISTS (SELECT 1 FROM responses r JOIN seats s ON s.id = r.seat_id LEFT JOIN members m ON m.id = s.member_id
-      WHERE r.call_id = ${call} AND r.simulated = 0 AND s.state = 'answered' AND (m.id IS NULL OR m.is_real = 1))`;
+const ASKED_OUTSIDE = `(COALESCE(p.owner, s.owner, 'outside') = 'outside' AND p.test_run IS NULL AND (p.created_ip_hash IS NULL OR p.created_ip_hash NOT IN ${OUR_ADDRESSES}) AND s.asker NOT IN ${OUR_ANON})`;
+// OWNER_router_24 (operations 6:20 AM CT 16 Nov): a seat with no member is a person only when it came from an outside pool (its pool id, or a
+// call to an outside pool that is not simulated); a seat on a panel needs its member, real. (A member's deletion unlinks its seats, so a
+// deleted bot's answered seat once read as a real person.)
+const PERSON = `((m.id IS NOT NULL AND m.is_real = 1) OR (s.member_id IS NULL AND (s.pool_pid IS NOT NULL OR (rc.pool_ref IS NOT NULL AND rc.simulated = 0 AND rc.panel_id IS NULL))))`;
+const ANSWERED = (call) => `EXISTS (SELECT 1 FROM responses r JOIN seats s ON s.id = r.seat_id JOIN calls rc ON rc.id = r.call_id LEFT JOIN members m ON m.id = s.member_id
+      WHERE r.call_id = ${call} AND r.simulated = 0 AND s.state = 'answered' AND ${PERSON})`;
 const REAL_POOL = (c) => `(${c}.panel_id IN (SELECT id FROM panels WHERE kind = 'private') OR (${c}.pool_ref IS NOT NULL AND ${c}.simulated = 0))
       AND ${c}.key_id NOT IN (SELECT id FROM keys WHERE label LIKE 'standin%')`;
 
 export async function proof(env) {
   const now = Date.now();
   // answered by a person: the team's headless members (is_real 0, the 'team bot' marks of TRUST's proofs included) never count
-  const answered = `EXISTS (SELECT 1 FROM responses r JOIN seats s ON s.id = r.seat_id LEFT JOIN members m ON m.id = s.member_id
-      WHERE r.call_id = c.id AND r.simulated = 0 AND s.state = 'answered' AND (m.id IS NULL OR m.is_real = 1))`;
+  const answered = ANSWERED('c.id');   // OWNER_router_24: one rule for both
   // a live key the owner made for a proof (label standin-*) rings only the team's bots on a private panel: never a real call
   const realPool = `(c.panel_id IN (SELECT id FROM panels WHERE kind = 'private') OR (c.pool_ref IS NOT NULL AND c.simulated = 0))
       AND c.key_id NOT IN (SELECT id FROM keys WHERE label LIKE 'standin%')`;
@@ -31,7 +38,7 @@ export async function proof(env) {
   const outside = await env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM principals p JOIN calls c ON c.principal_id = p.id WHERE ${OUTSIDER_P}`).first();
   // keyless callers: our own checks send the team header, which marks their keyless calls 'anon:team:'
   const keyless = await env.DB.prepare(`SELECT COUNT(DISTINCT key_id) AS n FROM idempotency
-      WHERE op = 'call' AND status = 201 AND key_id LIKE 'anon:%' AND key_id NOT LIKE 'anon:team:%' AND created_at > ?`).bind(now - 7 * DAY).first();
+      WHERE op = 'call' AND status = 201 AND key_id LIKE 'anon:%' AND key_id NOT LIKE 'anon:team:%' AND key_id NOT IN ${OUR_ANON} AND created_at > ?`).bind(now - 7 * DAY).first();
   let asked = { n: 0 };
   try {
     asked = await env.DB.prepare(`SELECT COUNT(DISTINCT s.asker) AS n FROM stranger_requests s LEFT JOIN principals p ON p.id = s.principal_id WHERE ${ASKED_OUTSIDE}`).first();
@@ -67,6 +74,16 @@ export async function proof(env) {
     outside_principals_with_a_call: (outside && outside.n) || 0,
     keyless_outside_callers_last_7_days: (keyless && keyless.n) || 0,
     outsiders_who_asked_for_real_people: (asked && asked.n) || 0,
+    // OWNER_router_18 item 6: asks one person sends their own people are neither calls nor an AI's tasks; counted apart, never as outsiders
+    person_asks_answered: await (await import('./people.js')).personAsksAnswered(env),   // real receivers and senders only, no test run's panel
+    // goal 4 (operations 2:13 PM CT 16 Nov): an outsider makes a page, connects an AI and answers its ask. A page counts once its own AI's
+    // ask was answered by its real person; pages made from our own addresses, by a test run, or by the team are never counted
+    outside_principals_with_an_answered_ask: await (async () => { try {
+      const r = await env.DB.prepare(`SELECT COUNT(DISTINCT p.id) AS n FROM tasks k JOIN connections cn ON cn.id = k.connection_id JOIN members m ON m.id = k.answered_by
+          JOIN panels pn ON pn.id = cn.panel_id JOIN principals p ON p.id = pn.principal_id
+          WHERE k.state IN ('done', 'answered') AND m.is_real = 1 AND m.panel_id = cn.panel_id AND p.owner = 'person' AND p.test_run IS NULL
+            AND (p.created_ip_hash IS NULL OR p.created_ip_hash NOT IN ${OUR_ADDRESSES})`).first();
+      return (r && r.n) || 0; } catch { return 0; } })(),
     // the CEO (OWNER_all_8 item 1): a task counts only when a real person answered it: the member who answered is a person
     // (not a headless test member) on a panel the operator made; tasks are placed only by the operator's own keys, so
     // outsiders' answered tasks are 0 by construction
@@ -77,6 +94,8 @@ export async function proof(env) {
       return { ours: (t && t.ours) || 0, outsiders: 0 }; } catch { return { ours: 0, outsiders: 0 }; } })(),
     ours: shown,
     counted_at: iso(now),
+    // OWNER_router_27 item 2 (the CEO's ruling, 2:31 PM CT 16 Nov): the record, said plainly
+    record_notes: ['No answer before 16 Nov carries the device-signed mark: the app\'s key enrolment was refused by the service until build 17. Both real call answers so far (15 Nov) were given with Face ID in the app but reached us unsigned.'],
     how_counted: 'A real call is one answered by at least one real person (not simulated) on a private panel or an outside pool. Ours are made by our own programs; outsiders are everyone else, as recorded when each principal was made. An outside principal counts once it has made any call, free or paid; keys our own checks make, and the front page\'s demo for visitors, never count. Keyless callers are counted by address for the last 7 days only (we keep no more).',
   };
 }
@@ -95,12 +114,12 @@ export async function proofAudit(env) {
         AND (EXISTS (SELECT 1 FROM calls c WHERE c.principal_id = p.id) OR EXISTS (SELECT 1 FROM stranger_requests s WHERE s.principal_id = p.id))
       ORDER BY p.created_at`).all()).results || [];
   const keylessAsked = (await env.DB.prepare(`SELECT COUNT(DISTINCT s.asker) AS n, MIN(s.created_at) AS first FROM stranger_requests s LEFT JOIN principals p ON p.id = s.principal_id
-      WHERE p.id IS NULL AND COALESCE(s.owner, 'outside') = 'outside'`).first()) || {};
+      WHERE p.id IS NULL AND COALESCE(s.owner, 'outside') = 'outside' AND s.asker NOT IN ${OUR_ANON}`).first()) || {};
   const members = (await env.DB.prepare(`SELECT m.id, m.panel_id, m.created_at, m.left_at, pp.id AS principal_id, pp.class, pp.owner,
         (SELECT COUNT(*) FROM seats s WHERE s.member_id = m.id AND s.state = 'answered') AS answered
       FROM members m JOIN panels pn ON pn.id = m.panel_id JOIN principals pp ON pp.id = pn.principal_id
       WHERE m.is_real = 1 AND pp.class != 'real' ORDER BY m.created_at`).all()).results || [];
-  const how = (p) => p.owner_note ? 'set by the operator: ' + p.owner_note
+  const how = (p) => p.owner_note === 'made from our own address' ? p.owner_note : p.owner_note ? 'set by the operator: ' + p.owner_note
     : p.owner === null ? 'made without an owner recorded (the minute of a deploy)'
     : p.self_made ? 'a self-made test key from an address that did not send the team header' : 'made by ' + (p.key_labels || 'a key');
   const t = (ms) => ms ? new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z') : null;

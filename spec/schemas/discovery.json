@@ -111,7 +111,8 @@
           "media_upload",
           "outcome",
           "voice",
-          "panels"
+          "panels",
+          "person_client"
         ]
       }
     },

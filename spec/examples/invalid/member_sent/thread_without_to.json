@@ -1,0 +1,37 @@
+{
+  "sent": [
+    {
+      "task_id": "tk_door01",
+      "title": "Red or blue for the door",
+      "step": {
+        "type": "question",
+        "text": "Red or blue for the door?",
+        "choices": [
+          "Red",
+          "Blue"
+        ]
+      },
+      "urgency": "today",
+      "created_at": "2026-11-16T20:24:01Z",
+      "state": "answered",
+      "expires_at": "2026-11-17T20:24:01Z",
+      "reply": {
+        "action": "answer",
+        "choice": "Blue",
+        "text": null,
+        "note": "Blue matches the porch.",
+        "at": "2026-11-16T20:25:23Z"
+      },
+      "answered_at": "2026-11-16T20:25:23Z",
+      "notes": [
+        {
+          "at": "2026-11-16T20:25:22Z",
+          "note": "The door faces the street.",
+          "by": "asker",
+          "name": "Robin"
+        }
+      ],
+      "new": false
+    }
+  ]
+}

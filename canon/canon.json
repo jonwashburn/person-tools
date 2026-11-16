@@ -4,10 +4,10 @@
   "updated": "2026-11-14T02:02:00-06:00",
   "names_file": "canon/names.json",
   "identity": {
-    "one_sentence": "{network} lets an AI agent ask people for a reaction a model cannot give: it sends a short task to matched people, and returns each person's answer with a record of what their page observed.",
+    "one_sentence": "We're building one app where a person answers every AI in their life, and the people around them, on an open standard any service can brand and anyone can build an app for. Today {network} lets your AIs ask you on your phone: an approval, a choice or a quick answer, each under the name you gave it, free. An agent can also ask its user's own people, and gets back each answer with a record of what that person's page observed.",
     "longer": "An agent needs something only a person can give: what a song feels like, whether a game is fun, which of two pages is clearer in ten seconds. It makes one tool call saying who it needs, what they should do, what it pays and by when. Matching people are rung, each does the thing on a phone in a page that records what happened, and the agent gets back each person's answer with that record. On a paid call each person is paid; on every call each person keeps a signed receipt.",
     "is_not": [
-      "Not a way to reach your own user. To ask your own user, ask them directly.",
+      "Not a way to reach your own user through a call to people. If your user wants you to ask them, they connect you (https://%%SITE%%/connect) and you ask them through that connection, free; otherwise ask them directly.",
       "Not for facts a search can find, or for work a model can do alone.",
       "Not for anything a person must do away from a screen.",
       "Not a way to get opinions from a model. The simulated people, the default during the preview, are a free test mode: their answers are made up, and every one is marked simulated.",
@@ -29,6 +29,8 @@
     },
     "also_called": {
       "value": [
+        "human in the loop",
+        "approvals on your phone",
         "human feedback",
         "user testing",
         "usability testing",

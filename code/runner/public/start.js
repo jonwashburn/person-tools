@@ -33,7 +33,7 @@
       h("a", { class: "linkbtn", href: page }, "Not now: go to my page"), msg,
       h("p", { class: "note" }, "Keep your page's link until you add a passkey: it is how you come back.")));
   }
-  fetch("/tester_notice.json").then(function (r) { return r.json(); }).then(function (notice) {
+  fetch("/tester_notice_self.json").then(function (r) { return r.json(); }).then(function (notice) {   // TRUST 3:08 PM CT 16 Nov: a page of your own has its own notice
     var adult = h("input", { type: "checkbox", id: "c-adult" }), us = h("input", { type: "checkbox", id: "c-us" }), ok = h("input", { type: "checkbox", id: "c-notice" });
     var msg = h("p", { class: "note", role: "status" });
     var go = h("button", { type: "button", class: "go", onclick: function () {

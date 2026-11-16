@@ -1,0 +1,17 @@
+{
+  "connection_id": "cn_shapes01",
+  "id": "cn_shapes01",
+  "name": "G",
+  "icon": "lab",
+  "made_at": "2026-11-16T20:24:01Z",
+  "last_used_at": null,
+  "quiet": false,
+  "blocked": false,
+  "revoked_at": null,
+  "lab": false,
+  "urgencies": [
+    "now",
+    "today",
+    "whenever"
+  ]
+}

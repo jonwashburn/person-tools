@@ -11,6 +11,7 @@
 import { rid, nowMs, iso, apiBase } from './util.js';
 import { fixable, notFixable } from './spec.js';
 import { taskBounds } from './screening/task_bounds.js';   // TRUST's bounds (policy/TASKS.md 2 to 7)
+import * as TBX from './screening/task_bounds.js';   // TRUST 6:47 PM CT 15 Nov: keyShapeIn / maskKeyShapes (1.3.0), when the copy has them
 import { taskTerms } from './private_terms.js';
 
 const URGENCY = ['now', 'today', 'whenever'];
@@ -93,19 +94,24 @@ export { bounds as ownTaskBounds };
 
 // OWNER_router_2 item 2: a key-shaped value in a person's reply never rests in the service
 const SECRET_RX_G = new RegExp(SECRET_RX.source, 'g');
-function maskSecrets(v) { if (typeof v !== 'string') return { v, masked: false }; const m = v.replace(SECRET_RX_G, '[removed]'); return { v: m, masked: m !== v }; }
+function maskSecrets(v) { if (typeof v !== 'string') return { v, masked: false }; let m = v.replace(SECRET_RX_G, '[removed]'); if (typeof TBX.maskKeyShapes === 'function') m = TBX.maskKeyShapes(m); return { v: m, masked: m !== v }; }
+// TRUST 6:47: what a key-shaped value in these words looks like (card processors' live keys, AWS, GitHub, Slack, Google keys and more),
+// or null; web addresses are taken out first (a long link path is not a key)
+function keyShape(v) { const t = String(v == null ? '' : v).replace(URL_RX, ' '); if (typeof TBX.keyShapeIn === 'function') { const w = TBX.keyShapeIn(t); if (w) return w; } return SECRET_RX.test(t) ? 'a key or a token' : null; }
 
 function out(t, request) {
-  return { task_id: t.id, state: t.state, title: t.title, to: t.connection_id ? 'the person who connected this AI' : t.to_name.startsWith('mb:') ? 'the panel\'s one member' : t.to_name, urgency: t.urgency,
+  const firstTo = t.orig_to_name || t.to_name;   // OWNER_router_18 item 7: a passed ask still reads as sent to its first addressee
+  return { task_id: t.id, state: t.state, title: t.title, to: t.connection_id ? 'the person who connected this AI' : firstTo.startsWith('mb:') ? 'the panel\'s one member' : firstTo, urgency: t.urgency,
     step: JSON.parse(t.step_json), unlocks: t.unlocks || null, asker: { program: t.program || null, session: t.session || null },
     created_at: iso(t.created_at), rang: !!t.rang_at, reply: t.reply_json ? JSON.parse(t.reply_json) : null, url: apiBase(request) + '/v1/tasks/' + t.id,
     ...(t.card_json ? { card: JSON.parse(t.card_json) } : {}),
-    notes: t.notes_json ? JSON.parse(t.notes_json) : [],
+    notes: t.notes_json ? JSON.parse(t.notes_json).filter(n => !n.private) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)), ...(t.lapsed_at ? { lapsed_at: iso(t.lapsed_at) } : {}),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}) };
 }
 
 async function panelFor(env, key, ref) {
-  const rows = (await env.DB.prepare('SELECT * FROM panels WHERE principal_id = ? AND kind = \'private\' AND COALESCE(join_code_hash, \'\') NOT LIKE \'gone:%\'').bind(key.principal_id).all()).results || [];
+  let rows = (await env.DB.prepare('SELECT * FROM panels WHERE principal_id = ? AND kind = \'private\' AND COALESCE(join_code_hash, \'\') NOT LIKE \'gone:%\'').bind(key.principal_id).all()).results || [];
+  { const { isPeoplePanel } = await import('./panels.js'); const keep = []; for (const r of rows) if (!(await isPeoplePanel(env, r))) keep.push(r); rows = keep; }   // TRUST 6:56 PM CT 15 Nov: no task to a person's people panel
   if (ref !== undefined) {
     const p = rows.find(r => r.id === ref || r.name === ref);
     if (!p) throw fixable('unknown_pool', 'panel', 'A task goes only to a panel of this key\'s own principal (GET /v1/panels lists them).', rows[0] ? rows[0].id : null);
@@ -167,7 +173,7 @@ async function createTask0(env, request, key, b) {
     const pr = await env.DB.prepare('SELECT team FROM principals WHERE id = ?').bind(key.principal_id).first();
     if (!pr || pr.team !== 1 || !key.team) throw fixable('forbidden_for_key_class', 'Authorization', 'Tasks are open only to the operator\'s own keys for now; ask your people with POST /v1/calls, which is screened.', null, {}, 403);
   }
-  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card'];
+  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card', 'expires_in'];
   for (const k of Object.keys(b || {})) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'task-001');
@@ -192,17 +198,21 @@ async function createTask0(env, request, key, b) {
     const ids = to.startsWith('mb:') ? [to.slice(3)] : ((await env.DB.prepare('SELECT id FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL').bind(panel.id, to).all()).results || []).map(r => r.id);
     if (await blocked(env, key.principal_id, ids)) throw notFixable(403, 'not_available', 'This person is not available.'); }
   const id = rid('tk_'), now = nowMs();
-  await env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, card_json)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?)`).bind(id, key.principal_id, key.id, panel.id, to, title, JSON.stringify(step), unlocks, program, session, urgency, now,
-      b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), card ? JSON.stringify(card) : null).run();
+  await env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, card_json, expires_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)`).bind(id, key.principal_id, key.id, panel.id, to, title, JSON.stringify(step), unlocks, program, session, urgency, now,
+      b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000).run();
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (urgency === 'now') { try { await ringTask(env, t); } catch { } t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first(); }
   return { status: 201, body: out(t, request) };
 }
 
 // OWNER_router_11 item 1: no asker's text may claim to be us (title, step text, labels, choices, unlocks; cards in cardFor)
+// TRUST 2:38 PM CT 16 Nov: a direction override or isolate makes words read differently from what was written; no honest use in an ask
+const BIDI_RX = /[\u202A-\u202E\u2066-\u2069]/;
+function noBidi(field, v) { if (typeof v === 'string' && BIDI_RX.test(v)) throw fixable('invalid_field', field, `${field} has a direction-control character (U+202A to U+202E or U+2066 to U+2069), which makes words read differently from what was written. Send the words without it.`, null); }
 async function notUs(task) {
   const { claimsUs } = await import('./cards.js'); const s = task.step || {};
+  for (const [field, v] of [['title', task.title], ['unlocks', task.unlocks], ['step.text', s.text], ['step.where', s.where], ['step.command', s.command], ['step.url', s.url], ['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label], ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c]))]) noBidi(field, v);
   const f = [['title', task.title], ['unlocks', task.unlocks], ['step.text', s.text], ['step.where', s.where], ['step.approve_label', s.approve_label], ['step.deny_label', s.deny_label],
     ...((s.choices || []).map((c, i) => [`step.choices[${i}]`, c]))].filter(([, v]) => typeof v === 'string' && v);
   for (const [field, v] of f) if (await claimsUs(v)) throw fixable('claims_to_be_us', field, `"${String(v).slice(0, 60)}" reads as person.tools speaking (a check, a verification or our own controls): only the person's app draws those.`, null, {}, 422);
@@ -215,7 +225,8 @@ async function cardFor(env, key, raw, standing, ownConnection) {
   const card = await readCard(env, key, raw, { own: ownConnection });
   const opts = standing ? await boundsOpts(env) : null;
   for (const w of textOf(card)) {
-    if (SECRET_RX.test(String(w).replace(URL_RX, ' '))) throw fixable('secret_in_task', 'card', 'Something in the card looks like a key or a token. Never send a key\'s value.', null, {}, 422);
+    noBidi('card', w);
+    if (keyShape(w)) throw fixable('secret_in_task', 'card', 'Something in the card looks like a key or a token. Never send a key\'s value.', null, {}, 422);
     if (opts) standingRules('card', w, opts);
   }
   return card;
@@ -227,7 +238,7 @@ async function connectionTask(env, request, key, b) {
   const c = key.connection;
   if (c.blocked) throw notFixable(403, 'not_available', 'This person is not available to this AI.');
   { const { blocked } = await import('./blocks.js'); if (await blocked(env, key.principal_id, [c.member_id])) throw notFixable(403, 'not_available', 'This person is not available to this AI.'); }
-  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card'];
+  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card', 'expires_in'];
   for (const k of Object.keys(b)) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, ['panel', 'to', 'asker'].includes(k) ? 'This key asks one person, the one who connected it, under the name they gave it: leave out panel, to and asker.' : `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'ask-001');
@@ -241,7 +252,7 @@ async function connectionTask(env, request, key, b) {
   if (!URGENCY.includes(urgency)) throw fixable('invalid_field', 'urgency', 'urgency is "now" (first on the list, and it rings once unless the person quieted this AI), "today" or "whenever".', 'today');
   const { allowedUrgencies } = await import('./connections.js'); const allowed = allowedUrgencies(c);   // operations 12:25: a connection may be limited
   if (!allowed.includes(urgency)) throw fixable('invalid_field', 'urgency', `This person takes ${allowed.map(x => '"' + x + '"').join(' or ')} from this AI.`, allowed[0], { allowed }, 422);
-  for (const [field, v] of taskFields({ title, step, unlocks })) if (SECRET_RX.test(String(v).replace(URL_RX, ' '))) throw fixable('secret_in_task', field, 'Something here looks like a key or a token. Never send a key\'s value: name the file it is in.', null, {}, 422);
+  for (const [field, v] of [...taskFields({ title, step, unlocks }), ...(step.type === 'approve' ? [['step.text', step.text]] : [])]) if (keyShape(v)) throw fixable('secret_in_task', field, 'Something here looks like a key or a token. Never send a key\'s value: name the file it is in.', null, {}, 422);
   await notUs({ title, step, unlocks });   // OWNER_router_11 item 1
   if (c.lab) await bounds({ title, step, unlocks, urgency }, env);
   const card = await cardFor(env, key, b.card, !!c.lab, c.id);   // OWNER_router_9
@@ -261,9 +272,9 @@ async function connectionTask(env, request, key, b) {
   const id = rid('tk_');
   const attach = b.media === undefined ? null : await (await import('./own.js')).attachOwn(env, c, b.media, id, now);
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, connection_id, webhook_url, card_json)
-      VALUES (?,?,?,?,?,?,?,?,?,NULL,?,'open',?,?,?,?,?)`).bind(id, key.principal_id, key.id, c.panel_id, c.person_name || ('mb:' + c.member_id), title, JSON.stringify(step), unlocks,
-      c.name, urgency, now, b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), c.id, hook, card ? JSON.stringify(card) : null),
+    env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, connection_id, webhook_url, card_json, expires_at)
+      VALUES (?,?,?,?,?,?,?,?,?,NULL,?,'open',?,?,?,?,?,?)`).bind(id, key.principal_id, key.id, c.panel_id, c.person_name || ('mb:' + c.member_id), title, JSON.stringify(step), unlocks,
+      c.name, urgency, now, b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), c.id, hook, card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000),
     env.DB.prepare('UPDATE connections SET last_used_at = ? WHERE id = ?').bind(now, c.id),
     ...(attach ? [attach] : []),
   ]);
@@ -273,11 +284,11 @@ async function connectionTask(env, request, key, b) {
 }
 
 // a note on a task, in order (operations 1:00 PM CT); masked like a reply; at most 50 per task
-async function addNote(env, taskId, note, by) {
+async function addNote(env, taskId, note, by, extra = {}) {
   const row = await env.DB.prepare('SELECT notes_json FROM tasks WHERE id = ?').bind(taskId).first();
   const notes = row && row.notes_json ? JSON.parse(row.notes_json) : [];
   if (notes.length >= 50) throw fixable('invalid_field', 'note', 'This task has 50 notes; answer it, or start a new one.', null, {}, 422);
-  notes.push({ at: iso(nowMs()), note, by });
+  notes.push({ at: iso(nowMs()), note, by, ...extra });   // extra: the name drawn for a person sender or passer; private between a passer and a receiver
   await env.DB.prepare('UPDATE tasks SET notes_json = ? WHERE id = ?').bind(JSON.stringify(notes), taskId).run();
   return notes;
 }
@@ -290,13 +301,26 @@ export async function askerNote(env, request, key, id, b) {
   const v = str(b && b.note, 'note', 1, 500, 'Thanks: changed.');
   if (/[\r\n]/.test(v)) throw fixable('invalid_field', 'note', 'An asker\'s note is one line.', 'Thanks: changed.');
   const mm = maskSecrets(v);
-  return { task_id: t.id, notes: await addNote(env, t.id, mm.v, 'asker') };
+  return { task_id: t.id, notes: (await addNote(env, t.id, mm.v, 'asker')).filter(n => !n.private) };
+}
+
+// OWNER_router_15: the ask's life is the asker's choice: expires_in seconds, 60 to 30 days (30 days when not given)
+function expiresIn(b) {
+  if (b.expires_in === undefined) return 2592000;
+  if (!Number.isInteger(b.expires_in) || b.expires_in < 60 || b.expires_in > 2592000) throw fixable('invalid_field', 'expires_in', 'expires_in is how long the ask stays open, in seconds: 60 to 2,592,000 (30 days). When it passes, you are told it lapsed; it is never answered for them.', 600);
+  return b.expires_in;
+}
+// an open ask past its time lapses now (as retention does each minute): never a default answer; the webhook says lapsed
+export async function lapseNow(env, t) {
+  const r = await env.DB.prepare('UPDATE tasks SET state = \'lapsed\', lapsed_at = ? WHERE id = ? AND state = \'open\'').bind(nowMs(), t.id).run();
+  if (r.meta.changes === 1 && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'lapsed' }); } catch { } }
 }
 
 export async function getTask(env, request, key, id) {
   if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer real_...', {}, 401);
-  const t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ? AND principal_id = ?').bind(String(id || ''), key.principal_id).first();
+  let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ? AND principal_id = ?').bind(String(id || ''), key.principal_id).first();
   if (!t) throw notFixable(404, 'not_found', 'No task of yours has that id.');
+  if (t.state === 'open' && (t.expires_at || t.created_at + 2592000000) < nowMs()) { await lapseNow(env, t); t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(); }
   return out(t, request);
 }
 
@@ -309,39 +333,62 @@ export async function listTasks(env, request, key, state) {
 // ---- the person's side: one list, and the reply
 function forMember(m) { return m.person_name ? ['(t.to_name = ? OR t.to_name = ?)', [m.person_name, 'mb:' + m.id]] : ['t.to_name = ?', ['mb:' + m.id]]; }
 
+// WEB 4:07: history is the last 50 by default; ?history=N asks for up to 200
+function histLimit(request) { try { const v = new URL(request.url).searchParams.get('history'); if (v === null || v === '') return 50; const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= 200 ? n : 50; } catch { return 50; } }   // WEB 4:21: no parameter is 50, not 0
 export async function memberTasks(env, request, m, q) {
   const [w, args] = forMember(m);
-  const open = (await env.DB.prepare(`SELECT t.* FROM tasks t WHERE t.panel_id = ? AND ${w} AND (t.state = 'open' OR (t.state = 'withdrawn' AND t.withdrawn_at > ?)) ORDER BY t.created_at DESC LIMIT 200`).bind(m.panel_id, ...args, nowMs() - 86400000).all()).results || [];
+  // WEB 12:36 PM CT 16 Nov: every read the list needs goes in ONE round trip (each one costs ~0.12 s from the function to the database):
+  // the open asks, the history, the askers' brands, the person's AIs, their photos and clips, and the deck's own reads (people.js)
+  const P = await import('./people.js'), now0 = nowMs();
+  const like = typeof q === 'string' && q.trim() ? '%' + q.trim().slice(0, 80).replace(/[%_]/g, '') + '%' : null;
+  const mine = `t.panel_id = ? AND ${w}`, mineArgs = [m.panel_id, ...args];
+  const rs = ((await env.DB.batch([
+    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND COALESCE(t.hold_until, 0) <= ? AND ((t.state = 'open' AND COALESCE(t.expires_at, t.created_at + 2592000000) > ?) OR (t.state = 'withdrawn' AND t.withdrawn_at > ?)) ORDER BY t.created_at DESC LIMIT 200`)
+      .bind(...mineArgs, now0, now0, now0 - 86400000),
+    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND t.state NOT IN ('open', 'withdrawn', 'lapsed')
+      ${like ? 'AND (t.title LIKE ? OR t.step_json LIKE ? OR t.unlocks LIKE ? OR t.program LIKE ?)' : ''} ORDER BY t.answered_at DESC LIMIT ?`)
+      .bind(...mineArgs, ...(like ? [like, like, like, like] : []), histLimit(request)),
+    env.DB.prepare(`SELECT DISTINCT b.principal_id, b.brand_json, b.domain, b.verified_at FROM brands b JOIN tasks t ON t.principal_id = b.principal_id WHERE ${mine}`).bind(...mineArgs),
+    env.DB.prepare(`SELECT DISTINCT c.id, c.name, c.icon FROM connections c JOIN tasks t ON t.connection_id = c.id WHERE ${mine}`).bind(...mineArgs),
+    env.DB.prepare(`SELECT o.task_id, o.content_type, o.bytes, o.seconds, o.delete_at FROM own_material o JOIN tasks t ON t.id = o.task_id WHERE ${mine}`).bind(...mineArgs),
+    ...P.deckStatements(env, m),
+  ])) || []).map(r => (r && r.results) || []);
+  const extras = P.deckFromResults(m, rs.slice(5));   // OWNER_router_18: the notice, answers to read, what was passed on
+  // asks from a person wait for the one-time notice (OWNER_router_18 item 8d)
+  const open = extras.notice ? rs[0].filter(t => !t.sender_member_id && !t.passed_by) : rs[0];
   // urgency (now, today, whenever), then newest first; a withdrawn task goes to the end of its group (OWNER_router_3)
   open.sort((x, y) => (RANK[x.urgency] - RANK[y.urgency]) || (y.created_at - x.created_at));
   const live = open.filter(t => t.state === 'open'), gone = open.filter(t => t.state === 'withdrawn');
   open.length = 0; open.push(...live);
   for (const g of gone) { let at = -1; open.forEach((t, i) => { if ((t.program || '') === (g.program || '')) at = i; }); if (at < 0) open.push(g); else open.splice(at + 1, 0, g); }
-  const like = typeof q === 'string' && q.trim() ? '%' + q.trim().slice(0, 80).replace(/[%_]/g, '') + '%' : null;
-  const hist = (await env.DB.prepare(`SELECT t.* FROM tasks t WHERE t.panel_id = ? AND ${w} AND t.state NOT IN ('open', 'withdrawn', 'lapsed')
-      ${like ? 'AND (t.title LIKE ? OR t.step_json LIKE ? OR t.unlocks LIKE ? OR t.program LIKE ?)' : ''} ORDER BY t.answered_at DESC LIMIT 100`)
-    .bind(m.panel_id, ...args, ...(like ? [like, like, like, like] : [])).all()).results || [];
-  const view = (t) => ({ task_id: t.id, title: t.title, urgency: t.urgency, from: t.program || 'one of your programs', step: JSON.parse(t.step_json), unlocks: t.unlocks || null,
-    created_at: iso(t.created_at), state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, notes: t.notes_json ? JSON.parse(t.notes_json) : [],
+  const hist = rs[1];
+  const view = (t) => ({ task_id: t.id, title: t.title, urgency: t.urgency, from: (t.passed_by && t.passed_from) || t.program || 'one of your programs', step: JSON.parse(t.step_json), unlocks: t.unlocks || null,
+    created_at: iso(t.created_at), state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, notes: t.notes_json ? JSON.parse(t.notes_json) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}),
+    ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: 'The person whose panel you joined. The name is their account\'s, checked by person.tools; it is never typed into the ask.' } } : {}),
+    ...(t.passed_by ? { passed_on_by: t.passed_by_name || 'one of your people' } : {}),
     shell_only: JSON.parse(t.step_json).type === 'command' ? 'Only you can run this: copy the line and paste it where it says. The service cannot run it for you.' : undefined });
   const groups = [];
   for (const t of open) { const g = groups.find(x => x.from === (t.program || 'one of your programs')); if (g) g.task_ids.push(t.id); else groups.push({ from: t.program || 'one of your programs', task_ids: [t.id] }); }
-  const out = { open: open.map(view), groups, history: hist.map(view) };
+  const out = { open: open.map(view), groups, history: hist.map(view), ...extras };
   // OWNER_router_9: each ask's card as its asker sent it, and the asker's brand; "from" stays the service's own
-  { const rows = [...open, ...hist], brands = {}; const { brandOf } = await import('./cards.js');
+  { const rows = [...open, ...hist], brands = {};
+    for (const b of rs[2]) if (b.verified_at && b.domain) { try { brands[b.principal_id] = { ...JSON.parse(b.brand_json), domain: b.domain, verified: true }; } catch { } }   // as cards.js brandOf
     for (const [i, x] of [...out.open, ...out.history].entries()) { const t = rows[i];
       if (t.card_json) x.card = JSON.parse(t.card_json);
-      if (!(t.principal_id in brands)) brands[t.principal_id] = await brandOf(env, t.principal_id).catch(() => null);
+      if (!(t.principal_id in brands)) brands[t.principal_id] = null;
       if (brands[t.principal_id]) x.brand = { ...brands[t.principal_id], ...(brands[t.principal_id].mark ? { mark_url: apiBase(request) + '/v1/brand_media/' + brands[t.principal_id].mark.media } : {}) }; } }
   const own = [...out.open, ...out.history].filter((x, i) => (i < out.open.length ? open[i] : hist[i - out.open.length]).connection_id);
-  if (own.length) {
-    const { ownMaterialView } = await import('./own.js'); const rows = [...open, ...hist]; const seen = {};
+  if (own.length) {   // WEB 4:07: two queries for the whole list, not two per ask
+    const rows = new Map([...open, ...hist].map(r => [r.id, r]));
+    const cs = new Map(rs[3].map(c => [c.id, c])), ms = new Map(rs[4].map(r => [r.task_id, r]));   // read in the one batch above
     for (const x of own) {
-      const t = rows.find(r => r.id === x.task_id);
-      const c = seen[t.connection_id] || (seen[t.connection_id] = await env.DB.prepare('SELECT id, name, icon FROM connections WHERE id = ?').bind(t.connection_id).first());
-      if (c) x.connection = { id: c.id, name: c.name, yours: true, icon: String(c.icon || '').startsWith('img:') ? null : (c.icon || null), ...(String(c.icon || '').startsWith('img:') ? { icon_url: apiBase(request) + '/v1/member/connections/' + c.id + '/icon' } : {}) };
-      const v = await ownMaterialView(env, x.task_id); if (v) x.media = v;
+      const c = cs.get(rows.get(x.task_id).connection_id);
+      const passed = !!rows.get(x.task_id).passed_by;   // WEB 1:15 PM CT 16 Nov: an ask passed on is from the passer's AI, not the receiver's
+      if (c && passed) x.connection = { name: c.name, yours: false, icon: String(c.icon || '').startsWith('img:') ? null : (c.icon || null) };
+      else if (c) x.connection = { id: c.id, name: c.name, yours: true, icon: String(c.icon || '').startsWith('img:') ? null : (c.icon || null), ...(String(c.icon || '').startsWith('img:') ? { icon_url: apiBase(request) + '/v1/member/connections/' + c.id + '/icon' } : {}) };
+      const md = ms.get(x.task_id);
+      if (md) x.media = { kind: md.content_type.startsWith('video/') ? 'clip' : 'photo', content_type: md.content_type, bytes: md.bytes, seconds: md.seconds, deleted_at: iso(md.delete_at) };
     }
   }
   return out;
@@ -351,9 +398,12 @@ export async function memberReply(env, request, m, taskId, b) {
   const [w, args] = forMember(m);
   const t = await env.DB.prepare(`SELECT t.* FROM tasks t WHERE t.id = ? AND t.panel_id = ? AND ${w}`).bind(String(taskId || ''), m.panel_id, ...args).first();
   if (!t) throw notFixable(404, 'not_found', 'No task of yours has that id.');
+  // TRUST 6:47 PM CT (OWNER_router_18): what the list does not show yet cannot be answered by its id
+  if ((t.hold_until && t.hold_until > nowMs()) || ((t.sender_member_id || t.passed_by) && await (await import('./people.js')).hidesPersonAsks(env, m))) throw notFixable(404, 'not_found', 'No task of yours has that id.');
   // TRUST 10:47: an answer acts once; a second answer to an answered or withdrawn task does nothing (a Refuse after a Pass
   // must never refuse a call that is already ringing)
-  if (t.state !== 'open') throw notFixable(409, 'already_answered', `This task is ${t.state === 'withdrawn' ? 'withdrawn' : 'already answered'}; nothing changed.`);
+  if (t.state === 'open' && (t.expires_at || t.created_at + 2592000000) < nowMs()) { await lapseNow(env, t); throw notFixable(409, 'already_answered', 'This ask has lapsed: its time ran out before an answer; nothing changed.'); }
+  if (t.state !== 'open') throw notFixable(409, 'already_answered', `This task is ${t.state === 'withdrawn' ? 'withdrawn' : t.state === 'lapsed' ? 'lapsed' : 'already answered'}; nothing changed.`);
   if (JSON.parse(t.step_json).type === 'review') {   // the media check: pass, refuse (with a reason), or not now
     for (const k of Object.keys(b || {})) if (!['action', 'reason', 'text'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send action, reason and text.`, null);
     return reviewReply(env, request, m, t, JSON.parse(t.step_json), b);
@@ -528,3 +578,12 @@ export async function taskRefusals(env, hours) {
   const rows = (await env.DB.prepare('SELECT * FROM task_refusals WHERE created_at > ? ORDER BY created_at DESC LIMIT 500').bind(nowMs() - h * 3600000).all()).results || [];
   return { hours: h, refusals: rows.map(r => ({ at: iso(r.created_at), program: r.program, session: r.session, title: r.title, rule: r.rule, field: r.field, message: r.message })) };
 }
+
+// rows for a long list of ids, 90 at a time (D1's limit is 100 bound values a statement)
+export async function inGroups(env, head, ids, tail = '') {
+  const out = [];
+  for (let i = 0; i < ids.length; i += 90) { const g = ids.slice(i, i + 90); out.push(...(((await env.DB.prepare(`${head} (${g.map(() => '?').join(',')}) ${tail}`).bind(...g).all()).results) || [])); }
+  return out;
+}
+// OWNER_router_18: people.js sends and passes asks with the same checks
+export { readStep, expiresIn, maskSecrets, notUs, cardFor, taskFields, addNote, forMember, str as taskStr, SECRET_RX, URL_RX, keyShape };

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "member_connection_revoked.json",
+  "title": "A revoked connection: DELETE /v1/member/connections/{id} (section 26.8)",
+  "type": "object",
+  "required": [
+    "connection_id",
+    "revoked",
+    "revoked_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "connection_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "revoked": {
+      "const": true
+    },
+    "revoked_at": {
+      "$ref": "common.json#/$defs/time"
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}
