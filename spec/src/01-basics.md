@@ -112,6 +112,7 @@ JSON, without authentication:
 - `test_keys` is present when the server issues test keys to anyone (section 18).
 - `webhook_header_prefix`, for a server that lists `branded_asks`, is the prefix of the headers on the answers it delivers
   to a service (27.2); without it, a service uses `{{wire_prefix}}`.
+- `connect_page`, for a server that lets a service start a connection (27.9), is the address of its connect page.
 - `api_base`, `mcp` and every other address in discovery are absolute `https` addresses, except that a server run for
   local testing on a loopback address (`localhost`, `127.0.0.1`, `[::1]`) may use `http`. A server serving one host
   uses that host in every address; one serving several builds them from the request's host. A server reachable under more than one host SHOULD build them from
@@ -123,7 +124,8 @@ JSON, without authentication:
 ## 6. Authentication and keys
 
 **[AUTH-1]** Every request except discovery, the JWKS, `GET /v1/media/samples`, `POST /v1/keys`,
-`POST /v1/receipts/verify` and `GET /v1/brand_media/{id}` (a brand's picture, section 27.10) MUST carry
+`POST /v1/receipts/verify`, `GET /v1/brand_media/{id}` (a brand's picture, section 27.10), and `POST /v1/connect/token` and
+`POST /v1/connect/brand` (connecting from a service, section 27.9) MUST carry
 `Authorization: Bearer <key>`, unless the server serves it without a key under AUTH-5 below. A missing key where one is
 needed, or a key the server does not know, is the error `unauthorized` (HTTP 401), which is fixable: `field` is
 `Authorization`, `example` is `"Bearer test_..."`, and `message` says how to get a test key when the server issues them.

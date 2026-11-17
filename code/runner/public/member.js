@@ -255,8 +255,8 @@
         var v = !state.alertWords; api("POST", "settings", { alert_words: v }).then(function (r) {
           if (r.ok) { state.alertWords = v; live.textContent = "Saved."; } else live.textContent = "Not saved."; render(); }); } }, "Show the ask in my alerts" + (state.alertWords ? " (on)" : " (off)")),
       state.alertWords === null ? null : h("p", { class: "note" }, "Off: an alert says only who is asking. On: it may also show the ask's first line, up to 80 characters, never the whole ask. Your phone's own preview setting still decides what shows on a locked screen. Only you see this."),
-      state.ownPage ? null : h("button", { type: "button", class: "toggle", "aria-pressed": st.longer_hold ? "true" : "false", onclick: function () { flip("longer_to_answer", "longer_hold"); } }, "Give me more time to take a call" + (st.longer_hold ? " (on)" : " (off)")),
-      state.ownPage ? null : h("p", { class: "note" }, "Calls on your panel are held for you for 15 minutes. With this On, any call held for less is held for 3 minutes instead. Useful with a screen reader, or whenever you like. No asker ever sees this, and it never changes what you are paid or how often you are rung."));
+      (state.ownPage || state.peoplePanel) ? null : h("button", { type: "button", class: "toggle", "aria-pressed": st.longer_hold ? "true" : "false", onclick: function () { flip("longer_to_answer", "longer_hold"); } }, "Give me more time to take a call" + (st.longer_hold ? " (on)" : " (off)")),
+      (state.ownPage || state.peoplePanel) ? null : h("p", { class: "note" }, "Calls on your panel are held for you for 15 minutes. With this On, any call held for less is held for 3 minutes instead. Useful with a screen reader, or whenever you like. No asker ever sees this, and it never changes what you are paid or how often you are rung."));
   }
 
   // ------------------------------------------------------------------ the ring (P2): web push to this phone
@@ -390,15 +390,15 @@
   }
   function ringSection() {
     var body;
-    if (state.ownPage && ring.state === "on") body = [h("p", { class: "sub" }, "This phone shows an alert when one of your AIs asks you now."), h("p", { class: "note" }, "Never in your quiet hours, and never from an AI you set to Quiet.")];
-    else if (state.ownPage && ["ios-add", "blocked", "unsupported"].indexOf(ring.state) < 0) body = [h("p", { class: "sub" }, "Show an alert when one of your AIs asks you now?"), h("button", { class: "go", type: "button", onclick: letItRing }, "Let this phone show alerts"), h("p", { class: "note" }, "Your phone asks you first. Without it, your asks still appear on this page.")];
+    if ((state.ownPage || state.peoplePanel) && ring.state === "on") body = [h("p", { class: "sub" }, "This phone shows an alert when one of your AIs asks you now."), h("p", { class: "note" }, "Never in your quiet hours, and never from an AI you set to Quiet.")];
+    else if ((state.ownPage || state.peoplePanel) && ["ios-add", "blocked", "unsupported"].indexOf(ring.state) < 0) body = [h("p", { class: "sub" }, "Show an alert when one of your AIs asks you now?"), h("button", { class: "go", type: "button", onclick: letItRing }, "Let this phone show alerts"), h("p", { class: "note" }, "Your phone asks you first. Without it, your asks still appear on this page.")];
     else if (ring.state === "on") body = [h("p", { class: "sub" }, "This phone rings when a call comes."), h("p", { class: "note" }, "Only while you are On, and never in your quiet hours. The notification shows the minutes and the pay, never the asker's words."), h("button", { class: "quiet", type: "button", onclick: testRing }, "Show a test ring")];
     else if (ring.state === "ios-add") body = [h("p", { class: "sub" }, "First, put this page on your Home Screen."), h("p", null, "An iPhone lets a page ring only from its Home Screen icon: tap Share, then “Add to Home Screen”, open the new icon, and come back to this switch.")];
     else if (ring.state === "blocked") body = [h("p", { class: "sub" }, "Notifications are blocked for this page."), h("p", null, "To allow them: on an iPhone, Settings, then Notifications, then this page's icon; on Android, tap the lock beside the address, then Notifications. Your calls appear on this page either way.")];
     else if (ring.state === "unsupported") body = [h("p", { class: "sub" }, "This browser cannot ring."), h("p", null, "Your calls still appear on this page. Keep it open, or look in now and then.")];
     else body = [h("p", { class: "sub" }, "Show a notification when a call comes?"), h("button", { class: "go", type: "button", onclick: letItRing }, "Let this phone show calls"), h("p", { class: "note" }, "A notification, not a phone call. Your phone asks you first. Without it, your calls still appear on this page.")];
-    if (state.ownPage) body = [].concat(body).map(function (x) { if (x && x.nodeType) { var w = document.createTreeWalker(x, NodeFilter.SHOW_TEXT), n; while ((n = w.nextNode())) n.nodeValue = n.nodeValue.replace(/Your calls/g, "Your asks").replace(/your calls/g, "your asks"); } return x; });   // a page of your own has asks, not calls
-    return h("section", { class: "screen", "aria-labelledby": "ring-h" }, h("p", { class: "label", id: "ring-h" }, "NOTIFICATIONS ON THIS PHONE"), body, ring.note ? h("p", { class: "note", role: "status" }, ring.note) : null, state.ownPage ? ownQuiet() : null);
+    if (state.ownPage || state.peoplePanel) body = [].concat(body).map(function (x) { if (x && x.nodeType) { var w = document.createTreeWalker(x, NodeFilter.SHOW_TEXT), n; while ((n = w.nextNode())) n.nodeValue = n.nodeValue.replace(/Your calls/g, "Your asks").replace(/your calls/g, "your asks"); } return x; });   // a page of your own has asks, not calls
+    return h("section", { class: "screen", "aria-labelledby": "ring-h" }, h("p", { class: "label", id: "ring-h" }, "NOTIFICATIONS ON THIS PHONE"), body, ring.note ? h("p", { class: "note", role: "status" }, ring.note) : null, (state.ownPage || state.peoplePanel) ? ownQuiet() : null);
   }
 
   // a line the person has not seen before is marked NEW once (kept on this phone only)
@@ -462,7 +462,7 @@
     return h("section", { class: "screen", "aria-labelledby": "ag-h" },
       h("p", { class: "label", id: "ag-h" }, "QUESTIONS, AND WHAT YOU AGREED TO"),
       reach ? h("p", null, reach.text) : null,
-      h("details", { class: "tech" }, h("summary", null, state.ownPage ? "The notice for a page of your own" : "The notice you accepted when you joined"),
+      h("details", { class: "tech" }, h("summary", null, state.ownPage ? "The notice for a page of your own" : state.peoplePanel ? "The notice you accepted when you joined these asks" : "The notice you accepted when you joined"),
         h("p", { class: "lede" }, notice.lede),
         h("dl", { class: "notice" }, (notice.sections || []).map(function (x) { return [h("dt", null, x.label), h("dd", null, x.text)]; })),
         h("p", { class: "note" }, notice.footnote)));
@@ -508,7 +508,8 @@
   function loadTasks() {
     fetch("/x/members/" + encodeURIComponent(token) + "/tasks", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
-      .then(function (d) { if (!d) return; if (d.own_page && !state.ownPage) { state.ownPage = true; var bl = document.getElementById("bar-label"); if (bl) bl.textContent = "YOUR PAGE"; var sk = document.querySelector("a.skip"); if (sk) sk.textContent = "Skip to your asks"; tasks.sig = ""; fetch("/tester_notice_self.json").then(function (r) { return r.json(); }).then(function (n) { notice = n; render(); }, function () {}); }   // REACH 3:35: a page of your own (TRUST 3:08: its own notice)
+      .then(function (d) { if (!d) return; if (d.people_panel && !state.peoplePanel) { state.peoplePanel = true; var bl2 = document.getElementById("bar-label"); if (bl2) bl2.textContent = "ASKS FOR YOU"; var sk2 = document.querySelector("a.skip"); if (sk2) sk2.textContent = "Skip to your asks"; tasks.sig = ""; fetch("/tester_notice_people.json").then(function (r) { return r.json(); }).then(function (n) { notice = JSON.parse(JSON.stringify(n).replace(/\{owner\}/g, "the person who invited you")); render(); }, function () {}); }   // OWNER_router_33
+        if (d.own_page && !state.ownPage) { state.ownPage = true; var bl = document.getElementById("bar-label"); if (bl) bl.textContent = "YOUR PAGE"; var sk = document.querySelector("a.skip"); if (sk) sk.textContent = "Skip to your asks"; tasks.sig = ""; fetch("/tester_notice_self.json").then(function (r) { return r.json(); }).then(function (n) { notice = n; render(); }, function () {}); }   // REACH 3:35: a page of your own (TRUST 3:08: its own notice)
         var sig = JSON.stringify([d.open, d.history, d.notice, d.answers_to_read, d.passed_on]); if (sig === tasks.sig) return; tasks.sig = sig; tasks.open = d.open || []; tasks.history = d.history || [];
         tasks.personNotice = d.notice || null; tasks.answers = d.answers_to_read || []; tasks.passed = d.passed_on || []; render(); });
   }
@@ -766,7 +767,8 @@
     // a waiting call comes first (it is held for only a minute or so); then what the answers changed
     // while a call waits, no earlier call's 'what changed' line above it: it could steer the answer (cold read 5)
     // REACH 3:35 PM CT 16 Nov: a page of your own leads with asks and your AIs; nothing of calls can happen there, so none of it is drawn
-    var sections = state.ownPage ? [tasksSection(), aisSection(), ringSection(), blocksSection(), accountSection(), appSection(), (state.receipts && state.receipts.length) ? receiptsSection() : null, privateSection(), feedbackSection(), agreedSection(), leaveSection()].filter(Boolean)
+    var sections = state.peoplePanel ? [tasksSection(), ringSection(), blocksSection(), accountSection(), appSection(), privateSection(), feedbackSection(), agreedSection(), leaveSection()].filter(Boolean)   // OWNER_router_33: no calls can reach a person's invitee
+      : state.ownPage ? [tasksSection(), aisSection(), ringSection(), blocksSection(), accountSection(), appSection(), (state.receipts && state.receipts.length) ? receiptsSection() : null, privateSection(), feedbackSection(), agreedSection(), leaveSection()].filter(Boolean)
       : (state.offers.length ? [offersSection(), tasksSection()] : [tasksSection(), changedBanner(), offersSection()]).concat([onSection(), ringSection(), aisSection(), blocksSection(), accountSection(), appSection(), receiptsSection(), privateSection(), feedbackSection(), agreedSection(), leaveSection()]).filter(Boolean);
     fill.apply(null, [main].concat(sections));
     if (state.offers.length !== state.lastCount) { live.textContent = state.offers.length ? state.offers.length + " call" + (state.offers.length === 1 ? "" : "s") + " waiting." : "No calls right now."; state.lastCount = state.offers.length; }

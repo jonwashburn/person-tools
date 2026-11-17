@@ -85,11 +85,12 @@ codes from this file; runner shows what it says. Each numbered rule is one thing
     11: the same call is offered again, with a fresh hold, once the person is On. A client may report this at most once per call and
     only for an offer made to that member; a second report is refused, so it can never be used to dodge the two-misses rule.
 
-16. **A person's own page, where only their own AIs ask.** On a page a person makes for themselves (`POST /v1/account/start`),
-    nobody else can join and only the AIs they connect can ask them. There On starts on, with no end unless the person sets one,
-    because every ask comes from something they connected; they can turn Off at any time. Quiet hours (rule 4), rule 5 and
-    `policy/TASKS.md` rule 6 still hold. The notice they accept says so (`legal/tester_notice_self.json`). Everywhere else, rule
-    3's On, with its end, holds.
+16. **A person's own page, and a people panel: no On or Off.** On a page a person makes for themselves (`POST /v1/account/start`, only
+    the AIs they connect ask them) and on a people panel (only its owner asks), there is no On or Off: an ask marked "now" rings
+    once, outside the person's quiet hours (rule 4), within rule 5 and `policy/TASKS.md` rule 6, unless the person muted that
+    owner or quieted that AI. To stop the rings they mute, quiet, revoke or leave. No call ever reaches either kind of page. The
+    notices they accept say so (`legal/tester_notice_self.json`, `legal/tester_notice_people.json`). Everywhere else, rule 3's On,
+    with its end, holds.
 
 ## Worked checks (router: each is a line in the baseline)
 

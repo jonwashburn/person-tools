@@ -20,7 +20,8 @@ Section 26.6 sends its readers here for cards. This section also lets a connecti
 adds rules of form and of names to the asks of 26.1 (no client words, no claim to be the server or another principal, no
 addresses or markup in a card, contacts in their own field).
 
-Every route here is on the server's API host: the host of the connection's `link` (26.8) and of discovery.
+Every route here is on the server's API host: the host of the connection's `link` (26.8) and of discovery. A person who gives
+the service only the key gives it that host as well; the link carries both.
 
 **Words**, in this section, are text with no address (nothing beginning `http://`, `https://` or `www.`), no markup (no `<`
 followed by a letter or `/`) and no script; ordinary punctuation, `&` included, is allowed. **The asker** is the service, or
@@ -58,7 +59,8 @@ answers with `GET /v1/tasks/{task_id}`.
 |---|---|---|
 | `title` | yes | 3 to 120 characters: a few words naming the ask |
 | `step` | yes | what is asked and how it may be answered (26.5, 27.6); `step.text` 3 to 4,000 characters, each choice 1 to 120 |
-| `urgency` | no | `now`, `today` (the default) or `whenever` (26.5); one the person did not allow this AI (26.8), the default included, is 400 `invalid_field` on `urgency`, and the refusal's `allowed` lists the ones allowed |
+| `urgency` | no | `now`, `today` (the default) or `whenever` (26.5); a new connection takes all three until the person limits them; one the person did not allow this AI (26.8), the default
+included, is 400 `invalid_field` on `urgency`, and the refusal's `allowed` lists the ones allowed |
 | `expires_in` | no | seconds the ask stays open, 60 to 2,592,000 (30 days, the default) |
 | `unlocks` | no | up to 300 characters: what the answer lets the service do |
 | `idempotency_key` | no | 1 to 128 characters: the service's own stable key for the thing it asks about (below) |
@@ -66,11 +68,11 @@ answers with `GET /v1/tasks/{task_id}`.
 | `media` | no | one photo or clip the service uploaded within the hour before (`POST /v1/tasks/media`, below) |
 | `contacts` | no | someone else's contact details (27.7) |
 | `group` | no | 1 to 80 characters (letters, digits, `:`, `_`, `-`): asks drawn together (27.8) |
-| `webhook` | no | one https address on a public host (not a bare IP address, an internal name or the server's own) where the answer is sent, signed (below) |
+| `webhook` | no | one https address on a public host (not a bare IP address, an internal name, a reserved top-level domain such as `.example`, or the server's own; else 400 `invalid_field` on `webhook`) where the answer is sent, signed (below) |
 
 It answers 201 with the ask as the service sees it: `{"task_id", "state", "title", "urgency", "step", "unlocks", "card",
-"contacts", "group", "webhook", "brand", "created_at", "expires_at", "reply", "notes", "url"}`, where `url` is the address of
-`GET /v1/tasks/{task_id}`, `brand` is `{"id", "name"}` of the brand the ask wears or `null`, and `contacts` is what the service
+"contacts", "group", "webhook", "brand", "key", "created_at", "expires_at", "reply", "notes", "url"}`, where `url` is the address of
+`GET /v1/tasks/{task_id}`, `brand` is `{"id", "name"}` of the brand the ask names, proved or not (what the person sees follows 27.4), or `null`, and `contacts` is what the service
 sent while the ask is open and `[{"id", "role", "ref", "consent", "consent_at"}]` after it closes. Fields the service did not send are
 `null`.
 
@@ -84,7 +86,7 @@ about has not changed, and the key binds for 30 days rather than 24 hours.)
 
 **Following.** `GET /v1/tasks/{task_id}` answers the same object; `reply` is `null` until the person answers, then
 `{"action", "choice", "text", "note", "at"}` as in 26.5, with `approved_text` after an approval, `device_approved` and `mark`
-(26.6), and `contact_ref` when the choice was a contact or the step was a call (27.7). A note from the person appears in
+(26.6), and `contact_ref` when the choice was a contact or the answer was a call step's Called (27.7). A note from the person appears in
 `notes` with `"by": "person"`; the service answers one with `POST /v1/tasks/{task_id}/notes` `{"note"}` (one line, at most 500
 characters) while the ask is open, and it answers 200 `{"task_id", "notes"}` (a note on an ask that is no longer open is 409
 `already_answered`). Notes and withdrawals send nothing to the webhook: a service that wants them reads
@@ -93,7 +95,8 @@ characters) while the ask is open, and it answers 200 `{"task_id", "notes"}` (a 
 **The answer, sent.** An ask takes one answer: once it is answered, done, not now, lapsed or withdrawn it takes no other
 (`already_answered`, 26.3). **[ASKS-2]** When an ask that named a `webhook` is answered, done, not now or lapsed, the server MUST
 post, once for that ask, `{"task_id", "key", "state", "reply", "answered_at"}` to it, where `key` is the ask's `idempotency_key` (`null` when it
-had none), `answered_at` is `null` for a lapse, and `reply` is the reply as `GET /v1/tasks/{task_id}` shows it. The body is
+had none), `answered_at` and `reply` are `null` for a lapse, and otherwise `reply` is the reply as `GET /v1/tasks/{task_id}`
+shows it. Each ask is posted on its own: Done on a grouped card posts once for each of its asks, each with its own `key`. The body is
 `application/json` (no version header) and is signed with the webhook secret the connection was
 given (26.8):
 
@@ -107,7 +110,9 @@ names none. The server follows no redirect and ignores the response's body. A tr
 when the service answers 2xx within 8 seconds; any other answer, or none, is a failed try, and none ends the retries early. **[ASKS-3]** A server MUST try again after a failed try, about 1 minute, 5
 minutes, 30 minutes, 2 hours, 6 hours, 12 hours and 24 hours later, signing each try with its own timestamp, and then stop.
 **[ASKER-1]** A service MUST check the signature before it acts on an answer, SHOULD refuse a timestamp more than five minutes
-from its own clock, and MUST act on one delivery id once.
+from its own clock, and MUST act on one delivery id once. The signature header carries exactly one `v1=` value. The secret is
+shared by the server and the service alone; a service that wants a second word on an answer reads `GET /v1/tasks/{task_id}`
+with its own key.
 
 **The secret and a revoked connection.** The person can make the connection a new webhook secret (`POST
 /v1/member/connections/{id}/secret`, which answers `{"webhook_secret"}` once), which stops the old one at once: tries after
@@ -132,7 +137,8 @@ for a thing the person cannot act on: an ask always has an answer the person can
 ### 27.3 The brand
 
 `PUT /v1/brand` `{"brand": {...}}`, with the key whose asks will wear it (a principal's key, or a connection's key), gives
-the brand or replaces it whole, and answers 200 `{"brand", "domain", "verified", "updated_at", "prove_it"}` (`prove_it` until the
+the brand or replaces it whole, and answers 200 `{"brand", "id", "domain", "verified", "updated_at", "prove_it"}`, where `id` is the brand's `brand_id` from
+the first `PUT` on (`prove_it` until the
 domain is proved, 27.4). `GET /v1/brand` answers the same.
 
 ```json
@@ -149,7 +155,9 @@ domain is proved, 27.4). `GET /v1/brand` answers the same.
 } }
 ```
 
-A brand gives only what it has. A name and a domain alone are a complete brand.
+A brand gives only what it has. A name and a domain alone are a complete brand. `domain` may be left out while a brand is
+drafted, but a brand without one is shown to no one. After the proof, `prove_it` is left out of the answers; `verified_at`
+says when.
 
 | Field | What it is | Limits |
 |---|---|---|
@@ -211,7 +219,8 @@ ASKS-7 again.
 MUST still draw who is asking itself (26.6): a person always sees both who dressed the card and who sent it.
 
 **One brand, many keys.** A service reaches many people, each through a connection with its own key. The first time a brand is
-proved, `POST /v1/brand/verify` also answers `brand_id` (`br_...`) and, once, `brand_key` (`bk_...`). The `brand_id` never
+proved, `POST /v1/brand/verify` also answers `brand_id` (`br_...`, the `id` the brand has had since its first `PUT`) and, once,
+`brand_key` (`bk_...`). The `brand_id` never
 changes and `GET /v1/brand` carries it from then on; a later proof (after the domain was dropped and given again) answers no
 new brand key, and `POST /v1/brand/key` makes one when it is needed. **[ASKS-9]** A request
 that places an ask and carries the header `Brand-Key: bk_...` MUST wear that brand, whatever key placed it; an unknown, stopped
@@ -223,7 +232,8 @@ keys: never in an address, a log or an ask.
 
 **Test brands.** **[ASKS-10]** A brand that has not proved its domain MUST be shown only to the server's own test members
 (members the server made for testing, never a real person), marked `"verified": false, "test": true`, whatever key gave it. Which test members a service may reach is the server's
-to say; a service with none proves its domain before its brand shows anywhere. A test brand may also hold a brand key
+to say; a service with none proves its domain before its brand shows anywhere. An ask that wears a brand which is not proved reaches a real person with no brand (`"brand": null`) and a test member
+with the test brand. A test brand may also hold a brand key
 (`POST /v1/brand/key`) and run the connect road of 27.9; both reach test members only. **[CARD-7]** A client
 MUST draw a test brand with the words "Test brand, not verified" in its own colours.
 
@@ -293,7 +303,7 @@ a number reads as a number; an email address as an address) and refuse a wrong f
 
 **A call to make.** `{"type": "call", "contact": "c1", "text"}` names a contact of the ask (27.7) that has a `phone`; `text`
 is what the call is about (3 to 4,000 characters), shown above the client's Call control. **[CARD-11]**
-A client MUST draw the contact and its own Call control, which dials the number on the person's own device, then offer
+A client MUST draw the contact once (where a `contact` block stands, else beside the Call control) and its own Call control, which dials the number on the person's own device, then offer
 "Called", which sends `{"action": "answer"}` (the person says they made the call; only this reply carries `contact_ref`), besides
 Done (cleared without saying), Not now and a note. **[ASKS-16]** Nothing is dialled by the server or the service.
 
@@ -312,7 +322,7 @@ the person: a customer, a caller, a colleague. They travel in one field, `contac
 | Field | What it is | Limits |
 |---|---|---|
 | `id` | how the ask refers to the contact | `c1` to `c4`; at most four contacts |
-| `role` | who they are to the person ("customer", "caller", "the plumber"), shown wherever the details are not | 1 to 30 characters; letters and spaces; never a person's name |
+| `role` | who they are to the person ("customer", "caller", "plumber"), shown wherever the details are not | 1 to 30 characters; letters and spaces; never a person's name |
 | `name` | their name | 1 to 80 characters |
 | `phone` | their number | E.164 |
 | `email` | their address | at most 254 characters |
@@ -323,8 +333,8 @@ the person: a customer, a caller, a colleague. They travel in one field, `contac
 E.164 is refused, not rewritten. `contact_ref` in a reply is the contact's `ref` (`null` when it has none).
 
 **References.** Lengths count a reference as written (`{c1}` is four characters). Words in the ask may refer to a contact as
-`{c1}`: the title, the step's text and choices, an approval's text, and
-a card's `headline`, `text`, `facts` values, `quote` and `when_where`. **[ASKS-17]** A server MUST refuse a reference to a contact
+`{c1}`: the title, `unlocks`, the step's text, choices and `line_for` labels, an approval's text and labels, and
+a card's `headline`, `text`, `facts` values, a `quote`'s `text` and `by`, and `when_where`. **[ASKS-17]** A server MUST refuse a reference to a contact
 the ask does not carry (`unknown_reference`), and a `role` that reads as a name: a role in which any word after the first
 starts with a capital letter, or which repeats a word of the contact's `name`, is refused on `role`. **[CARD-12]** On the open card (the ask as the person opens it, while it is open)
 a client MUST draw the contact's name for a reference ("the <role>" when it has none); everywhere else it MUST draw "the
@@ -337,8 +347,8 @@ the person saw it, names drawn.
 `GET /v1/member/tasks` and, to the service that sent them, in its own view of the open ask (27.2), and never in a push, the alert line (26.7), `groups`, history, a receipt, an export, a public page, a
 count or a log; where a reference stands in any of those, the role stands in its place. **[CARD-13]** A client MUST show the
 details only on the open card, and under them, in its own words, whose statement the consent is: "Northside Motors says Avery Johnson got in touch first" for `they_contacted_the_asker`, and
-"... says Avery Johnson agreed to be contacted" for the other, naming the brand (or, with none, who is asking as the client shows
-it) and the contact's `name` as given, or "the <role>" when it has none. It never says what the person agreed to beyond being contacted.
+"... says Avery Johnson agreed to be contacted" for the other, naming the brand the card shows, proved or test (or, with none, who is asking as
+the client shows it) and the contact's `name` as given, or "the <role>" when it has none. It never says what the person agreed to beyond being contacted.
 
 **Deleted at close.** **[ASKS-19]** When the ask is answered, done, not now, withdrawn or lapsed, the server MUST delete the
 contact's `name`, `phone` and `email` within a minute, keeping `id`, `role`, `ref`, `consent` and `consent_at` (when the ask that stated it was placed).
@@ -358,14 +368,15 @@ the details of anyone who did not contact it or agree to be contacted.
 ### 27.8 Groups, speed and the count
 
 **Several questions on one card.** A service with several questions about one thing sends each as its own ask with its own
-answer, and gives them the same `group`. A group belongs to one key asking one person; the oldest open ask in it (the first placed, in the server's order)
-heads the card, a lone open ask of a group is drawn alone, and
+answer, and gives them the same `group`. A group belongs to one key asking one person; the oldest open ask in it (the earliest `created_at`; asks placed in the same
+second, the lower `task_id`) heads the card, a lone open ask of a group is drawn alone, and
 a group's name may be used again once all its asks have closed. **[ASKS-22]** A server MUST alert the person at most once for
 the asks of one group placed within a minute of each other, so a service places them back to back. **[CARD-15]** A client MAY draw the open asks that share a `group_id` as one card (the
 person's list gives each grouped ask a `group_id` naming both its asker and its group, since two of a person's AIs may use the
-same group name; a client never groups by the name alone); such a card shows the oldest ask's title, card, `unlocks`, urgency and expiry, then each ask's step as a row with its own answers (the
-others' cards are not drawn); Done on the whole card sends Done for each open
-row. A client that does not group draws each ask alone and loses nothing. **[ASKS-23]** A server MUST refuse a seventh open ask in
+same group name; a client never groups by the name alone); such a card shows the oldest ask's title and card (the oldest: the earliest `created_at`, then the lower `task_id`),
+then each ask's step as a row, the oldest first, with its own answers, its own `unlocks` and its own urgency and expiry (the
+others' cards are not drawn); Done, Later and Not now on the whole card act on each open row. `group_id` is an opaque string;
+26.5's `groups` (asks by who is asking) is unchanged. A client that does not group draws each ask alone and loses nothing. **[ASKS-23]** A server MUST refuse a seventh open ask in
 one group (`group_full`), and an ask with a `group` whose step is not a question (400 `invalid_field` on `group`): an approval,
 a link, a command or a call stands on a card of its own, so another ask's card never frames what it does.
 
@@ -382,25 +393,32 @@ MUST carry, on each connection whose asks wear a brand, that `brand`, so that a 
 A person connects their own AI by making a connection and giving the AI its key (26.8). A server SHOULD also let a service where
 people sign in start the connection, so that the key reaches the right account:
 
-1. The service sends the person to the server's connect page with `brand` (its `brand_id`), `state` (the service's own opaque
-   value) and `return` (an https address on the brand's proved domain or a subdomain of it, on the default port: the proof covers no other).
+1. The service sends the person to the server's connect page (discovery's `connect_page`; the reference server's is
+   `https://run.person.tools/connect`) with the query parameters `brand` (its `brand_id`), `state` (the service's own value,
+   1 to 500 characters, returned unchanged) and `return` (an https address on the brand's proved domain or a subdomain of it, on the default port: the proof covers no other).
 2. The person, signed in to the server, sees the brand, its domain, that it is proved, and the urgencies it may use; may rename
    it; and connects it or not.
-3. The server sends the person to `return` with `code` and the same `state`, or with `error=declined`.
+3. The server sends the person to `return` with `code` and the same `state`, or with `error=declined` (the person said no)
+   or `error=` and an error code (anything else).
 4. Within ten minutes, once, the service exchanges the code: `POST /v1/connect/token` `{"code"}` with `Brand-Key`, which answers
-   the connection's `key`, `connection_id` and `webhook_secret`, as 26.8 gives them.
+   the connection's `key`, `connection_id` and `webhook_secret`, as 26.8 gives them. This route and the page's own
+   `POST /v1/connect/brand` `{"brand", "return"}` take no `Authorization` (add them to AUTH-1's list); the second answers
+   200 `{"brand": {"id", "name", "domain", "verified"}, "return_ok": true, "urgencies", "note"}`, or refuses as ASKS-25 says. A connection made this way wears the brand on
+   every ask without `Brand-Key`.
 
 With a test brand (27.4) the connect page and the code exchange work only for the server's test members, and `return` must
 still be on the brand's own domain, so a service can walk the whole road before it proves its domain. **[ASKS-25]** A server
-that offers this MUST refuse a `return` outside the brand's proved domain (400 `invalid_field` on
-`return`), and a code used twice or after ten minutes (410 `expired`). The server never learns who the person is to the service, and the service learns nothing of the person but the
+that offers this MUST refuse a `return` outside the brand's domain (its proved domain, or a test brand's given one) (400
+`invalid_field` on `return`), and a code used twice or after ten minutes (410 `expired`). The server never learns who the person is to the service, and the service learns nothing of the person but the
 connection.
 
 ### 27.10 What a client reads
 
 In `GET /v1/member/tasks`, an ask that wears a brand carries `brand`: the brand as given, with `id`, `domain`, `verified`
 (`true`; or `false` with `test: true`, 27.4), and a `url` on each picture state that serves it with no credential (`GET
-/v1/brand_media/{m_...}`). An ask that carries contacts has `contacts` (27.7; `ref` never), and an ask in a group has `group` and `group_id` (27.8).
+/v1/brand_media/{m_...}`). An ask that carries contacts has `contacts` (27.7; `ref` never), and an ask in a group has `group` and `group_id` (27.8). An ask
+withdrawn with `elsewhere` leaves `open` at once and stands in `history` with `"state": "withdrawn"`, `"answered_elsewhere": true`,
+`withdrawn_at` and `withdraw_why`; a client says it was answered in the service.
 `from` and the connection's name stay the server's and the person's: the brand never names who is asking.
 
 ### 27.11 Errors and registries
@@ -427,7 +445,8 @@ requirement against any server that lists `branded_asks`.
 
 ### 27.13 One branded ask, from end to end (informative)
 
-Northside Motors' assistant holds a connection key that a person at the lot made for it (26.8). Shapes are abridged to the fields
+Northside Motors' assistant holds a connection key that a person at the lot made for it (26.8). `northside.example` stands in
+for Northside's real domain throughout: a reserved domain itself can be neither proved nor used for a webhook. Shapes are abridged to the fields
 this section names; the server adds the others 27.2 lists.
 
 1. **The brand.** `PUT /v1/brand` with the connection key:

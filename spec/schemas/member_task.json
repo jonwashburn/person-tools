@@ -116,38 +116,45 @@
       "$ref": "card.json"
     },
     "brand": {
-      "allOf": [
+      "oneOf": [
         {
-          "$ref": "brand.json"
+          "type": "null"
         },
         {
-          "required": [
-            "id",
-            "verified"
-          ],
-          "if": {
-            "required": [
-              "verified"
-            ],
-            "properties": {
-              "verified": {
-                "const": false
+          "allOf": [
+            {
+              "$ref": "brand.json"
+            },
+            {
+              "required": [
+                "id",
+                "verified"
+              ],
+              "if": {
+                "required": [
+                  "verified"
+                ],
+                "properties": {
+                  "verified": {
+                    "const": false
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "test"
+                ],
+                "properties": {
+                  "test": {
+                    "const": true
+                  }
+                }
               }
             }
-          },
-          "then": {
-            "required": [
-              "test"
-            ],
-            "properties": {
-              "test": {
-                "const": true
-              }
-            }
-          }
+          ]
         }
       ],
-      "description": "The brand as given (27.3), with id, domain and verified; a brand that has not proved its domain shows only to a test member, with verified false and test true (ASKS-10). A picture state carries url, served with no credential (27.10)."
+      "description": "The brand as given (27.3), with id, domain and verified; a brand that has not proved its domain shows only to a test member, with verified false and test true (ASKS-10). A picture state carries url, served with no credential (27.10). An ask whose service has no brand, or whose unproved brand would reach a real person, carries brand null (27.4)."
     },
     "media": {
       "type": "object",
@@ -266,7 +273,7 @@
           }
         }
       },
-      "description": "Someone else's contact details (27.7): name, phone and email only while the ask is open (ASKS-18, ASKS-19); never ref (27.10)."
+      "description": "Someone else's contact details (27.7): name, phone and email only while the ask is open (ASKS-18, ASKS-19); never ref (27.10). Words may refer to a contact as {c1}: the title, unlocks, the step's text, choices, line_for labels and approval labels, and the card's words; a client draws the name on the open card and 'the <role>' everywhere else, numbering a repeated role (CARD-12)."
     },
     "group": {
       "type": [
@@ -293,6 +300,10 @@
       "minLength": 1,
       "maxLength": 200,
       "description": "On a withdrawn ask: the service's words on why (ASKS-4)."
+    },
+    "answered_elsewhere": {
+      "const": true,
+      "description": "On an ask withdrawn with elsewhere: it was settled in the service's own app; it stands only in history (27.10, CARD-17)."
     }
   },
   "$defs": {

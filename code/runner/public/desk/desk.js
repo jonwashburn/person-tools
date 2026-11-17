@@ -238,8 +238,8 @@ function yesNo(t) {
     const [no, yes] = s.choices.length > 2 ? s.choices : twoChoices(s.choices);
     return { no: { label: no, body: { action: 'answer', choice: no } }, yes: yes !== undefined ? { label: yes, body: { action: 'answer', choice: yes } } : null };
   }
-  if (k === 'approve') return { no: { label: s.deny_label || 'Deny', body: { action: 'deny' } },
-    yes: { label: s.approve_label || 'Approve', body: { action: 'approve' } } };
+  if (k === 'approve') return { no: { label: refs(t, s.deny_label || 'Deny', true), body: { action: 'deny' } },
+    yes: { label: refs(t, s.approve_label || 'Approve', true), body: { action: 'approve' } } };
   if (k === 'dial') return { no: { label: 'Not now', body: { action: 'not_now' } }, yes: { label: 'Called', body: { action: 'answer' } } };
   if (k === 'words' || k === 'link' || k === 'command') return { no: { label: 'Not now', body: { action: 'not_now' } },
     yes: { label: 'Done', body: { action: 'done' } } };
@@ -730,8 +730,8 @@ function labelFor(t, body) {
   if (body.action === 'answer') return body.choice != null ? refs(t, body.choice, false) + (body.text ? ': “' + body.text + '”' : '') : '“' + (body.text || '') + '”';
   if (body.action === 'done') return 'Done';
   if (body.action === 'not_now') return 'Not now';
-  if (body.action === 'approve') return (t.step.approve_label || 'Approve') + (body.text ? ' (your edited words)' : '');
-  if (body.action === 'deny') return t.step.deny_label || 'Deny';
+  if (body.action === 'approve') return refs(t, t.step.approve_label || 'Approve', false) + (body.text ? ' (your edited words)' : '');
+  if (body.action === 'deny') return refs(t, t.step.deny_label || 'Deny', false);
   return body.action;
 }
 function answer(t, body) {
@@ -1349,7 +1349,7 @@ function cardFor(t) {
       h('span', { class: 'url', title: s.url || '' }, s.url || ''),
       u ? h('a', { class: 'btn', href: u.href, target: '_blank', rel: 'noopener noreferrer', id: 'open-link' }, 'Open link', kbd('O')) : null));
   }
-  if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', linked(t.unlocks), '”')));
+  if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', linked(refs(t, t.unlocks, true)), '”')));
   if (leftWords(t.expires_at)) kids.push(h('p', { class: 'note-state' }, 'If you do not answer by ' + fmtClock.format(ms(t.expires_at)) + ', the ask closes and ' + whoName(t) + ' is told you did not answer. Nothing is chosen for you.'));
 
   if (s.text && slot >= 0 && (k === 'choice' || k === 'words')) kids.push(h('div', { class: 'ask-words' + (t.sender ? ' mine' : '') }, h('p', null, linked(rf(s.text)))));
@@ -1378,7 +1378,7 @@ function cardFor(t) {
       input.value = d.lineText || '';
       input.addEventListener('input', () => { d.lineText = input.value; });
       input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); sendLine(); } });
-      kids.push(h('div', { class: 'field line-for' }, h('label', { class: 'label', for: 'f-line' }, lineFor(t, c)), input,
+      kids.push(h('div', { class: 'field line-for' }, h('label', { class: 'label', for: 'f-line' }, refs(t, lineFor(t, c), true)), input,
         h('div', { class: 'answers' }, ansBtn('Send ' + rf(c), '↵', sendLine, 'btn-you'),
           h('button', { class: 'linkish', type: 'button', onclick: () => { d.lineFor = null; S.cardSig = ''; renderCard(true); } }, 'Choose again'))));
     }
@@ -1527,8 +1527,8 @@ function historyAnswer(t) {
   if (r.action === 'answer') return r.choice != null ? 'You picked ' + refs(t, r.choice, false) + (r.text ? ': ' + r.text : '') : r.text ? 'You wrote: ' + r.text : 'Answered';
   if (r.action === 'done') return 'Done';
   if (r.action === 'not_now') return 'Not now';
-  if (r.action === 'approve') return (s.approve_label || 'Approve') + (r.approved_text && r.approved_text !== s.text ? ', with your words' : '');
-  if (r.action === 'deny') return s.deny_label || 'Deny';
+  if (r.action === 'approve') return refs(t, s.approve_label || 'Approve', false) + (r.approved_text && r.approved_text !== s.text ? ', with your words' : '');
+  if (r.action === 'deny') return refs(t, s.deny_label || 'Deny', false);
   // an ask settled in the service's own app says so; one it withdrew says who did (27.2, ASKS-4)
   if (t.state === 'withdrawn') return settledElsewhere(t) ? 'Answered in ' + ((brandOf(t) && brandOf(t).name) || whoName(t)) : 'Withdrawn by ' + whoName(t);
   if (t.state === 'lapsed') return 'Closed without an answer';
@@ -1536,7 +1536,7 @@ function historyAnswer(t) {
 }
 function searchText(t) {
   const r = t.reply || {}, s = t.step || {};
-  return [refs(t, t.title, false), refs(t, s.text, false), s.command, s.url, (s.choices || []).map((c) => refs(t, c, false)).join(' '), whoName(t), t.unlocks, r.choice, r.text, r.note, r.approved_text,
+  return [refs(t, t.title, false), refs(t, s.text, false), s.command, s.url, (s.choices || []).map((c) => refs(t, c, false)).join(' '), whoName(t), refs(t, t.unlocks, false), r.choice, r.text, r.note, r.approved_text,
     (t.notes || []).map((n) => n.note).join(' '), historyAnswer(t), passerName(t), cardWords(t)].filter(Boolean).join(' \n ').toLowerCase();
 }
 function cardWords(t) { // the words of an ask's card blocks, for search: headline, text, facts, when and where, price
@@ -1571,7 +1571,7 @@ function renderHistory() {
   if (kindOf(t) === 'command') kids.push(h('div', { class: 'cmd' }, h('pre', null, s.command || '')));
   else if (s.text) kids.push(h('div', { class: 'ask-words' }, h('p', null, linked(refs(t, s.text, false)))));
   if (kindOf(t) === 'link' && s.url) kids.push(h('p', { class: 'cmd-where' }, s.url));
-  if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', t.unlocks, '”')));
+  if (t.unlocks) kids.push(h('div', { class: 'unlocks' }, h('span', { class: 'label' }, 'After your answer, in its words'), h('p', { class: 'its-words' }, '“', refs(t, t.unlocks, false), '”')));
   kids.push(h('div', { class: 'sent-as' }, h('span', { class: 'label' }, 'Your answer · ' + when(r.at)), h('p', null, historyAnswer(t)),
     r.action === 'approve' && r.approved_text && r.approved_text !== s.text ? h('p', null, '“' + r.approved_text + '”') : null,
     (r.action === 'approve' || r.action === 'deny') && r.device_approved === false ? h('p', { class: 'help' }, 'Sent without a device signature: the AI sees it carries no device mark.') : null,

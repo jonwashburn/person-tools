@@ -1,9 +1,9 @@
 {
- "id": "tester-notice-self-1",
+ "id": "tester-notice-self-3",
  "in_force": "for people who make their own page (POST /v1/account/start; the CEO, 2:21 PM CT 15 Nov 2026), from 16 Nov 2026",
  "owner": "TRUST; the person's pages render it verbatim; the .md beside it is generated from this file",
  "title": "Before you make your page: your own AIs ask you here",
- "lede": "person.tools is a service that is not launched yet. Your page is where the AIs you connect (a home camera, a car, a business program, your own scripts) can ask you short questions and wait for your answer. Nobody else can join your page or ask you through it.",
+ "lede": "Your page is where the AIs you connect (a home camera, a car, a business program, your own scripts) ask you short questions, and you answer. Only those AIs can ask you here; nobody else can join your page. person.tools is new and still in preview: it is free, and it may change.",
  "sections": [
   {
    "label": "Free",
@@ -19,7 +19,7 @@
   },
   {
    "label": "When you are rung",
-   "text": "Your page starts On, because only your own AIs can ask you; turn it Off at any time. An ask your AI marks “now” rings once, outside your quiet hours (9 PM to 8 AM your time unless you change it); every other ask waits on your list. An ask's alert says only who is asking, never what they wrote, unless you turn on “Show the ask in my alerts” in your settings; then it may show the ask's first line, up to 80 characters. Your phone's own preview setting still decides what shows on a locked screen."
+   "text": "An ask your AI marks “now” rings once, outside your quiet hours (9 PM to 8 AM your time unless you change it); every other ask waits on your list. To stop one AI ringing, quiet it (its asks still arrive) or revoke it. An ask's alert says only who is asking, never what they wrote, unless you turn on “Show the ask in my alerts” in your settings; then it may show the ask's first line, up to 80 characters. Your phone's own preview setting still decides what shows on a locked screen."
   },
   {
    "label": "Your answers",
@@ -31,7 +31,7 @@
   },
   {
    "label": "Stop, leave, delete",
-   "text": "Turn Off, revoke an AI, or leave at any time. Leaving deletes your page, your answers and their records: from the service at once, and from every copy within 30 days."
+   "text": "Quiet or revoke an AI, or leave, at any time. Leaving deletes your page, your answers and their records: from the service at once, and from every copy within 30 days."
   },
   {
    "label": "How long we keep it",
@@ -53,5 +53,7 @@
   "notice id",
   "time accepted (router clock)",
   "the adult statement"
- ]
+ ],
+ "previous_id": "tester-notice-self-2",
+ "changed": "tester-notice-self-3 (16 Nov 2026, OWNER_router_34 item 3): the opening says first what the page is for; that the service is a free preview that may change comes second, plainly. Nothing else changed."
 }

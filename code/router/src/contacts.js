@@ -34,9 +34,12 @@ function readOne(c, i) {
 }
 
 // the words an ask carries that may refer to a contact, with where each stands
-export function askWords(title, step, card) {
+export function askWords(title, step, card, unlocks) {
   const w = [['title', title]];
-  if (step) { if (step.text) w.push(['step.text', step.text]); (step.choices || []).forEach((c, i) => w.push([`step.choices[${i}]`, c])); }
+  if (unlocks) w.push(['unlocks', unlocks]);   // PROTOCOL 9:58: unlocks, line_for labels and approval labels may refer too
+  if (step) { if (step.text) w.push(['step.text', step.text]); (step.choices || []).forEach((c, i) => w.push([`step.choices[${i}]`, c]));
+    for (const [k, v] of Object.entries(step.line_for || {})) w.push([`step.line_for.${k}`, v]);
+    if (step.approve_label) w.push(['step.approve_label', step.approve_label]); if (step.deny_label) w.push(['step.deny_label', step.deny_label]); }
   for (const [i, b] of ((card && card.blocks) || []).entries()) {
     const f = `card.blocks[${i}]`;
     if (b.headline) w.push([f + '.headline', b.headline]); if (b.text) w.push([f + '.text', b.text]);
@@ -48,7 +51,7 @@ export function askWords(title, step, card) {
 }
 // unlocks and the remaining card words: checked for long numbers, never for references
 function otherWords(unlocks, card) {
-  const w = unlocks ? [['unlocks', unlocks]] : [];
+  const w = [];   // unlocks is read with the ask's own words (askWords)
   for (const [i, b] of ((card && card.blocks) || []).entries()) { if (b.quote && b.quote.by) w.push([`card.blocks[${i}].quote.by`, b.quote.by]); if (b.facts) b.facts.forEach((r, j) => w.push([`card.blocks[${i}].facts[${j}].label`, r.label])); }
   return w;
 }
@@ -63,7 +66,7 @@ export function askContacts(raw, { title, step, card, unlocks }, placedAt) {
     for (const c of list) c.consent_at = iso(placedAt);
   }
   const has = new Set((list || []).map((c) => c.id));
-  for (const [field, v] of askWords(title, step, card)) for (const m of v.matchAll(REF_RX)) if (!has.has('c' + m[1])) throw fixable('unknown_reference', field, `{c${m[1]}} names a contact this ask does not carry.`, null, {}, 400);
+  for (const [field, v] of askWords(title, step, card, unlocks)) for (const m of v.matchAll(REF_RX)) if (!has.has('c' + m[1])) throw fixable('unknown_reference', field, `{c${m[1]}} names a contact this ask does not carry.`, null, {}, 400);
   if (step && step.type === 'call') {
     const c = (list || []).find((x) => x.id === step.contact);
     if (!c) throw fixable('unknown_reference', 'step.contact', `${step.contact} is not a contact of this ask.`, 'c1', {}, 400);
@@ -72,7 +75,7 @@ export function askContacts(raw, { title, step, card, unlocks }, placedAt) {
   for (const [i, b] of ((card && card.blocks) || []).entries()) if (b.contact && !has.has(b.contact)) throw fixable('unknown_reference', `card.blocks[${i}].contact`, `${b.contact} is not a contact of this ask.`, null, {}, 400);
   if (list) for (const [i, c] of list.entries()) if (c.ref && LONG_NUMBER.test(c.ref)) throw fixable('number_outside_contacts', `contacts[${i}].ref`, 'A ref outlives the ask, so it never holds a long number: give the id a letter prefix, such as lead-5125.', 'lead-5125', {}, 400);   // TRUST 5:06
   if (list) for (const [i, c] of list.entries()) if (c.name && LONG_NUMBER.test(c.name)) throw fixable('number_outside_contacts', `contacts[${i}].name`, 'A long number goes in the contact\'s phone, never in its name.', EXAMPLE, {}, 400);
-  if (list) for (const [field, v] of [...askWords(title, step, card), ...otherWords(unlocks, card)]) if (LONG_NUMBER.test(v)) throw fixable('number_outside_contacts', field, 'A long number in an ask that carries contacts goes in contacts: put it there and write {c1} where it stood.', EXAMPLE, {}, 400);
+  if (list) for (const [field, v] of [...askWords(title, step, card, unlocks), ...otherWords(unlocks, card)]) if (LONG_NUMBER.test(v)) throw fixable('number_outside_contacts', field, 'A long number in an ask that carries contacts goes in contacts: put it there and write {c1} where it stood.', EXAMPLE, {}, 400);
   return list;
 }
 // a person's ask to their own people, a call or an offer: no one else's details (ASKS-20)

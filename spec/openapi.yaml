@@ -946,7 +946,7 @@ paths:
       summary: "The brand this key gives, and whether its domain is proved (section 27.3)."
       security: [{bearer: []}]
       responses:
-        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, id: {type: string, pattern: "^br_"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
         "401": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
     put:
@@ -956,7 +956,7 @@ paths:
       security: [{bearer: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "./schemas/brand_request.json"}}}}
       responses:
-        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
+        "200": {description: "The answer.", content: {application/json: {schema: {type: object, required: [brand, verified], properties: {brand: {$ref: "./schemas/brand.json"}, id: {type: string, pattern: "^br_"}, domain: {type: [string, "null"]}, verified: {type: boolean}, updated_at: {$ref: "./schemas/common.json#/$defs/time"}, prove_it: {type: object, required: [token, file, txt_name], properties: {token: {type: string}, file: {type: string}, txt_name: {type: string}}}}}}}}
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
   /v1/brand/mark:
@@ -1015,6 +1015,17 @@ paths:
         "400": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
         "410": {$ref: "#/components/responses/Error"}
+  /v1/connect/brand:
+    post:
+      operationId: connectBrand
+      tags: [asks]
+      summary: "The connect page's own look-up of a brand and its return address, with no key (section 27.9)."
+      security: [{}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [brand, return], additionalProperties: false, properties: {brand: {type: string, pattern: "^br_"}, return: {type: string, pattern: "^https://\\S+$"}}}}}}
+      responses:
+        "200": {description: "The brand as the person will see it, and that return is on its domain.", content: {application/json: {schema: {type: object, required: [brand, return_ok], properties: {brand: {type: object, required: [id, name, domain, verified], properties: {id: {type: string, pattern: "^br_"}, name: {type: string}, domain: {type: string}, verified: {type: boolean}}}, return_ok: {const: true}, urgencies: {type: array, items: {enum: [now, today, whenever]}}, note: {type: string}}}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
 components:
   schemas:
     JWKS:

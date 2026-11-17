@@ -1,7 +1,7 @@
 // The router's HTTP surface (askpeople-api), to the standard's HTTP binding (spec section 19).
 // Every request first settles whatever is overdue (no background loop anywhere).
 import CANON_STATUS from './canon_status.json';   // the canon's status line, written into the build by bin/golive
-import { rid, nowMs, iso, fmt, sha256hex, apiBase, siteBase, parseUsd, teamCheck } from './util.js';
+import { rid, nowMs, iso, fmt, sha256hex, apiBase, siteBase, runnerBase, parseUsd, teamCheck } from './util.js';
 import { CallError, notFixable, fixable, LIMITS, PAY_FLOOR_CENTS_PER_HOUR, SAMPLE_ID } from './spec.js';
 import { quote, openCall, results, cancelCall, settle, getCallFor, callObject, outcome, ANON } from './calls.js';
 import { getSeat, takeSeat, postEvents, postResponse, postStop, seatMedia, seatReceipt, serveMedia, memberOffers, memberReceipts, memberLeave, memberSettings, memberPush, callSeatsForTeam } from './seats.js';
@@ -133,13 +133,13 @@ function discovery(request) {
     webhook_header_prefix: 'x-person-tools',   // 27.2: the prefix of the headers on answers delivered to a service
     profiles: [BUILD.wire_prefix + '/fair-call/0.1'],   // DISC-3: its checks (F01-F04) pass and are held by the baseline
     screening_policy: siteBase(request) + '/policy',
+    connect_page: runnerBase(request) + '/connect',   // 27.9 (PROTOCOL 8:33 PM CT 16 Nov): where a service sends a person to connect it
     test_keys: base + '/v1/keys',
     privacy_floor: 20,
     pay_floor_usd_per_hour: fmt(PAY_FLOOR_CENTS_PER_HOUR),
     limits: { max_people: LIMITS.max_people, max_deadline_minutes: LIMITS.max_deadline_minutes, max_wait_seconds: LIMITS.max_wait_seconds, stop_minimum_usd: LIMITS.stop_minimum_usd },
     retention: { recordings_days: 90, responses_days: 395, records_days: 30 },
-    test_money: true,
-    ext: { [(BUILD.names && (BUILD.names.domain || BUILD.names.network)) || 'person.tools']: { status: CANON_STATUS.plain || 'preview: simulated people for everyone; real calls by invitation; all money is test money', names: BUILD.names,
+    ext: { [(BUILD.names && (BUILD.names.domain || BUILD.names.network)) || 'person.tools']: { test_money: true, status: CANON_STATUS.plain || 'preview: simulated people for everyone; real calls by invitation; all money is test money', names: BUILD.names,
       wire_note: 'The wire name is a placeholder until the standard is final; it changes once, then never.', what_you_pay: WHAT_YOU_PAY,
       mcp_protocol_versions: ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'], no_key: 'quotes and simulated calls work without a key', build: BUILD.stamp,
       // REACH 2:39 PM CT: agents learn connections where they read the API
@@ -521,7 +521,7 @@ export async function handle(request, env, ctx) {
     if ((m = /^\/v1\/members\/(mt_[a-z0-9]+)\/settings$/.exec(path)) && ['GET', 'POST', 'PATCH'].includes(request.method)) {
       const S = await import('./seats.js'); const PP = await import('./people.js'); const mm = await S.memberByToken(env, m[1]);
       const allowed = await PP.alertWordsAllowed(env, mm);   // until TRUST's attack holds and it is opened: test members only, and nobody else sees it
-      if (request.method === 'GET') { const r = await S.memberSettingsRead(env, request, m[1]); if (allowed) r.settings = { ...(r.settings || {}), alert_words: await PP.alertWordsOf(env, mm.id) }; if (await PP.isOwnPage(env, mm)) r.own_page = true; return json(r); }
+      if (request.method === 'GET') { const r = await S.memberSettingsRead(env, request, m[1]); if (allowed) r.settings = { ...(r.settings || {}), alert_words: await PP.alertWordsOf(env, mm.id) }; if (await PP.isOwnPage(env, mm)) r.own_page = true; const wca = await PP.whoCanAsk(env, mm); if (wca) { r.who_can_ask = wca; r.people_panel = true; } return json(r); }   // OWNER_router_33
       const b = await body(request); let aw;
       if (b && Object.prototype.hasOwnProperty.call(b, 'alert_words')) {
         if (typeof b.alert_words !== 'boolean') throw fixable('invalid_field', 'alert_words', 'alert_words is true or false: show an ask\'s first line in your own alerts (off unless you turn it on).', false);
@@ -739,7 +739,7 @@ export async function handle(request, env, ctx) {
         if (!mm) throw notFixable(404, 'not_found', 'No such member.');
         const { offerAlert, taskAlert } = await import('./apns.js'); const sound = mm.sounds !== 0, at = nowMs() + 60000;
         return json({ member_id: mm.id, sounds: sound, apns_offer: offerAlert({ askerName: 'Preview', privatePanel: true, kind: 'listen', minutes: 2, payCents: 0, callId: 'call_preview', seatId: 'st_preview', expiresAt: at, sound }),
-          apns_task: taskAlert({ program: 'preview', taskId: 'tk_preview', sound }), web: { silent: !sound } });
+          apns_task: taskAlert({ program: 'Preview', taskId: 'tk_preview', sound }), web: { silent: !sound } });
       }
       if ((m = /^\/internal\/principals\/(pr_[a-z0-9]+)\/owner$/.exec(path)) && request.method === 'POST') {   // OWNER_router_5: the operator corrects who owns a principal, with why
         if (!env.ADMIN_TOKEN || tok !== env.ADMIN_TOKEN) throw notFixable(401, 'unauthorized', 'No.');

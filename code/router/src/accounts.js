@@ -153,8 +153,8 @@ export async function startPage(env, request, b, ipHash, teamHeader) {
   if (b.us_resident !== true) throw fixable('invalid_field', 'us_resident', 'For now only adults living in the United States may make a page.', true);
   // TRUST 3:08 PM CT 16 Nov: a page of your own accepts its own notice (SELF_NOTICE_IDS); the general ids stay accepted only until the page
   // that sends self-1 is live everywhere (step 2 takes them out)
-  const SELF_NOTICE_IDS = ['tester-notice-self-1'];
-  if (b.notice_accepted !== true || !SELF_NOTICE_IDS.includes(b.notice_id)) throw fixable('invalid_field', 'notice_id', 'Read the notice for a page of your own (tester-notice-self-1) and accept it.', SELF_NOTICE_IDS[0]);   // step 2 (the page sends self-1 since 4:22 PM CT 16 Nov)
+  const SELF_NOTICE_IDS = ['tester-notice-self-3', 'tester-notice-self-2'];   // OWNER_router_34 item 3: the page serves self-3
+  if (b.notice_accepted !== true || !SELF_NOTICE_IDS.includes(b.notice_id)) throw fixable('invalid_field', 'notice_id', `Read the notice for a page of your own (${SELF_NOTICE_IDS[0]}) and accept it.`, SELF_NOTICE_IDS[0]);   // step 2 (the page sends self-1 since 4:22 PM CT 16 Nov)
   const now = nowMs();
   // 3:3x PM CT 16 Nov: our own checks' pages (made with the team header; their member is not real) never count toward a stranger's five:
   // every page through run.person.tools reaches us from the relay's address, and 36 test pages a day had filled that address's five

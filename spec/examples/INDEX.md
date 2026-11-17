@@ -221,6 +221,7 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/member_connection/branded.json` | ASKS-24, a connection whose asks wear a brand |
 | `valid/member_connection_secret/new.json` | 26.8, a connection's new webhook secret, shown once |
 | `valid/member_task/withdrawn.json` | ASKS-4, a withdrawn ask still listed for a day, with when and why |
+| `valid/member_task/answered_elsewhere.json` | 27.10, an ask settled in the service's own app, as history shows it |
 
 ## Invalid (each for exactly one reason)
 

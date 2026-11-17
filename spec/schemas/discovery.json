@@ -212,6 +212,10 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{0,40}$",
       "description": "For a server that lists branded_asks: the prefix of the headers on the answers it delivers to a service (27.2); without it, the wire prefix."
+    },
+    "connect_page": {
+      "$ref": "common.json#/$defs/abs_url",
+      "description": "For a server that offers 27.9: the address of its connect page, where a service sends a person to connect."
     }
   },
   "additionalProperties": false

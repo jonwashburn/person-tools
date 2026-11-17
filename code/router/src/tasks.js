@@ -186,9 +186,12 @@ export async function ringTask(env, t) {
   if (t.group_name && t.key_id && await env.DB.prepare('SELECT 1 AS x FROM tasks WHERE key_id = ? AND group_name = ? AND panel_id = ? AND to_name = ? AND id != ? AND rang_at IS NOT NULL AND rang_at >= ? LIMIT 1').bind(t.key_id, t.group_name, t.panel_id, t.to_name, t.id, now - 60000).first()) return false;
   const ms = (await env.DB.prepare(t.to_name.startsWith('mb:') ? 'SELECT * FROM members WHERE id = ? AND left_at IS NULL' : 'SELECT * FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL')
     .bind(...(t.to_name.startsWith('mb:') ? [t.to_name.slice(3)] : [t.panel_id, t.to_name])).all()).results || [];
+  const pkr = await env.DB.prepare('SELECT join_code_hash FROM panels WHERE id = ?').bind(t.panel_id).first(); const asksOnly = /^(?:self|people):/.test((pkr && pkr.join_code_hash) || '');
   let rang = false;
   for (const m of ms) {
-    if (!ringDecision(m, now, []).ok) continue;
+    // OWNER_router_33: a panel that takes only asks (a page of your own, a person's people) shows no On/Off, so its asks ring as if On;
+    // quiet hours, the caps and mutes still hold
+    if (!ringDecision(asksOnly ? { ...m, on_state: 'on', on_until: null } : m, now, []).ok) continue;
     let ok = false;
     if (m.push_json) { const { ringMember } = await import('./calls.js'); const r = await ringMember(env, m).catch(() => ({ ok: false })); ok = ok || !!r.ok; }
     if (m.apns_token) {
@@ -415,7 +418,7 @@ export async function memberTasks(env, request, m, q) {
     env.DB.prepare(`SELECT DISTINCT c.id, c.name, c.icon FROM connections c JOIN tasks t ON t.connection_id = c.id WHERE ${mine}`).bind(...mineArgs),
     env.DB.prepare(`SELECT o.task_id, o.content_type, o.bytes, o.seconds, o.delete_at FROM own_material o JOIN tasks t ON t.id = o.task_id WHERE ${mine}`).bind(...mineArgs),
     ...P.deckStatements(env, m),
-    env.DB.prepare("SELECT 1 AS own FROM panels WHERE id = ? AND join_code_hash LIKE 'self:%'").bind(m.panel_id),   // last: own_page (REACH 3:35)
+    env.DB.prepare("SELECT (p.join_code_hash LIKE 'self:%') AS own, (EXISTS (SELECT 1 FROM panel_owners po WHERE po.panel_id = p.id) AND NOT EXISTS (SELECT 1 FROM owner_members om WHERE om.member_id = ? AND om.panel_id = p.id)) AS people FROM panels p WHERE p.id = ?").bind(m.id, m.panel_id),   // last: own_page (REACH 3:35), people_panel (OWNER_router_33)
   ])) || []).map(r => (r && r.results) || []);
   const extras = P.deckFromResults(m, rs.slice(5));   // OWNER_router_18: the notice, answers to read, what was passed on
   // asks from a person wait for the one-time notice (OWNER_router_18 item 8d)
@@ -433,12 +436,13 @@ export async function memberTasks(env, request, m, q) {
     ...(t.contacts_json ? { contacts: CT.forPerson(CT.parse(t.contacts_json)) } : {}),   // OWNER_router_29: never the service's ref
     ...(t.group_name ? { group: t.group_name, group_id: (t.connection_id || t.principal_id) + '/' + t.group_name } : {}),   // OWNER_router_31; group_id: TRUST 7:40 (one service's group)
     ...(t.elsewhere ? { answered_elsewhere: true } : {}),   // OWNER_router_31 (CARD-17): settled in the service's own app
-    ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: `You joined ${t.program || 'this person'}'s people. The name is their account's, checked by person.tools; it is never typed into the ask.` } } : {}),
+    ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: 'The person who invited you.' } } : {}),   // OWNER_router_34 item 2
     ...(t.passed_by ? { passed_on_by: t.passed_by_name || 'one of your people' } : {}),
     shell_only: JSON.parse(t.step_json).type === 'command' ? 'Only you can run this: copy the line and paste it where it says. The service cannot run it for you.' : undefined });
   const groups = [];
   for (const t of open) { const g = groups.find(x => x.from === (t.program || 'one of your programs')); if (g) g.task_ids.push(t.id); else groups.push({ from: t.program || 'one of your programs', task_ids: [t.id] }); }
-  const out = { open: open.map(view), groups, history: hist.map(view), ...extras, ...((rs[rs.length - 1] || [])[0] ? { own_page: true } : {}) };
+  const pk = (rs[rs.length - 1] || [])[0] || {};
+  const out = { open: open.map(view), groups, history: hist.map(view), ...extras, ...(pk.own ? { own_page: true } : {}), ...(pk.people ? { people_panel: true } : {}) };
   // OWNER_router_9: each ask's card as its asker sent it, and the asker's brand; "from" stays the service's own
   { const rows = [...open, ...hist], brands = {};
     const { brandView } = await import('./cards.js');   // OWNER_router_26 items 1, 3, 24: proved brands to all; test brands to test members only

@@ -570,6 +570,13 @@ function firstLine(text, max = 80) {
   return (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s,;:.-]+$/, '') + '\u2026';
 }
 // REACH 3:35 PM CT 16 Nov: a page of your own (made at /start) leads with the person's own AIs
+// OWNER_router_33: who can ask a person's invitee (the panel's owner), and how the person mutes or unmutes them in place
+export async function whoCanAsk(env, m) {
+  const o = m && await panelOwner(env, m.panel_id); if (!o) return null;
+  if (await env.DB.prepare('SELECT 1 AS x FROM owner_members WHERE member_id = ? AND panel_id = ?').bind(m.id, m.panel_id).first()) return null;   // the owner's own membership
+  const mu = await env.DB.prepare('SELECT id FROM mutes WHERE member_id = ? AND principal_id = ?').bind(m.id, o.principal_id).first();
+  return [{ kind: 'person', name: o.name, muted: !!mu, ...(mu ? { mute_id: mu.id, unmute: 'DELETE /v1/member/mutes/' + mu.id } : { mute: { path: '/v1/member/mutes', body: { panel_owner: true } } }) }];
+}
 export async function isOwnPage(env, m) {
   return !!(m && await env.DB.prepare("SELECT 1 AS x FROM panels WHERE id = ? AND join_code_hash LIKE 'self:%'").bind(m.panel_id).first());
 }

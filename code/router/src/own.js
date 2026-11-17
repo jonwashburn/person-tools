@@ -122,6 +122,7 @@ async function secretOf(env, c) { return c.secret_enc ? new TextDecoder().decode
 
 export function webhookUrl(v, publicHost) {
   let u; try { u = new URL(String(v)); } catch { throw fixable('invalid_field', 'webhook', 'webhook is one https address where the answer is sent.', 'https://example.com/person-tools/answers'); }
+  if (/\.(?:example|test|invalid|localhost)\.?$/i.test(u.hostname)) throw fixable('invalid_field', 'webhook', 'webhook is a public address: .example, .test, .invalid and .localhost names reach no one.', 'https://example.com/person-tools/answers');   // PROTOCOL 8:33
   if (!publicHost(u) || u.username || u.password) throw fixable('invalid_field', 'webhook', 'webhook is a plain public https address (no bare IP, no internal name, not this service).', 'https://example.com/person-tools/answers');
   return u.toString();
 }

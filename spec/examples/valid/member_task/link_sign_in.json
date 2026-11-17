@@ -19,6 +19,6 @@
   "sender": {
     "name": "Robin",
     "kind": "person",
-    "behind": "The person whose panel you joined; the name is the one on their account."
+    "behind": "The person who invited you."
   }
 }

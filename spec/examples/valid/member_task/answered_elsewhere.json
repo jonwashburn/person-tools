@@ -1,0 +1,83 @@
+{
+  "task_id": "tk_hol03",
+  "title": "Christmas Eve is Thursday, Dec 24. Are you open?",
+  "urgency": "whenever",
+  "from": "Northside Motors",
+  "connection": {
+    "id": "cn_north01",
+    "name": "Northside Motors",
+    "icon": null,
+    "yours": true
+  },
+  "step": {
+    "type": "question",
+    "text": "Are you open?",
+    "choices": [
+      "Open as usual",
+      "Closed",
+      "Other hours"
+    ],
+    "line_for": {
+      "Other hours": "Your hours that day"
+    }
+  },
+  "card": {
+    "blocks": [
+      {
+        "headline": "Christmas Eve is Thursday, Dec 24."
+      },
+      {
+        "text": "Shoppers and callers will ask. Tell me once and the AI uses it."
+      },
+      {
+        "when_where": {
+          "when": "Thu 24 Dec"
+        }
+      },
+      {
+        "choices": [
+          "Open as usual",
+          "Closed",
+          "Other hours"
+        ]
+      }
+    ]
+  },
+  "created_at": "2026-11-23T15:00:00Z",
+  "expires_at": "2026-12-23T15:00:00Z",
+  "state": "withdrawn",
+  "reply": null,
+  "notes": [],
+  "brand": {
+    "name": "Northside Motors",
+    "domain": "northside.example",
+    "mark": {
+      "states": {
+        "needs_you": {
+          "media": "m_mark0001",
+          "url": "https://api.example.com/v1/brand_media/m_mark0001"
+        },
+        "idle": {
+          "glyph": "ring",
+          "colour": "#8f8f8f"
+        }
+      }
+    },
+    "colours": {
+      "ink": "#0d0d0d",
+      "ink_soft": "#5d5d5d",
+      "rule": "#e6e6e6"
+    },
+    "grounds": {
+      "light": "#ffffff"
+    },
+    "corners": "round",
+    "quiet_line": "Nothing needs you.",
+    "id": "br_north01",
+    "verified": false,
+    "test": true
+  },
+  "withdrawn_at": "2026-11-23T16:00:00Z",
+  "withdraw_why": "Answered in Northside Motors' own app.",
+  "answered_elsewhere": true
+}

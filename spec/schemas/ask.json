@@ -178,6 +178,16 @@
     },
     "lapsed_at": {
       "type": "string"
+    },
+    "key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The ask's idempotency_key (27.2), or null."
+    },
+    "answered_elsewhere": {
+      "type": "boolean"
     }
   },
   "description": "Servers may add fields; a service ignores what it does not know."

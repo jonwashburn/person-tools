@@ -54,7 +54,7 @@ export function isYesNo(step) {
 }
 export function taskAlert({ program, taskId, sound = true, step = null }) {
   const yesno = isYesNo(step), who = program || 'one of your programs';
-  return { aps: { alert: { title: 'A task for you', body: yesno ? `From ${who}. Press and hold to answer.` : `From ${who}.` }, category: yesno ? 'YESNO' : 'TASK', 'thread-id': 'tasks',
+  return { aps: { alert: { title: String(who).slice(0, 80), body: 'Press and hold to answer.' }, category: yesno ? 'YESNO' : 'TASK', 'thread-id': 'tasks',   // OWNER_router_34: who is asking, then how to answer
     'mutable-content': 1, ...(sound ? { sound: 'ring.caf' } : {}), 'interruption-level': 'time-sensitive' }, task_id: taskId };
 }
 
