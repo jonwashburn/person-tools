@@ -1,9 +1,9 @@
 {
- "id": "tester-notice-people-3",
+ "id": "tester-notice-people-4",
  "in_force": "for people who join a person's people-only panel (OWNER_router_23; policy/TASKS.md rules 9 to 15), from 15 Nov 2026",
  "owner": "TRUST; the person's pages render it verbatim; the .md beside it is generated from this file",
  "title": "Before you join: let {owner} send you asks",
- "lede": "{owner} uses person.tools, a service that is not launched yet, to send short tasks and questions to people they know. {owner} sent you this link. ({owner} is the name on their account, checked by person.tools.)",
+ "lede": "{owner} uses person.tools to send short asks to people they know: a question with a few choices, a link to open, or a small thing to do. {owner} sent you this link. ({owner} is the name on their account, checked by person.tools.) person.tools is new and still in preview: it is free, and it may change.",
  "sections": [
   {
    "label": "Unpaid",
@@ -54,6 +54,6 @@
   "time accepted (router clock)",
   "the adult statement"
  ],
- "previous_id": "tester-notice-people-2",
- "changed": "tester-notice-people-3 (16 Nov 2026, OWNER_router_33 item 2): words only, in the invitee's terms. The title and the agree line say \"let {owner} send you asks\" instead of joining a panel; what rings (an ask {owner} marks now) and what never does (a stranger's call) are said; leaving says what it stops and deletes; \"panel\" is gone from what a person reads. Amended before it shipped (about 9:19 PM CT): a people panel has no On or Off (SERVICE, OWNER_router_33 item 3), so a ring depends only on quiet hours, the ring caps and your mute."
+ "previous_id": "tester-notice-people-3",
+ "changed": "tester-notice-people-4 (17 Nov 2026, OWNER_router_36 item 2): the opening says \"asks\" (no \"tasks\"), says what an ask can be, and puts the free preview after what the invitee is joining, as in tester-notice-self-3. Nothing else changed."
 }

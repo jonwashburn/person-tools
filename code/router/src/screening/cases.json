@@ -9463,6 +9463,48 @@
    },
    "rule": "undecided",
    "note": "a leading numbered label before a colon (1.5.1, 16 Nov 2026)"
+  },
+  {
+   "id": "FM-1",
+   "expect": "ALLOW",
+   "outcome": true,
+   "ctx": {},
+   "call": {
+    "ask": "We moved the Northside & Sons sign to the left, as most of you said."
+   },
+   "note": "a firm named for a family is a name, not children (1.5.2, 17 Nov 2026)"
+  },
+  {
+   "id": "FM-2",
+   "expect": "ALLOW",
+   "outcome": true,
+   "ctx": {},
+   "call": {
+    "ask": "We renamed the shop Abbott and Daughters because most of you liked it best."
+   },
+   "note": "a firm named for a family is a name, not children (1.5.2, 17 Nov 2026)"
+  },
+  {
+   "id": "FM-3",
+   "expect": "HOLD",
+   "outcome": true,
+   "ctx": {},
+   "call": {
+    "ask": "We asked your sons which shelf they liked best."
+   },
+   "rule": "mentions_children",
+   "note": "a firm named for a family is a name, not children (1.5.2, 17 Nov 2026)"
+  },
+  {
+   "id": "FM-4",
+   "expect": "HOLD",
+   "outcome": true,
+   "ctx": {},
+   "call": {
+    "ask": "Northside & Sons asked the kids which shelf they liked."
+   },
+   "rule": "mentions_children",
+   "note": "a firm named for a family is a name, not children (1.5.2, 17 Nov 2026)"
   }
  ]
 }

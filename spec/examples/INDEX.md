@@ -222,6 +222,7 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/member_connection_secret/new.json` | 26.8, a connection's new webhook secret, shown once |
 | `valid/member_task/withdrawn.json` | ASKS-4, a withdrawn ask still listed for a day, with when and why |
 | `valid/member_task/answered_elsewhere.json` | 27.10, an ask settled in the service's own app, as history shows it |
+| `valid/test_member/made.json` | 26.13, a test member made by a test key for a conformance run |
 
 ## Invalid (each for exactly one reason)
 
@@ -427,3 +428,4 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `invalid/ask_request/phone_not_e164.json` | a phone not written in E.164 is refused, not rewritten (27.7) |
 | `invalid/member_connection_secret/missing_secret.json` | the answer carries the new secret |
 | `invalid/ask_request/group_on_approval.json` | only questions carry a group (27.8) |
+| `invalid/test_member/not_a_test.json` | a member made this way is always a test member (MEMBER-24) |

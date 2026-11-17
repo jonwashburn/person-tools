@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test_member.json",
+  "title": "A test member for a conformance run: the 201 answer of discovery's test_members route (section 26.13, MEMBER-24)",
+  "type": "object",
+  "required": [
+    "member_id",
+    "member_token",
+    "test",
+    "expires_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "member_id": {
+      "$ref": "common.json#/$defs/id"
+    },
+    "member_token": {
+      "type": "string",
+      "minLength": 8,
+      "description": "The member credential; it goes in Authorization, never in an address (CLIENT-1)."
+    },
+    "test": {
+      "const": true
+    },
+    "expires_at": {
+      "$ref": "common.json#/$defs/time",
+      "description": "Deleted with all it holds by then, within 30 days (MEMBER-24)."
+    }
+  }
+}

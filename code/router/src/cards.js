@@ -60,6 +60,7 @@ async function words(v, field, max, opt = {}) {
 
 // ---- brands ----
 async function nameCheck(env, v, field) {
+  if (typeof v === 'string' && /<[\p{L}\/]/u.test(v)) throw fixable('invalid_field', field, `${field} carries no markup: words only.`, null, {}, 400);   // ASKS-6 (PROTOCOL 1:30 AM CT 17 Nov)
   const { checkAskerName } = await import('./panels.js'); const { screenTerms } = await import('./private_terms.js');
   try { return await checkAskerName(v, await screenTerms(env)); }
   catch (e) { if (e && e.body) { e.body.field = field; e.body.message = String(e.body.message || '').replace(/^asker_name/, field); e.status = 400; e.body.status = 400; } throw e; }

@@ -3,6 +3,7 @@ import { rid, nowMs, iso, fmt, signSeatToken, readSeatToken, sha256hex, runnerBa
 import { settle, finishPanelSeat, offerFor, answeredFor } from './calls.js';
 import { notFixable, fixable } from './spec.js';
 import { BUILD } from './build_info.js';
+import { testMark } from './testmembers.js';   // OWNER_router_37: test: true on a test member's own routes
 import { isOn, inQuietHours, nextRingAt } from './rings.js';
 
 const RECORDED = {
@@ -326,7 +327,7 @@ export async function memberOffers(env, request, token) {
       held_until: iso(s.offer_expires_at), seat_token: link.token, seat_url: link.url });
   }
   const rung = ((await env.DB.prepare('SELECT s.offer_expires_at - CASE WHEN c.panel_id IN (SELECT id FROM panels WHERE kind = \'private\') THEN 900000 WHEN COALESCE(?, 0) = 1 THEN 180000 ELSE 60000 END AS t FROM seats s JOIN calls c ON c.id = s.call_id WHERE (s.offered_to = ? OR s.member_id = ?) AND s.offer_expires_at IS NOT NULL AND s.offer_expires_at > ? ORDER BY s.offer_expires_at').bind(m.slow_hold, m.id, m.id, now - 3600000).all()).results || []).map(x => x.t).filter(t => t > now - 3600000);
-  return { member_id: m.id, on: m.on_state, on_until: iso(m.on_until), quiet: { start: m.quiet_start, end: m.quiet_end, tz: m.tz }, settings: { longer_hold: !!m.slow_hold, sounds: m.sounds !== 0 },
+  return { member_id: m.id, ...testMark(m), on: m.on_state, on_until: iso(m.on_until), quiet: { start: m.quiet_start, end: m.quiet_end, tz: m.tz }, settings: { longer_hold: !!m.slow_hold, sounds: m.sounds !== 0 },
     silent: m.sounds === 0,   // OWNER_router_6: the page's ring shows with no sound (sw.js reads this when a push arrives)
     ring_cap: { used: rung.length, limit: 4, resets_at: rung.length ? iso(rung[0] + 3600000) : null, applies: !!m.is_real }, missed_rings: m.missed_rings || 0,
     // the person's side of MONEY-11/FAIR-9: in quiet hours nothing rings; calls waiting on this panel, and when one could ring
@@ -339,7 +340,7 @@ export async function memberOffers(env, request, token) {
 export async function memberReceipts(env, request, token) {
   const m = await memberByToken(env, token);
   const rows = (await env.DB.prepare('SELECT r.id, r.seat_id, r.body_json, r.signature, r.key_id, c.what_changed, c.what_changed_at, c.outcomes_json, c.ask, (SELECT record_json FROM responses WHERE seat_id = r.seat_id) AS record_json FROM receipts r JOIN calls c ON c.id = r.call_id WHERE r.member_id = ? ORDER BY r.created_at').bind(m.id).all()).results || [];
-  return { member_id: m.id, receipts: rows.map(r => ({ receipt: JSON.parse(r.body_json), jws: r.signature, ask: r.ask, heard: heardOf(r.record_json), what_changed: r.what_changed || null, what_changed_at: r.what_changed ? iso(r.what_changed_at) : null, what_changed_people: peopleOf(r.outcomes_json, r.what_changed) })),
+  return { member_id: m.id, ...testMark(m), receipts: rows.map(r => ({ receipt: JSON.parse(r.body_json), jws: r.signature, ask: r.ask, heard: heardOf(r.record_json), what_changed: r.what_changed || null, what_changed_at: r.what_changed ? iso(r.what_changed_at) : null, what_changed_people: peopleOf(r.outcomes_json, r.what_changed) })),
     verify: 'POST /v1/receipts/verify with {"jws": "..."}', test_money: true };
 }
 
@@ -377,12 +378,12 @@ export function isPushService(endpoint) {
 export async function memberPush(env, request, token, body) {
   const m = await memberByToken(env, token);
   const sub = body && body.subscription;
-  if (sub === null) { await env.DB.prepare('UPDATE members SET push_json = NULL WHERE id = ?').bind(m.id).run(); return { member_id: m.id, ring: 'off: no push' }; }
+  if (sub === null) { await env.DB.prepare('UPDATE members SET push_json = NULL WHERE id = ?').bind(m.id).run(); return { member_id: m.id, ...testMark(m), ring: 'off: no push' }; }
   if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\/[^\s]{8,1000}$/.test(sub.endpoint) || !sub.keys || typeof sub.keys.p256dh !== 'string' || typeof sub.keys.auth !== 'string')
     throw fixable('invalid_field', 'subscription', 'subscription is the push subscription the browser gave: {endpoint (https), keys: {p256dh, auth}}; null removes it.', null);
   if (!isPushService(sub.endpoint)) throw fixable('invalid_field', 'subscription.endpoint', 'Only a browser push service may be given here (Google, Mozilla, Apple or Microsoft).', null);
   await env.DB.prepare('UPDATE members SET push_json = ? WHERE id = ?').bind(JSON.stringify({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }), m.id).run();
-  return { member_id: m.id, ring: 'on: a call rings this phone when you are On and outside your quiet hours' };
+  return { member_id: m.id, ...testMark(m), ring: 'on: a call rings this phone when you are On and outside your quiet hours' };
 }
 
 // The iPhone app's device (owner 10:44 PM CT 14 Nov): {apns_token: hex, environment: 'production' | 'sandbox'}; null removes it.
@@ -397,7 +398,7 @@ export async function memberDevice(env, request, token, body) {
   if (body.environment === 'development') body.environment = 'sandbox';
   for (const k of Object.keys(body)) if (!['apns_token', 'environment'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send apns_token and, for a development build, environment "sandbox".`, null);
   const { apnsConfigured } = await import('./apns.js');
-  if (body.apns_token === null) { await env.DB.prepare('UPDATE members SET apns_token = NULL, apns_env = NULL WHERE id = ?').bind(m.id).run(); return { member_id: m.id, apple_push: 'off' }; }
+  if (body.apns_token === null) { await env.DB.prepare('UPDATE members SET apns_token = NULL, apns_env = NULL WHERE id = ?').bind(m.id).run(); return { member_id: m.id, ...testMark(m), apple_push: 'off' }; }
   const t = typeof body.apns_token === 'string' ? body.apns_token.trim().toLowerCase() : '';
   if (!/^[0-9a-f]{64,200}$/.test(t)) throw fixable(body.apns_token === undefined ? 'missing_field' : 'invalid_field', 'apns_token', 'apns_token is the device token the app received from Apple, as hex (64 characters or more); null removes it.', null);
   const where = body.environment === undefined ? 'production' : body.environment;
@@ -406,7 +407,7 @@ export async function memberDevice(env, request, token, body) {
     env.DB.prepare('UPDATE members SET apns_token = NULL, apns_env = NULL WHERE apns_token = ? AND id != ?').bind(t, m.id),
     env.DB.prepare('UPDATE members SET apns_token = ?, apns_env = ? WHERE id = ?').bind(t, where, m.id),
   ]);
-  return { member_id: m.id, environment: where, apple_push: apnsConfigured(env) ? 'on: a call offered to you alerts this phone while you are On and outside your quiet hours'
+  return { member_id: m.id, ...testMark(m), environment: where, apple_push: apnsConfigured(env) ? 'on: a call offered to you alerts this phone while you are On and outside your quiet hours'
     : 'kept: Apple push is not switched on yet on our side; this phone will be alerted once it is, with nothing more to do' };
 }
 
@@ -447,7 +448,7 @@ export async function memberSettings(env, request, token, body) {
   // OWNER_router_6: sounds is the person's setting: every membership with the same name on the same principal's panels follows
   if (b.sounds !== undefined && m.person_name) await env.DB.prepare('UPDATE members SET sounds = ? WHERE person_name = ? AND left_at IS NULL AND panel_id IN (SELECT id FROM panels WHERE principal_id = (SELECT principal_id FROM panels WHERE id = ?))')
     .bind(sounds, m.person_name, m.panel_id).run();
-  return { member_id: m.id, quiet: { start: qs, end: qe, tz }, settings: { longer_hold: !!slow, sounds: !!sounds, material_days: days }, note: 'These settings are private: no asker sees them, and they never decide who is asked first.' };
+  return { member_id: m.id, ...testMark(m), quiet: { start: qs, end: qe, tz }, settings: { longer_hold: !!slow, sounds: !!sounds, material_days: days }, note: 'These settings are private: no asker sees them, and they never decide who is asked first.' };
 }
 
 // For the team's harness only (chief D8 question from runner): the seat links of a team-test call, for a team key.
@@ -470,7 +471,7 @@ export async function callSeatsForTeam(env, request, key, callId) {
 // OWNER_router_6: GET /v1/members/{token}/settings (the app reads it once it answers; the same settings memberSettings writes)
 export async function memberSettingsRead(env, request, token) {
   const m = await memberByToken(env, token);
-  return { member_id: m.id, quiet: { start: m.quiet_start, end: m.quiet_end, tz: m.tz }, settings: { longer_hold: !!m.slow_hold, sounds: m.sounds !== 0, material_days: m.material_days || 7 },
+  return { member_id: m.id, ...testMark(m), quiet: { start: m.quiet_start, end: m.quiet_end, tz: m.tz }, settings: { longer_hold: !!m.slow_hold, sounds: m.sounds !== 0, material_days: m.material_days || 7 },
     note: 'These settings are private: no asker sees them, and they never decide who is asked first. sounds: false means nothing of ours makes a sound for you.' };
 }
 

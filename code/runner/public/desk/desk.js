@@ -185,10 +185,17 @@ function roleWords(t) {
   return out;
 }
 const capFirst = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+// A reference that starts a sentence takes a capital (CARD-12): the start of the text or a line, or after . ! ? or an ellipsis
+// and a space; quotes and brackets between are passed over
+function startsSentence(text, at) {
+  let i = at - 1, gap = false;
+  while (i >= 0 && /[\s"'\u201c\u201d\u2018\u2019(\[]/u.test(text[i])) { if (text[i] === '\n') return true; if (/\s/u.test(text[i])) gap = true; i--; }
+  return i < 0 || (gap && /[.!?\u2026]/u.test(text[i]));
+}
 function refs(t, str, open) {   // {c1}: the contact's name on the open card, "the <role>" everywhere else (CARD-12)
   if (typeof str !== 'string' || str.indexOf('{c') < 0 || !contactsOf(t).length) return str;
   const rw = roleWords(t);
-  return str.replace(/\{(c[1-4])\}/g, (m, id, at) => { const c = contactOf(t, id); if (!c) return m; const w = open && c.name ? String(c.name) : rw[id]; return at === 0 ? capFirst(w) : w; });
+  return str.replace(/\{(c[1-4])\}/g, (m, id, at) => { const c = contactOf(t, id); if (!c) return m; const w = open && c.name ? String(c.name) : rw[id]; return startsSentence(str, at) ? capFirst(w) : w; });
 }
 function forgetDetails(t) {   // what History keeps of a closed ask's contacts: who they were to the person, never their details
   if (!contactsOf(t).length) return t;
@@ -1067,7 +1074,7 @@ function flashCard(msg) {
 function whoBlock(t, extra) {
   const yours = t.connection && t.connection.yours;
   if (t.sender && !t.passed_on_by) return h('div', { class: 'who' }, iconFor(null, t.sender.name || whoName(t), true),
-    h('div', null, h('div', { class: 'name person' }, t.sender.name || whoName(t)), h('div', { class: 'basis' }, t.sender.behind || 'A person whose panel you joined')),
+    h('div', null, h('div', { class: 'name person' }, t.sender.name || whoName(t)), h('div', { class: 'basis' }, t.sender.behind || 'The person who invited you.')),   // the API's own words (OWNER_router_34 item 2)
     h('div', { class: 'meta' }, extra || h('span', { class: 'label' }, t.urgency === 'now' ? 'Now' : t.urgency === 'today' ? 'Today' : 'Whenever'), h('span', { class: 'when' }, 'Asked ' + when(t.created_at))));
   const pb = t.passed_by || t.passed_on_by; const pbName = pb && (typeof pb === 'string' ? pb : (pb.name || pb.alias));
   if (pbName) return h('div', { class: 'who' }, taskIcon(t, true),
@@ -2233,7 +2240,7 @@ function limitsRow() {
 function noticeCard() {
   const n = S.notice; if (!n) return null;
   return h('section', { class: 'notice-card', 'aria-labelledby': 'notice-h' }, h('p', { class: 'label', id: 'notice-h' }, 'Before any ask from a person'),
-    h('p', { class: 'notice-text' }, n.text || ((n.from || 'Someone') + ' can send you tasks and questions here; you can mute or leave at any time.')),
+    h('p', { class: 'notice-text' }, n.text || ((n.from || 'Someone') + ' can send you asks here; you can mute or leave at any time.')),   // the API's words (OWNER_router_36 item 2)
     h('div', { class: 'answers' },
       h('button', { class: 'btn btn-you', type: 'button', onclick: async (ev) => { const b = ev.currentTarget; b.disabled = true; b.textContent = 'One moment…';
         try { await api('POST', '/v1/member/people/notice', {}); S.notice = null; S.noticeAckAt = Date.now(); S.cardSig = ''; render(); if (S.loading) S.lookAgain = true; else refresh(true); } catch (e) { b.disabled = false; b.textContent = 'Not saved: ' + e.message; } } }, 'OK, show me their asks'),

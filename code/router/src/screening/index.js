@@ -12,7 +12,7 @@
 
 import { withModelRead } from "./model_read.js";
 import { withMaterialRead } from "./material_read.js";
-export const SCREENING_VERSION = "1.5.1-rules";
+export const SCREENING_VERSION = "1.5.2-rules";
 export const VERSION = SCREENING_VERSION;
 
 const KINDS = ["listen", "watch", "view", "play", "compare", "answer"];
@@ -622,7 +622,11 @@ function replyAfterRead(m, call, ctx) {
   m.hold = { ...m.hold, reply, fix: { why: reply.why, change: reply.what_to_change, fixable: reply.fixable, ...(reply.field ? { field: reply.field } : {}), ...(reply.corrected_example ? { example: reply.corrected_example } : {}) } };
 }
 // The outcome line an asker sends back (DECISIONS.md D21) is screened like a call, without the reaction-ask test.
-export async function screenOutcome(text, ctx = {}) { return screenSync({ ask: typeof text === "string" ? text : "", kind: "answer" }, { ...ctx, purpose: "outcome", pool_real: true, principal_is_ours: true }); }
+// A business named for a family ("Northside & Sons", "Abbott and Daughters") is a firm's name, not a mention of children (PROTOCOL, 17 Nov
+// 2026: every "... & Sons" brand was refused its own name). Matched with its capitals, so "ask your sons" still holds; outcome text and
+// names only (an asker's name, a brand's name, a line about what changed).
+const FIRM_FAMILY = /\b([A-Z][A-Za-z'.-]*)\s*(?:&|\band\b)\s*(?:Sons?|Daughters?|Brothers?|Sisters?)\b/g;
+export async function screenOutcome(text, ctx = {}) { const t = typeof text === "string" ? text.replace(FIRM_FAMILY, "$1 & Co") : ""; return screenSync({ ask: t, kind: "answer" }, { ...ctx, purpose: "outcome", pool_real: true, principal_is_ours: true }); }
 // In an answer field's label, typing or writing is answering and a question is a question: only steps that leave the page
 // count (calling, messaging, visiting, going somewhere, buying, posting, liking, following, signing up, asking someone).
 const LABEL_ACTION = /(?<!\b(?:would you|did you|do you|have you|will you|could you|would|did)\b[^.!?]{0,30})\b(?:call|calling|phone|text(?:ing)? (?:me|us|them|him|her|a|the|your)|e-?mail (?:me|us|them|him|her|a|the)|message (?:me|us|them|him|her|a|the)|contact|visit|go (?:to|and|have|check|look|like|follow|post|buy|find|see)|buy|purchase|post (?:it|this|a|on|in)|comment on|like (?:it|this|the|our|my)|follow (?:us|me|them|the|our|my|@)|subscribe|sign(?:ing)? up|register|join (?:our|the|my)|download|install|upload|photograph|deliver|pick (?:it |one |them )?up|ask (?:a|an|your|someone|people|one of))\b/;

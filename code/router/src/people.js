@@ -75,7 +75,7 @@ const toName = (r) => 'mb:' + r.id;   // TRUST 6:47: always the one membership, 
 export async function panelOwner(env, panelId) {
   try { return await env.DB.prepare('SELECT panel_id, name, principal_id FROM panel_owners WHERE panel_id = ?').bind(panelId).first(); } catch { return null; }
 }
-export const ownerLine = (name) => `${name} can send you tasks and questions here; you can mute or leave at any time.`;
+export const ownerLine = (name) => `${name} can send you asks here; you can mute or leave at any time.`;   // OWNER_router_36 item 2
 async function muted(env, principalId, memberIds) {
   if (!principalId || !memberIds.length) return false;
   try { return !!(await env.DB.prepare(`SELECT 1 AS x FROM mutes WHERE principal_id = ? AND member_id IN (${memberIds.map(() => '?').join(',')}) LIMIT 1`).bind(principalId, ...memberIds).first()); } catch { return false; }
@@ -166,7 +166,7 @@ export async function newLink(env, request, m, b) {
     env.DB.prepare('INSERT INTO join_links (code_hash, panel_id, label, max_joins, joins, created_at) VALUES (?,?,?,1,0,?)').bind(await sha256hex(code), o.panel_id, label, now),
   ]);
   const url = runnerBase(request) + '/j/' + code;
-  return { label, join_url: url, for_them: `${o.name} would like to send you tasks and questions on person.tools. Join here (one tap, about a minute): ${url}`, note: 'This link works once; an older unused one for this name stopped.' };
+  return { label, join_url: url, for_them: `${o.name} would like to send you asks on person.tools: short questions or small things to do, most answered with a tap. Join here (one tap, about a minute): ${url}`, note: 'This link works once; an older unused one for this name stopped.' };
 }
 
 // ---- POST /v1/member/people/asks: one task per person, "From <name>"; same steps and cards as /v1/tasks
@@ -266,6 +266,30 @@ export async function sentNote(env, request, m, taskId, b) {
   const mm = T.maskSecrets(v);
   const name = isSender ? owned.find(o => o.principal_id === t.principal_id).name : await passerName(env, m);
   return { task_id: t.id, notes: await T.addNote(env, t.id, mm.v, isSender ? 'asker' : 'passer', { name, ...(isPasser ? { private: true } : {}) }) };
+}
+// OWNER_router_35 item 2: POST /v1/member/sent/{task_id}/withdraw: the sender, or one who passed it on, takes an open ask back. The
+// receiver's card shows it withdrawn for a day, as an asker's withdrawal does; the asker reads it withdrawn (never who passed it), and a
+// connected AI that named a webhook is told. Answer: the thread, state withdrawn.
+export async function withdrawSent(env, request, m, taskId, b) {
+  for (const k of Object.keys(b || {})) throw fixable('unknown_field', k, 'Send no body: the ask is taken back as it is.', null);
+  const owned = await ownedBy(env, m), me = await selves(env, m);
+  let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(String(taskId || '')).first();
+  const isSender = t && t.sender_member_id && owned.some(o => o.principal_id === t.principal_id);
+  const pass = t && !isSender ? await env.DB.prepare(`SELECT to_member_id FROM task_passes WHERE task_id = ? AND from_member_id IN (${me.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT 1`).bind(t.id, ...me).first() : null;
+  if (!t || (!isSender && !pass)) throw notFixable(404, 'not_found', 'No ask you sent or passed on has that id.');
+  const holders = t.to_name.startsWith('mb:') ? [t.to_name.slice(3)] : ((await env.DB.prepare('SELECT id FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL').bind(t.panel_id, t.to_name).all()).results || []).map(r => r.id);
+  const whoId = isSender ? holders[0] || null : pass.to_member_id;
+  const who = whoId ? { member_id: whoId, name: (await namesOf(env, [whoId])).get(whoId) || 'someone who left' } : { name: t.to_name };
+  if (t.state === 'withdrawn') return threadView(t, who);   // taken back already: the same answer
+  if (t.state !== 'open') throw notFixable(409, 'already_answered', `This ask is ${t.state === 'lapsed' ? 'lapsed' : 'already answered'}; it stays as it is.`);
+  if (!isSender && holders.some(h => me.includes(h))) throw notFixable(409, 'conflict', 'This ask is back on your own list: answer it there, or say Not now.');
+  const now = nowMs();
+  const u = await env.DB.prepare('UPDATE tasks SET state = \'withdrawn\', withdrawn_at = ?, withdraw_why = ? WHERE id = ? AND state = \'open\'').bind(now, 'Taken back before it was answered.', t.id).run();
+  if (u.meta.changes !== 1) throw notFixable(409, 'conflict', 'This ask changed just now (answered or taken back); nothing was withdrawn.');
+  if (t.contacts_json) { try { await (await import('./contacts.js')).stripClosed(env, t.id); } catch { } }
+  if (!isSender && t.webhook_url && t.connection_id) { try { const { queueAnswer } = await import('./own.js'); await queueAnswer(env, { ...t, state: 'withdrawn' }); } catch { } }
+  t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first();
+  return threadView(t, who);
 }
 async function passerName(env, m) {
   const owned = await ownedBy(env, m);

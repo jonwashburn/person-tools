@@ -351,7 +351,14 @@ details only on the open card, and under them, in its own words, whose statement
 the client shows it) and the contact's `name` as given, or "the <role>" when it has none. It never says what the person agreed to beyond being contacted.
 
 **Deleted at close.** **[ASKS-19]** When the ask is answered, done, not now, withdrawn or lapsed, the server MUST delete the
-contact's `name`, `phone` and `email` within a minute, keeping `id`, `role`, `ref`, `consent` and `consent_at` (when the ask that stated it was placed).
+contact's `name`, `phone` and `email` within a minute, keeping `id`, `role`, `ref`, `consent` and `consent_at` (when the ask that stated it was placed). **[ASKS-26]** The person's own words do not keep a contact's name past the close either. In an answer to an ask that
+carries contacts, the server MUST store `text`, `note` and `approved_text` with each contact's `name`, wherever it appears as
+whole words in any case and with any spaces between its words (the longest name first), replaced by the contact's reference
+(`{c1}`), and post them so in the webhook; an approval approved as written keeps its
+references as written. (A reference stands for a name, so only names are put back: a client draws names, never a phone or an
+email, into the text a person edits.) A client draws these references as CARD-12 says, and a service fills them in from its own
+records (by `ref`) before it acts on the words, for example before it sends an approved text. A part of a name ("Avery"), and a
+number or address the person typed, are the person's own words and stay as written.
 
 **Not passed on, not to strangers.** **[ASKS-20]** A server MUST refuse to pass on an ask that carries contacts (409
 `has_contacts`), and MUST refuse `contacts` on a call to a pool, an offer, and a person's ask to their own people
@@ -496,6 +503,8 @@ this section names; the server adds the others 27.2 lists.
 
 ### 27.14 Changes to this section
 
+- 17 Nov 2026: a contact's name in the person's own words (an edited approval, a line, a note) is stored as the contact's
+  reference, so it leaves with the contact at close (ASKS-26).
 - 16 Nov 2026, later: a worked example, from a brand to a cleared ask (27.13); only questions carry a group, and a client groups
   only one asker's asks (27.8, CARD-15); a contact with
   no name reads "the <role>", and two contacts with one role are numbered (CARD-12, CARD-13).

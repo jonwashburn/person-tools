@@ -113,6 +113,8 @@ JSON, without authentication:
 - `webhook_header_prefix`, for a server that lists `branded_asks`, is the prefix of the headers on the answers it delivers
   to a service (27.2); without it, a service uses `{{wire_prefix}}`.
 - `connect_page`, for a server that lets a service start a connection (27.9), is the address of its connect page.
+- `test_members`, for a server that lists `person_client` and makes test members for a conformance run (26.13), is the
+  address of that route.
 - `api_base`, `mcp` and every other address in discovery are absolute `https` addresses, except that a server run for
   local testing on a loopback address (`localhost`, `127.0.0.1`, `[::1]`) may use `http`. A server serving one host
   uses that host in every address; one serving several builds them from the request's host. A server reachable under more than one host SHOULD build them from

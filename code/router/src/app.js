@@ -134,6 +134,7 @@ function discovery(request) {
     profiles: [BUILD.wire_prefix + '/fair-call/0.1'],   // DISC-3: its checks (F01-F04) pass and are held by the baseline
     screening_policy: siteBase(request) + '/policy',
     connect_page: runnerBase(request) + '/connect',   // 27.9 (PROTOCOL 8:33 PM CT 16 Nov): where a service sends a person to connect it
+    test_members: base + '/v1/test/members',   // 26.13, MEMBER-24 (OWNER_router_37): a test key makes a conformance run's test member
     test_keys: base + '/v1/keys',
     privacy_floor: 20,
     pay_floor_usd_per_hour: fmt(PAY_FLOOR_CENTS_PER_HOUR),
@@ -566,7 +567,7 @@ export async function handle(request, env, ctx) {
     if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'POST') { const jb = await body(request); const jr = await joinPanel(env, request, m[1], jb); try { await (await import('./people.js')).afterJoin(env, jr, jb); } catch { } return json(jr, 201); }
     if ((m = /^\/v1\/join\/(jc_[a-z0-9]+)$/.exec(path)) && request.method === 'GET') return json(await (await import('./people.js')).withOwnerLine(env, m[1], await joinInfo(env, request, m[1])));
     // OWNER_router_18: a person sends asks to their own people, reads what came back, passes an ask on; mutes; the one-time notice; the daily cap
-    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/(people|people\/asks|people\/links|people\/notice|sent|sent\/read|mutes|limits|mutes\/(mu_[a-z0-9]+)|sent\/(tk_[a-z0-9]+)\/notes|tasks\/(tk_[a-z0-9]+)\/pass)$/.exec(path))) {
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/(people|people\/asks|people\/links|people\/notice|sent|sent\/read|mutes|limits|mutes\/(mu_[a-z0-9]+)|sent\/(tk_[a-z0-9]+)\/notes|tasks\/(tk_[a-z0-9]+)\/pass|sent\/(tk_[a-z0-9]+)\/withdraw)$/.exec(path))) {   // OWNER_router_35 item 2: .../withdraw
       const { memberByToken } = await import('./seats.js'); const PP = await import('./people.js'); const mm = await memberByToken(env, m0[1]); const r = m0[2], M = request.method;
       if (r === 'people' && M === 'GET') return json(await PP.listPeople(env, request, mm));
       if (r === 'people/asks' && M === 'POST') { const x = await PP.sendAsks(env, request, mm, await body(request)); return json(x.body, x.status); }
@@ -580,8 +581,11 @@ export async function handle(request, env, ctx) {
       if (m0[3] && M === 'DELETE') return json(await PP.removeMute(env, mm, m0[3]));
       if (m0[4] && M === 'POST') return json(await PP.sentNote(env, request, mm, m0[4], await body(request)), 201);
       if (m0[5] && M === 'POST') return json(await PP.passTask(env, request, mm, m0[5], await body(request)));
+      if (m0[6] && M === 'POST') return json(await PP.withdrawSent(env, request, mm, m0[6], await body(request)));
     }
 
+    // OWNER_router_37 (spec 26.13, MEMBER-24): a conformance run's test member, made by a test key
+    if (path === '/v1/test/members' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { makeTestMember } = await import('./testmembers.js'); return json(await makeTestMember(env, request, k, await body(request)), 201); }
     // ---- panels
     if (path === '/v1/panels' && request.method === 'GET') { const k = needKey(await authKey(env, request)); return json(await listPanels(env, request, k)); }
     if (path === '/v1/panels' && request.method === 'POST') { const k = needKey(await authKey(env, request)); return json(await createPanel(env, request, k, await body(request)), 201); }

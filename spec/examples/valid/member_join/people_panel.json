@@ -28,7 +28,7 @@
   },
   "owner": {
     "name": "Robin",
-    "line": "Robin can send you tasks and questions here; you can mute or leave at any time.",
+    "line": "Robin can send you asks here; you can mute or leave at any time.",
     "shown": "Show this line before anyone joins, then send \"owner_line_seen\": true with the join."
   }
 }

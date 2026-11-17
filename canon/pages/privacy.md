@@ -64,6 +64,15 @@ off unless you turn it on, only you can turn it on, and you can turn it off at a
 service never carry them: when the alert arrives, your phone fetches the line from us. Your phone's own setting for showing
 previews still decides whether anything appears on your lock screen.
 
+## Other people's details in an ask
+
+A service may put up to four people's details on an ask (a name, a phone number, an email address) so you can reach the person
+it is about, such as a customer who called a shop. The service tells us how that person agreed to be contacted. You see the
+details only on the open ask; in an alert, your list, your history and everywhere else that person appears only by role
+("customer"). The details are deleted within a minute of the ask closing. If you type a contact's name into your answer or a
+note, we keep a reference in its place and the service fills the name back in from its own records; a number or address you
+type yourself stays as you wrote it.
+
 ## How long things are kept
 
 | What | How long |
@@ -75,6 +84,7 @@ previews still decides whether anything appears on your lock screen.
 | Tasks for you | open until answered or until the ask's own time runs out (60 seconds to 30 days, set by the asker); then it lapses and is never answered for you; answered ones 180 days, or until you delete them |
 | Asks from a person you know, and asks passed on to you | as tasks for you (open until answered or their time runs out; answered ones 180 days, or until you delete them) |
 | Mutes, blocks and your daily limit | until you remove them or leave |
+| A contact's name, phone and email on an ask | while the ask is open, then at most a minute |
 | Desk sign-ins (which computer, roughly where) | until you sign it out, or 30 days unused |
 | Passkey sign-in sessions | 30 days, or until you sign out |
 | A connection you revoked (what it sent) | 30 days |

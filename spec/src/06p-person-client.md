@@ -311,7 +311,7 @@ own panel (16.1); `asker` is the name the person will see and `principal_name` t
 the notice the person accepts, `notice_id` its current version and `accepted_notice_ids` the versions the server still takes;
 `attestations` is `{"send": {...}, "optional": [...], "means"}`, the exact object to send once the person has said each thing
 in it is true. When a person owns the panel, `owner` is `{"name", "line", "shown"}`: **[CLIENT-15]** the client MUST show
-`owner.line` ("<name> can send you tasks and questions here; you can mute or leave at any time") before the person joins, and
+`owner.line` ("<name> can send you asks here; you can mute or leave at any time") before the person joins, and
 then sends `"owner_line_seen": true` with the join. `POST /v1/join/{code}` with those attestations answers 201 `{"member_id",
 "member_token", "page", "panel", "on", "note"}`. Every person is an adult (section 16), so `send` always holds `"adult":
 true`; a server names any other statement it needs there, such as where the person lives.
@@ -435,11 +435,26 @@ conforms when it meets every requirement marked `CLIENT-` against any server tha
 less than the whole interface (one that answers asks and never joins a panel, say) and conforms for what it offers, as long as
 everything it shows and sends keeps these rules.
 
+**Test members for a conformance run.** Checking this section and section 27 from outside needs a person to ask, and no check
+may reach a real person. A server that lists `person_client` SHOULD let a test key (18.1) make test members: discovery's
+`test_members` names the route, and `POST` to it with a test key and `{}` answers 201 `{"member_id", "member_token", "test":
+true, "expires_at"}`. The member uses the member routes as any member does, with `member_token` as its credential: it connects
+its own AIs (26.8), reads and answers their asks, and leaves. **[MEMBER-24]** A server that serves `test_members` MUST make
+them only for a test key (`forbidden_for_key_class` for any key that can reach a real person); MUST make each a test member by
+construction, which no one but that key's principal and the member's own AIs can ask, which is never offered a call from a
+pool, and which is never counted in a public number or a proof; MUST say `"test": true` on it wherever the member's own routes
+show the member; MUST take for it no name, contact or alias that the server would show outside that key's own view; MUST keep
+at most five live test members per test key (a sixth is 429 `rate_limited`); and MUST delete each, with all it holds, within 30
+days. A test member sees test brands (27.4) as any test member does. A server without the route still conforms: it documents
+the setup step that gives a conformance run a test member's credential, and a suite takes that credential from the person
+running it.
+
 ### 26.14 Changes to this section
 
 Most of these came from building a desktop client from this section's text alone. Each place where the builder had to guess,
 probe a live server or read a server's code was a gap, and each gap was closed in the text; fifty-two were closed.
 
+- 17 Nov 2026: test members for a conformance run, made by a test key (26.13, MEMBER-24), and discovery's `test_members`.
 - 16 Nov 2026: section 27 (asks from a service, and branded cards) takes over cards: 26.6's Cards, MEMBER-10 and CLIENT-9 point
   to it. Done, Later and Not now on every ask against a server that lists `branded_asks` (CLIENT-2). A connection's key may
   give its own brand (MEMBER-14), and the person can give it a new webhook secret (26.8). For such a server the registries

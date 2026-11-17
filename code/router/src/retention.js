@@ -57,6 +57,9 @@ export async function retention(env, now, until = Infinity) {
     out.test_principals++;
   }
   if (late()) return out;
+  // 6a. OWNER_router_37 (MEMBER-24): a conformance run's test member past its time is removed with all it holds; its row goes in step 6
+  try { out.test_members = await (await import('./testmembers.js')).expireTestMembers(env, now); } catch { }
+  if (late()) return out;
   // 6. members who left: their link to past seats is removed, then the row
   for (const m of (await env.DB.prepare('SELECT id FROM members WHERE left_at IS NOT NULL AND left_at < ? AND (gone_note IS NULL OR left_at < ?) LIMIT 50').bind(now - DAY, now - 30 * DAY).all()).results || []) {
     try { await (await import('./people.js')).leaveCleanup(env, m.id); } catch { }   // TRUST 12:31 PM CT 16 Nov: what 15 Nov added for them goes too

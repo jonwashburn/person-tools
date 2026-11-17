@@ -2520,6 +2520,666 @@ def setup(ctx, args):
     return True
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Sections 26 and 27: the person's side, and asks from a service with their brands and cards. These checks need a test
+# member (26.13): made through discovery's test_members with the run's test key, or given with --member-file (a file holding
+# MEMBER_TOKEN=...). They reach no real person. Every ask they place is withdrawn and every AI connection removed at the end
+# (BA99); a member the run made leaves (PC99).
+PNG_1PX = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+SVG = b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>'
+BRAND = {"name": "Harbor Bikes", "domain": "harbor-bikes.example",
+         "mark": {"states": {"needs_you": {"glyph": "disc", "colour": "#d9480f"}, "idle": {"glyph": "ring", "colour": "#767676"}}},
+         "colours": {"ink": "#1a1a1a"}, "grounds": {"light": "#ffffff"}}
+SHOPPER = {"id": "c1", "role": "customer", "name": "Avery Quinlan", "phone": "+15125550199", "email": "avery.q@example.com",
+           "ref": "cust_4410", "consent": "they_contacted_the_asker"}
+
+
+def yn(text, **kw):
+    b = {"title": text, "urgency": "whenever", "step": {"type": "question", "text": text, "choices": ["Yes", "No"]}}
+    b.update(kw)
+    return b
+
+
+class Person:
+    """The run's test member, the AIs it connected, and the asks they placed."""
+
+    def __init__(self, ctx):
+        self.ctx, self.token, self.made_by_route, self.info, self.error = ctx, None, False, {}, None
+        self.conns = {}      # tag -> (connection_id, key)
+        self.asks = []       # (key, task_id)
+        self.branded = set()
+        self.closed = {}     # what BA90 reads after the minute of ASKS-19
+
+    def m(self, method, path, body=None, **kw):
+        return self.ctx.api.req(method, path, body, key=self.token, **kw)
+
+    def conn(self, tag):
+        if tag not in self.conns:
+            r = self.m("POST", "/v1/member/connections", {"name": f"Check {tag}", "icon": "other"})
+            expect(r.status == 201 and isinstance(r.body, dict) and r.body.get("key"), f"POST /v1/member/connections: {r!r}")
+            self.conns[tag] = (r.body.get("connection_id") or r.body.get("id"), r.body["key"])
+        return self.conns[tag][1]
+
+    def brand(self, tag):
+        k = self.conn(tag)
+        if tag not in self.branded:
+            r = self.ctx.api.req("PUT", "/v1/brand", {"brand": BRAND}, key=k)
+            expect(r.status == 200, f"PUT /v1/brand with a valid brand: {r!r}")
+            self.branded.add(tag)
+        return k
+
+    def ask(self, key, body, tag, headers=None):
+        b = dict(body)
+        b.setdefault("idempotency_key", self.ctx.idem(tag))
+        r = self.ctx.api.req("POST", "/v1/tasks", b, key=key, headers=headers)
+        if r.status in (200, 201) and isinstance(r.body, dict) and r.body.get("task_id") and (key, r.body["task_id"]) not in self.asks:
+            self.asks.append((key, r.body["task_id"]))
+        return r
+
+    def placed(self, key, body, tag, headers=None):
+        r = self.ask(key, body, tag, headers)
+        expect(r.status == 201, f"POST /v1/tasks ({tag}) answered {r!r}, expected 201")
+        return r.body["task_id"]
+
+    def answer(self, tid, body):
+        return self.m("POST", f"/v1/member/tasks/{tid}", body)
+
+    def view(self):
+        r = self.m("GET", "/v1/member/tasks")
+        expect(r.status == 200 and isinstance(r.body, dict), f"GET /v1/member/tasks: {r!r}")
+        return r.body
+
+    def open_item(self, tid):
+        return next((x for x in self.view().get("open") or [] if isinstance(x, dict) and x.get("task_id") == tid), None)
+
+
+def person(ctx, feature="person_client"):
+    ctx.need(feature)
+    p = ctx.cache.get("person")
+    if p is None:
+        p = ctx.cache["person"] = Person(ctx)
+        if ctx.args.member_token:
+            p.token = ctx.args.member_token
+        else:
+            tm = (ctx.disc or {}).get("test_members")
+            if not tm:
+                p.error = "no test member: the server lists no test_members and no --member-file was given (26.13)"
+            else:
+                r = ctx.api.req("POST", tm, {})
+                if r.status == 201 and isinstance(r.body, dict) and r.body.get("member_token"):
+                    p.token, p.made_by_route, p.info = r.body["member_token"], True, r.body
+                else:
+                    p.error = f"POST test_members answered {r!r}"
+    if p.error:
+        raise Skip(p.error)
+    return p
+
+
+def branded(ctx):
+    person(ctx)
+    return person(ctx, "branded_asks")
+
+
+def refused(r, status=400, code=None, field=None):
+    if r.status != status or not isinstance(r.body, dict):
+        return False
+    if code and r.body.get("code") != code:
+        return False
+    if field and str(r.body.get("field") or "").split(".")[-1] != field:
+        return False
+    return True
+
+
+def raw_upload(ctx, path, data, ctype, key):
+    a = ctx.api
+    wait = a.min_interval - (time.monotonic() - a.last)
+    if wait > 0:
+        time.sleep(wait)
+    h = {"Accept": "application/json", "Content-Type": ctype, "Authorization": f"Bearer {key}"}
+    h.update(a.extra)
+    try:
+        r = a.http.request("POST", a.url(path), content=data, headers=h)
+    except httpx.HTTPError as e:
+        raise Fail(f"POST {path}: transport error {type(e).__name__}")
+    finally:
+        a.last = time.monotonic()
+    try:
+        b = r.json()
+    except Exception:
+        b = None
+    a.log.append({"method": "POST", "path": path, "status": r.status_code, "ctype": r.headers.get("content-type", ""),
+                  "version": r.headers.get(f"{a.prefix}-version"), "body": b, "elapsed": 0, "api": True})
+    return Resp(r.status_code, r.headers, b, r.text if b is None else None, 0, path)
+
+
+# -- section 26 ---------------------------------------------------------------------------------------------------
+@check("PC01", ["MEMBER-1"])
+def pc01(ctx):
+    p = person(ctx)
+    v = p.view()
+    expect(isinstance(v.get("open"), list) and isinstance(v.get("history"), list), f"GET /v1/member/tasks lacks open or history: {sorted(v)[:12]}")
+    r = ctx.api.req("GET", "/v1/member/tasks", key=None)
+    expect(r.status == 401, f"GET /v1/member/tasks without a credential answered {r!r}, expected 401")
+    return "the member credential works in the Authorization header; none answers 401"
+
+
+@check("PC02", ["MEMBER-2"])
+def pc02(ctx):
+    person(ctx)
+    r = ctx.api.req("OPTIONS", "/v1/member/tasks", key=None, headers={"Origin": "https://client.example",
+                    "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"})
+    ctx.api.log[-1]["api"] = False   # a preflight carries no body (X03)
+    allow = r.headers.get("access-control-allow-origin")
+    hdrs = (r.headers.get("access-control-allow-headers") or "").lower()
+    expect(r.status in (200, 204) and allow in ("*", "https://client.example"),
+           f"a cross-origin preflight answered {r.status} with allow-origin {allow!r}")
+    expect("authorization" in hdrs or "*" in hdrs, f"the preflight does not allow the Authorization header: {hdrs!r}")
+    return f"preflight {r.status}, allow-origin {allow}"
+
+
+@check("PC03", ["MEMBER-4"])
+def pc03(ctx):
+    p = person(ctx)
+    k = p.conn("order")
+    t1 = p.placed(k, yn("Is the side door locked?"), "pc03-whenever")
+    t2 = p.placed(k, yn("Is the alarm on?", urgency="today"), "pc03-today")
+    ids = [x.get("task_id") for x in p.view().get("open") or [] if isinstance(x, dict)]
+    expect(t1 in ids and t2 in ids, "the two asks are not both in open")
+    expect(ids.index(t2) < ids.index(t1), "an ask of urgency today stands after one of urgency whenever")
+    return "open lists the more urgent ask first"
+
+
+@check("PC04", ["MEMBER-5"])
+def pc04(ctx):
+    p = person(ctx)
+    k = p.conn("order")
+    t = p.placed(k, yn("Is bay two free?"), "pc04")
+    r1 = p.answer(t, {"action": "approve"})
+    expect(refused(r1, 400, "invalid_field", "action"), f"approve on a question answered {r1!r}, expected 400 on action")
+    r2 = p.answer(t, {"action": "answer", "choice": "Maybe"})
+    expect(refused(r2, 400, "invalid_field", "choice"), f"a choice not offered answered {r2!r}, expected 400 on choice")
+    t2 = p.placed(k, {"title": "Send the parts order", "urgency": "whenever", "step": {"type": "approve", "text": "Order two brake pads."}}, "pc04-appr")
+    r3 = p.answer(t2, {"action": "approve", "text": "Order three brake pads."})
+    expect(r3.status == 400, f"approve with text on a step that is not editable answered {r3!r}, expected 400")
+    return "an action, a choice and an edit the step does not take are refused"
+
+
+@check("PC05", ["MEMBER-6", "MEMBER-7"])
+def pc05(ctx):
+    p = person(ctx)
+    k = p.conn("order")
+    t = p.placed(k, {"title": "Which account?", "urgency": "whenever", "step": {"type": "question", "text": "Which account should I use?"}}, "pc05")
+    secret = "sk_live_" + "".join(random.choice(string.ascii_letters + string.digits) for _ in range(24))
+    r = p.answer(t, {"action": "answer", "text": f"Use {secret} for now."})
+    expect(r.status == 200 and isinstance(r.body, dict), f"the answer was refused: {r!r}")
+    rep = r.body.get("reply") or {}
+    expect(secret not in json.dumps(r.body) and "[removed]" in str(rep.get("text")) and rep.get("masked"),
+           f"a secret-shaped value was not stored as [removed] with masked: {str(rep.get('text'))[:80]!r}")
+    r2 = p.answer(t, {"action": "note", "note": "One more thing."})
+    expect(refused(r2, 409, "already_answered"), f"a note on an answered ask answered {r2!r}, expected 409 already_answered")
+    return "a secret in an answer is stored as [removed]; a note after the answer is 409"
+
+
+@check("PC06", ["MEMBER-9"])
+def pc06(ctx):
+    p = person(ctx)
+    k = p.conn("order")
+    t = p.placed(k, {"title": "Pay the parts invoice", "urgency": "whenever", "step": {"type": "approve", "text": "Pay the $40 parts invoice."}}, "pc06")
+    r = p.answer(t, {"action": "approve"})
+    rep = (r.body or {}).get("reply") or {} if isinstance(r.body, dict) else {}
+    expect(r.status == 200, f"an approval without a device signature was refused: {r!r}")
+    expect(rep.get("device_approved") is False and rep.get("mark"), f"the reply lacks device_approved false with a mark: {json.dumps(rep)[:200]}")
+    return "an unsigned approval is accepted and marked device_approved false"
+
+
+@check("PC07", ["MEMBER-14"])
+def pc07(ctx):
+    p = person(ctx)
+    k = p.conn("order")
+    r1 = ctx.api.req("GET", "/v1/member/tasks", key=k)
+    expect(r1.status in (401, 403), f"a connection's key read the member's list: {r1.status}")
+    r2 = ctx.api.req("POST", "/v1/calls", ctx.as_call(ctx.listen(), "pc07"), key=k)
+    expect(r2.status in (401, 403), f"a connection's key opened a call: {r2.status}")
+    return f"a connection's key is refused elsewhere ({r1.status}, {r2.status})"
+
+
+@check("PC08", ["MEMBER-8"])
+def pc08(ctx):
+    p = person(ctx)
+    k = p.conn("media")
+    up = raw_upload(ctx, "/v1/tasks/media", PNG_1PX, "image/png", k)
+    expect(up.status == 201 and isinstance(up.body, dict) and up.body.get("media_id"), f"POST /v1/tasks/media with a PNG: {up!r}")
+    t = p.placed(k, yn("Is this the right part?", media=up.body["media_id"]), "pc08")
+    r = p.m("GET", f"/v1/member/tasks/{t}/media")
+    ctx.api.log[-1]["api"] = False   # bytes by design, not a JSON answer (X03)
+    cc = (r.headers.get("cache-control") or "").lower()
+    expect(r.status == 200 and (r.headers.get("content-type") or "").startswith("image/png"), f"the material answered {r.status} {r.headers.get('content-type')}")
+    expect("no-store" in cc and "private" in cc, f"the material's cache-control is {cc!r}")
+    t2 = p.placed(k, yn("And this one, with no picture?"), "pc08-none")
+    r2 = p.m("GET", f"/v1/member/tasks/{t2}/media")
+    expect(refused(r2, 404, "not_found"), f"material of an ask with none answered {r2!r}, expected 404 not_found")
+    return "material comes back with its type and no-store, private; none is 404"
+
+
+@check("PC09", ["MEMBER-11"])
+def pc09(ctx):
+    p = person(ctx)
+    r = p.m("POST", "/v1/member/on", {"on": True, "hours": 24})
+    try:
+        expect(r.status == 200 and isinstance(r.body, dict) and r.body.get("on_until"), f"POST /v1/member/on: {r!r}")
+        u = r.body["on_until"]
+        expect(TIME_RE.match(u), f"on_until {u!r} is not a time")
+        import calendar
+        until = calendar.timegm(time.strptime(u[:19], "%Y-%m-%dT%H:%M:%S"))
+        expect(until - time.time() <= 12 * 3600 + 120, f"24 hours of On was kept as {(until - time.time()) / 3600:.1f} hours")
+    finally:
+        p.m("POST", "/v1/member/on", {"on": False})
+    return "On for 24 hours is cut to 12"
+
+
+@check("PC10", ["MEMBER-15"])
+def pc10(ctx):
+    p = person(ctx)
+    k = p.conn("blocked")
+    cid = p.conns["blocked"][0]
+    r = p.m("PATCH", f"/v1/member/connections/{cid}", {"blocked": True})
+    expect(r.status == 200, f"blocking the connection: {r!r}")
+    try:
+        r2 = p.ask(k, yn("Is anyone in?"), "pc10")
+        said = json.dumps(r2.body).lower() if r2.body is not None else (r2.text or "").lower()
+        if r2.status in (200, 201):
+            expect(p.open_item(r2.body.get("task_id")) is None, "a blocked AI's ask reached the person's list")
+        expect("block" not in said, f"the blocked AI was told more than 'not available': {said[:160]}")
+    finally:
+        p.m("PATCH", f"/v1/member/connections/{cid}", {"blocked": False})
+    return f"a blocked AI hears {r2.status} and nothing of the block"
+
+
+@check("PC11", ["MEMBER-24"])
+def pc11(ctx):
+    p = person(ctx)
+    if not p.made_by_route:
+        raise Skip("the test member was given by file; the server's test_members route was not used")
+    expect(p.info.get("test") is True and p.info.get("member_id") and p.info.get("expires_at"),
+           f"the test member's answer lacks test true, member_id or expires_at: {sorted(p.info)}")
+    r = ctx.api.req("POST", ctx.disc["test_members"], {}, key=None)
+    expect(r.status == 401, f"test_members without a key answered {r!r}, expected 401")
+    return "a test member says test: true; no key is 401"
+
+
+# -- section 27 ---------------------------------------------------------------------------------------------------
+@check("BA01", ["ASKS-8"])
+def ba01(ctx):
+    p = branded(ctx)
+    k = p.conn("brand")
+    r = ctx.api.req("PUT", "/v1/brand", {"brand": BRAND}, key=k)
+    expect(r.status == 200 and isinstance(r.body, dict), f"PUT /v1/brand: {r!r}")
+    p.branded.add("brand")
+    pi = r.body.get("prove_it")
+    expect(r.body.get("verified") is False and isinstance(pi, dict) and pi.get("token"), f"an unproved brand's answer lacks verified false or prove_it: {json.dumps(r.body)[:200]}")
+    expect(r.body.get("id"), "the brand's answer has no id")
+    return "a brand is stored unproved, with prove_it and an id"
+
+
+@check("BA02", ["ASKS-7"])
+def ba02(ctx):
+    p = branded(ctx)
+    k = p.brand("brand")
+    r = ctx.api.req("PUT", "/v1/brand", {"brand": {**BRAND, "colours": {"ink": "#9a9a9a"}}}, key=k)
+    expect(refused(r, 400, "contrast_too_low"), f"ink #9a9a9a on #ffffff answered {r!r}, expected contrast_too_low")
+    b = r.body
+    expect(b.get("ratio") is not None and b.get("floor") is not None and b.get("example") is not None, f"the refusal lacks ratio, floor or example: {sorted(b)}")
+    bad = json.loads(json.dumps(BRAND))
+    bad["mark"]["states"]["needs_you"]["colour"] = "#f0f0f0"
+    r2 = ctx.api.req("PUT", "/v1/brand", {"brand": bad}, key=k)
+    expect(refused(r2, 400, "contrast_too_low"), f"a glyph of #f0f0f0 on #ffffff answered {r2!r}, expected contrast_too_low")
+    return "words under 4.5:1 and a glyph under 3:1 are refused with the ratio"
+
+
+@check("BA03", ["ASKS-6"])
+def ba03(ctx):
+    p = branded(ctx)
+    k = p.brand("brand")
+    bad = []
+    for field, val in (("name", "Harbor Bikes https://harbor-bikes.example"), ("name", "Harbor <b>Bikes</b>"),
+                       ("name", "Harbor <script>x</script>"), ("quiet_line", "Nothing waits. www.harbor-bikes.example"),
+                       ("quiet_line", "<i>Nothing waits.</i>")):
+        r = ctx.api.req("PUT", "/v1/brand", {"brand": {**BRAND, field: val}}, key=k)
+        if not refused(r, 400, "invalid_field", field):
+            bad.append(f"{field} {val!r} answered {r.status}")
+            if r.status == 200:
+                ctx.api.req("PUT", "/v1/brand", {"brand": BRAND}, key=k)
+    r = ctx.api.req("PUT", "/v1/brand", {"brand": {**BRAND, "name": "Harbor & Bikes 3<4"}}, key=k)
+    if r.status != 200:
+        bad.append(f"ordinary punctuation ('&', '<' before a digit) answered {r.status}")
+    ctx.api.req("PUT", "/v1/brand", {"brand": BRAND}, key=k)
+    expect(not bad, "; ".join(bad))
+    return "addresses and markup in a brand's words are refused; '&' and '3<4' are kept"
+
+
+@check("BA04", ["ASKS-5"])
+def ba04(ctx):
+    p = branded(ctx)
+    k = p.brand("brand")
+    bad = json.loads(json.dumps(BRAND))
+    bad["mark"]["states"]["needs_you"] = {"media": "https://harbor-bikes.example/mark.png"}
+    r = ctx.api.req("PUT", "/v1/brand", {"brand": bad}, key=k)
+    expect(r.status == 400, f"a mark that is a picture by address answered {r!r}, expected 400")
+    for route in ("/v1/brand/mark", "/v1/tasks/media"):
+        r = raw_upload(ctx, route, SVG, "image/svg+xml", k)
+        expect(400 <= r.status < 500, f"an svg to {route} answered {r.status}")
+    return "a picture by address and svg are refused"
+
+
+@check("BA05", ["ASKS-10", "ASKS-24", "MEMBER-10"])
+def ba05(ctx):
+    p = branded(ctx)
+    k = p.brand("brand")
+    t = p.placed(k, yn("Is the shop open on Saturday?"), "ba05")
+    x = p.open_item(t)
+    expect(x is not None, "the branded ask is not in the test member's open list")
+    b = x.get("brand") or {}
+    expect(b.get("name") == BRAND["name"] and b.get("verified") is False, f"the test member sees brand {json.dumps(b)[:160]}")
+    r = p.m("GET", "/v1/member/connections")
+    cs = (r.body or {}).get("connections") or [] if isinstance(r.body, dict) else []
+    cid = p.conns["brand"][0]
+    c = next((c for c in cs if isinstance(c, dict) and (c.get("connection_id") == cid or c.get("id") == cid)), None)
+    expect(c is not None and (c.get("brand") or {}).get("name") == BRAND["name"], "the person's list of AIs does not carry the connection's brand")
+    return "a test brand reaches the test member, on the ask and on the list of AIs"
+
+
+@check("BA06", ["ASKS-11"])
+def ba06(ctx):
+    p = branded(ctx)
+    k = p.conn("cards")
+    bad = []
+    for tag, card, step in (
+            ("unknown", {"blocks": [{"headline": "Hello."}, {"banner": "Big sale"}]}, None),
+            ("differ", {"blocks": [{"headline": "Open on Saturday?"}, {"choices": ["Yes", "Maybe"]}]}, None),
+            ("password", {"blocks": [{"headline": "Sign in"}, {"input": {"label": "Your password"}}]},
+             {"type": "question", "text": "Sign in to the parts site."}),
+            ("markup", {"blocks": [{"headline": "Bay <u>2</u> is free."}]}, None)):
+        body = yn("Is bay two free?", card=card)
+        if step:
+            body["step"] = step
+        r = p.ask(k, body, f"ba06-{tag}")
+        if r.status != 400:
+            bad.append(f"{tag} answered {r.status}")
+        elif tag == "differ" and r.code != "choices_differ":
+            bad.append(f"a choices block unlike the step answered {r.code}, expected choices_differ")
+    expect(not bad, "; ".join(bad))
+    return "an unknown block, a differing choices block, a password input and markup in a card are refused"
+
+
+@check("BA07", ["ASKS-13"])
+def ba07(ctx):
+    p = branded(ctx)
+    k = p.conn("cards")
+    bad = []
+    for i, word in enumerate(["Done", "Later", "Not now", "Dоne", "done.", "D o n e"]):
+        r = p.ask(k, {"title": "Which one?", "urgency": "whenever", "step": {"type": "question", "text": "Which one?", "choices": [word, "Did it"]}}, f"ba07-{i}")
+        if not refused(r, 400, "reserved_word"):
+            bad.append(f"{word!r} answered {r.status} {r.code}")
+    r = p.ask(k, {"title": "Pay it?", "urgency": "whenever", "step": {"type": "approve", "text": "Pay the invoice.", "approve_label": "Undo"}}, "ba07-label")
+    if not refused(r, 400, "reserved_word"):
+        bad.append(f"an approval labelled 'Undo' answered {r.status} {r.code}")
+    r = p.ask(k, {"title": "The job?", "urgency": "whenever", "step": {"type": "question", "text": "The job?", "choices": ["Did it", "Not doing it"]}}, "ba07-ok")
+    if r.status != 201:
+        bad.append(f"'Did it' / 'Not doing it' answered {r.status}")
+    expect(not bad, "; ".join(bad))
+    return "the client's own words are refused, folded and spaced; others are taken"
+
+
+@check("BA08", ["ASKS-14", "ASKS-15"])
+def ba08(ctx):
+    p = branded(ctx)
+    k = p.conn("cards")
+    t = p.placed(k, {"title": "Hours on Thursday", "urgency": "whenever", "step": {"type": "question", "text": "Are you open on Thursday?",
+                  "choices": ["Open as usual", "Closed", "Other hours"], "line_for": {"Other hours": "Your hours that day"}}}, "ba08")
+    r1 = p.answer(t, {"action": "answer", "choice": "Other hours"})
+    expect(refused(r1, 400, field="text"), f"Other hours without its line answered {r1!r}, expected 400 on text")
+    r2 = p.answer(t, {"action": "answer", "choice": "Closed", "text": "all day"})
+    expect(refused(r2, 400, field="text"), f"Closed with a line answered {r2!r}, expected 400 on text")
+    r3 = p.answer(t, {"action": "answer", "choice": "Other hours", "text": "10 to 2"})
+    expect(r3.status == 200, f"Other hours with its line answered {r3!r}")
+    t2 = p.placed(k, {"title": "Ring number", "urgency": "whenever", "step": {"type": "question", "text": "Which number should calls ring?", "keyboard": "phone"}}, "ba08-phone")
+    r4 = p.answer(t2, {"action": "answer", "text": "my desk"})
+    expect(refused(r4, 400, field="text"), f"a phone line answered 'my desk' gave {r4!r}, expected 400 on text")
+    return "line_for takes text with its own choice only; a phone line takes a number only"
+
+
+@check("BA09", ["ASKS-12"])
+def ba09(ctx):
+    p = branded(ctx)
+    k = p.conn("cards")
+    t = p.placed(k, {"title": "Order the pads", "urgency": "whenever", "step": {"type": "approve", "text": "Order two brake pads."}}, "ba09")
+    r = p.answer(t, {"action": "done"})
+    expect(r.status == 200 and isinstance(r.body, dict) and r.body.get("state") == "done", f"done on an approval answered {r!r}")
+    return "done is taken on an approval"
+
+
+@check("BA10", ["ASKS-1"])
+def ba10(ctx):
+    p = branded(ctx)
+    k = p.conn("repeat")
+    key = ctx.idem("ba10")
+    r1 = p.ask(k, {**yn("Is the van back?"), "idempotency_key": key}, "ba10")
+    expect(r1.status == 201, f"the first ask answered {r1!r}")
+    r2 = p.ask(k, {**yn("A different question, the same key?"), "idempotency_key": key}, "ba10")
+    expect(r2.status == 200 and r2.body.get("repeated") is True and r2.body.get("task_id") == r1.body["task_id"]
+           and r2.body.get("title") == "Is the van back?", f"the same key with another body answered {r2!r}")
+    w = ctx.api.req("POST", f"/v1/tasks/{r1.body['task_id']}/withdraw", {"why": "A conformance check."}, key=k)
+    expect(w.status == 200, f"the withdraw answered {w!r}")
+    r3 = p.ask(k, {**yn("Is the van back?"), "idempotency_key": key}, "ba10")
+    expect(r3.status == 200 and r3.body.get("repeated") is True and r3.body.get("state") == "withdrawn", f"the same key after a withdraw answered {r3!r}")
+    return "a repeated key returns the same ask as it is now, and opens nothing"
+
+
+@check("BA11", ["ASKS-4"])
+def ba11(ctx):
+    p = branded(ctx)
+    k = p.conn("repeat")
+    t = p.placed(k, yn("Did the parts arrive?"), "ba11")
+    w = ctx.api.req("POST", f"/v1/tasks/{t}/withdraw", {"why": "The parts came in."}, key=k)
+    expect(w.status == 200 and w.body.get("state") == "withdrawn", f"the withdraw answered {w!r}")
+    r = p.answer(t, {"action": "answer", "choice": "Yes"})
+    expect(400 <= r.status < 500, f"an answer to a withdrawn ask answered {r.status}")
+    t2 = p.placed(k, yn("Is the bike ready?"), "ba11-elsewhere")
+    w2 = ctx.api.req("POST", f"/v1/tasks/{t2}/withdraw", {"why": "Answered in the shop's own app.", "elsewhere": True}, key=k)
+    expect(w2.status == 200, f"a withdraw with elsewhere answered {w2!r}")
+    expect(p.open_item(t2) is None, "an ask withdrawn with elsewhere is still in open")
+    return "a withdrawn ask takes no answer; one withdrawn elsewhere leaves open at once"
+
+
+@check("BA12", ["ASKS-9"])
+def ba12(ctx):
+    p = branded(ctx)
+    k_plain = p.conn("repeat")
+    r = p.ask(k_plain, yn("A brand key probe?"), "ba12-unknown", headers={"Brand-Key": "bk_unknown000000000000000000"})
+    expect(refused(r, 400, "brand_not_proved"), f"an unknown Brand-Key answered {r!r}, expected brand_not_proved")
+    kb = p.brand("brand")
+    bk = ctx.api.req("POST", "/v1/brand/key", {}, key=kb)
+    if bk.status != 200 or not (bk.body or {}).get("brand_key"):
+        raise Skip(f"the server gives no brand key to a test brand ({bk.status}); the rest of ASKS-9 needs a proved domain")
+    t = p.placed(k_plain, yn("Asked with the brand key?"), "ba12", headers={"Brand-Key": bk.body["brand_key"]})
+    x = p.open_item(t)
+    expect(x is not None and (x.get("brand") or {}).get("name") == BRAND["name"], "an ask placed with a Brand-Key does not wear that brand")
+    return "Brand-Key dresses an ask from another key; an unknown one is refused"
+
+
+@check("BA13", ["ASKS-17", "ASKS-21"])
+def ba13(ctx):
+    p = branded(ctx)
+    k = p.conn("contacts")
+    bad = []
+    r = p.ask(k, {"title": "Call {c2} back", "urgency": "today", "contacts": [SHOPPER], "step": {"type": "question", "text": "Did {c2} call?", "choices": ["Yes", "No"]}}, "ba13-ref")
+    if not refused(r, 400, "unknown_reference"):
+        bad.append(f"a reference to a missing contact answered {r.status} {r.code}")
+    r = p.ask(k, {"title": "Call {c1} back", "urgency": "today", "contacts": [{**SHOPPER, "role": "Avery Quinlan"}], "step": {"type": "question", "text": "Did {c1} call?", "choices": ["Yes", "No"]}}, "ba13-role")
+    if not refused(r, 400, field="role"):
+        bad.append(f"a role that is a name answered {r.status} {r.code}")
+    r = p.ask(k, {"title": "Call {c1} back", "urgency": "today", "contacts": [SHOPPER], "step": {"type": "question", "text": "Did {c1} call?", "choices": ["Yes", "No"]}}, "ba13-ok")
+    if r.status != 201:
+        bad.append(f"a contact with a phone in E.164 answered {r.status} {r.code}")
+    expect(not bad, "; ".join(bad))
+    return "an unknown reference and a role that is a name are refused; a contact's phone is taken"
+
+
+@check("BA14", ["ASKS-18", "ASKS-20"])
+def ba14(ctx):
+    p = branded(ctx)
+    k = p.conn("contacts")
+    r = p.ask(k, {"title": "{c1} wants a callback", "urgency": "today", "contacts": [SHOPPER], "card": {"blocks": [{"headline": "{c1} texted about a wheel."}, {"contact": "c1"}]},
+                  "step": {"type": "question", "text": "What should I tell {c1}?"}}, "ba14")
+    expect(r.status == 201, f"an ask with a contact answered {r!r}")
+    t = r.body["task_id"]
+    sc = (r.body.get("contacts") or [{}])[0]
+    expect(sc.get("name") == SHOPPER["name"] and sc.get("phone") == SHOPPER["phone"], "the service's own view of the open ask lacks the contact")
+    x = p.open_item(t)
+    c = ((x or {}).get("contacts") or [{}])[0]
+    expect(c.get("name") == SHOPPER["name"] and "ref" not in c, f"the person's open ask carries {json.dumps(c)[:160]}")
+    v = p.view()
+    mine = {tt for _, tt in p.asks}   # this run's asks only: a member given by file may hold earlier runs' answers
+    others = json.dumps({kk: ([e for e in vv if not isinstance(e, dict) or e.get("task_id") in mine] if isinstance(vv, list) else vv)
+                         for kk, vv in v.items() if kk != "open"})
+    expect(SHOPPER["name"] not in others and SHOPPER["phone"] not in others, "a contact's details appear outside the open ask")
+    r2 = p.m("POST", f"/v1/member/tasks/{t}/pass", {"to": "mb_nobody00000000000000", "note": "a check"})
+    expect(refused(r2, 409, "has_contacts"), f"passing on an ask with contacts answered {r2!r}, expected 409 has_contacts")
+    r3 = ctx.api.req("POST", "/v1/calls", {**ctx.as_call(ctx.listen(), "ba14-call"), "contacts": [SHOPPER]})
+    expect(refused(r3, 400, "contacts_not_allowed"), f"contacts on a pool call answered {r3!r}, expected contacts_not_allowed")
+    p.closed["ba14"] = t
+    return "details only on the open ask and the service's view; no pass on; no contacts on a pool call"
+
+
+@check("BA15", ["ASKS-16"])
+def ba15(ctx):
+    p = branded(ctx)
+    k = p.conn("contacts")
+    t = p.placed(k, {"title": "Call {c1} back about the wheel.", "urgency": "today", "contacts": [SHOPPER],
+                     "step": {"type": "call", "contact": "c1", "text": "Call {c1} back about the wheel."}}, "ba15")
+    r = p.answer(t, {"action": "answer"})
+    rep = (r.body or {}).get("reply") or {} if isinstance(r.body, dict) else {}
+    expect(r.status == 200 and rep.get("contact_ref") == SHOPPER["ref"], f"Called on a call step answered {r!r}")
+    return "a call step is answered Called, with the contact's ref"
+
+
+@check("BA16", ["ASKS-23"])
+def ba16(ctx):
+    p = branded(ctx)
+    k = p.conn("groups")
+    g = "visit-" + ctx.run
+    for i in range(6):
+        p.placed(k, {**yn(f"Question {i + 1} about the visit?"), "group": g}, f"ba16-{i}")
+    r = p.ask(k, {**yn("Question 7 about the visit?"), "group": g}, "ba16-7")
+    expect(refused(r, 400, "group_full"), f"a seventh open ask in one group answered {r!r}, expected group_full")
+    r2 = p.ask(k, {"title": "Send it?", "urgency": "whenever", "group": g + "-a", "step": {"type": "approve", "text": "Send the letter."}}, "ba16-appr")
+    expect(refused(r2, 400, field="group"), f"an approval with a group answered {r2!r}, expected 400 on group")
+    return "a seventh ask in a group, and a group on an approval, are refused"
+
+
+@check("BA17", ["ASKS-25"])
+def ba17(ctx):
+    p = branded(ctx)
+    if not (ctx.disc or {}).get("connect_page"):
+        raise Skip("the server lists no connect_page (27.9 is a SHOULD)")
+    kb = p.brand("brand")
+    b = ctx.api.req("GET", "/v1/brand", key=kb)
+    bid = (b.body or {}).get("id") if isinstance(b.body, dict) else None
+    expect(bid, f"GET /v1/brand gives no id: {b!r}")
+    bad = []
+    for ret in ("https://elsewhere.example/back", "https://harbor-bikes.example.elsewhere.example/back", "https://harbor-bikes.example" + "@" + "elsewhere.example/back",
+                "http://harbor-bikes.example/back", "https://harbor-bikes.example:8443/back"):
+        r = ctx.api.req("POST", "/v1/connect/brand", {"brand": bid, "return": ret}, key=None)
+        if not refused(r, 400, field="return"):
+            bad.append(f"{ret} answered {r.status}")
+    r = ctx.api.req("POST", "/v1/connect/brand", {"brand": bid, "return": "https://harbor-bikes.example/back"}, key=None)
+    if r.status != 200 or not (r.body or {}).get("return_ok"):
+        bad.append(f"a return on the brand's own domain answered {r.status}")
+    r = ctx.api.req("POST", "/v1/connect/token", {"code": "cc_unknown0000000000"}, key=None, headers={"Brand-Key": "bk_unknown000000000000000000"})
+    if not refused(r, 400, "brand_not_proved"):
+        bad.append(f"a code exchange with an unknown brand key answered {r.status} {r.code}")
+    expect(not bad, "; ".join(bad))
+    return "return is held to the brand's domain; an unknown brand key exchanges nothing"
+
+
+@check("BA90", ["ASKS-19", "ASKS-26"], group="final")
+def ba90(ctx):
+    p = ctx.cache.get("person")
+    if p is None or p.error or not p.token:
+        raise Skip("no test member in this run")
+    t = p.closed.get("ba14")
+    if not t:
+        raise Skip("BA14 placed no ask with a contact")
+    k = p.conns["contacts"][1]
+    r = p.answer(t, {"action": "answer", "text": "Tell Avery Quinlan the wheel is true; AVERY  QUINLAN can call +15125550199 or avery, any time.",
+                     "note": "avery quinlan prefers mornings."})
+    expect(r.status == 200, f"the answer was refused: {r!r}")
+    time.sleep(65)   # ASKS-19: a minute after the close
+    g = ctx.api.req("GET", f"/v1/tasks/{t}", key=k)
+    expect(g.status == 200 and isinstance(g.body, dict), f"GET /v1/tasks/{t}: {g!r}")
+    c = (g.body.get("contacts") or [{}])[0]
+    expect(not any(f in c for f in ("name", "phone", "email")) and c.get("ref") == SHOPPER["ref"] and c.get("consent"),
+           f"a minute after the close the contact is {json.dumps(c)[:200]}")
+    rep = g.body.get("reply") or {}
+    want = "Tell {c1} the wheel is true; {c1} can call +15125550199 or avery, any time."
+    expect(rep.get("text") == want, f"the person's words were stored as {rep.get('text')!r}, expected {want!r}")
+    expect(rep.get("note") == "{c1} prefers mornings.", f"the answer's note was stored as {rep.get('note')!r}")
+    hist = json.dumps(p.view().get("history") or []).lower()
+    expect("avery quinlan" not in hist and "avery  quinlan" not in hist, "the person's history still holds the contact's name")
+    return "details deleted within a minute; the name in the person's words is a reference, the number typed stays"
+
+
+@check("BA99", ["ASKS-4"], group="final")
+def ba99(ctx):
+    p = ctx.cache.get("person")
+    if p is None or p.error or not p.token:
+        raise Skip("no test member in this run")
+    bad = 0
+    for key, t in p.asks:
+        r = ctx.api.req("POST", f"/v1/tasks/{t}/withdraw", {"why": "A conformance check; nothing to answer."}, key=key)
+        if r.status not in (200, 409):
+            bad += 1
+    for tag, (cid, _) in list(p.conns.items()):
+        p.m("DELETE", f"/v1/member/connections/{cid}")
+    expect(bad == 0, f"{bad} withdraws answered neither 200 nor 409")
+    return f"{len(p.asks)} asks withdrawn or already closed; {len(p.conns)} connections removed"
+
+
+@check("PC99", ["MEMBER-16", "MEMBER-3"], group="final")
+def pc99(ctx):
+    p = ctx.cache.get("person")
+    if p is None or p.error or not p.token:
+        raise Skip("no test member in this run")
+    if not p.made_by_route:
+        raise Skip("the test member was given by file; it is left for the person running the suite")
+    r0 = p.m("POST", "/v1/member/leave", {})
+    expect(refused(r0, 400, "missing_field", "confirm"), f"leave without confirm answered {r0!r}")
+    r = p.m("POST", "/v1/member/leave", {"confirm": True})
+    expect(r.status == 200 and (r.body or {}).get("left") is True, f"leave answered {r!r}")
+    r2 = p.m("GET", "/v1/member/tasks")
+    expect(refused(r2, 404, "not_found"), f"the credential after leaving answered {r2!r}, expected 404 not_found")
+    return "the test member left; its credential then answers 404"
+
+
+UNTESTED.update({
+    "ASKS-2": "the answer is posted to the service's webhook; checking it needs a public https receiver, which a suite does not run",
+    "ASKS-3": "retries are posted to the service's webhook over a day; as ASKS-2",
+    "ASKS-22": "an alert reaches the person's device, which a suite does not have",
+    "MEMBER-12": "a test member is never offered a pool call (MEMBER-24), so there is no offer to decline",
+    "MEMBER-13": "what a push carries reaches the person's device, which a suite does not have",
+    "MEMBER-17": "needs a second member who joined through the first one's link (26.10); not in this version of the suite",
+    "MEMBER-18": "as MEMBER-17",
+    "MEMBER-19": "as MEMBER-17",
+    "MEMBER-20": "needs an account session (26.11); not in this version of the suite",
+    "MEMBER-21": "needs a sign-in from a second computer (26.11); not in this version of the suite",
+    "MEMBER-22": "as MEMBER-21",
+    "MEMBER-23": "ringing reaches the person's device, which a suite does not have",
+})
+UNTESTED.update({f"ASKER-{i}": "binds a service that places asks, not a server" for i in range(1, 5)})
+UNTESTED.update({f"CARD-{i}": "a rule for person clients; a server suite does not see a client" for i in range(1, 18)})
+UNTESTED.update({f"CLIENT-{i}": "a rule for person clients; a server suite does not see a client" for i in range(1, 16)})
+
+
 def trace_table():
     ids = spec_ids()
     cover = {}
@@ -2579,8 +3239,10 @@ def main():
     ap.add_argument("--trace", action="store_true", help="print untested requirement ids and exit")
     ap.add_argument("--write-trace", metavar="PATH", help="write traceability.md and exit")
     ap.add_argument("--list", action="store_true", help="list checks and exit")
-    ap.add_argument("--budget", type=float, default=450.0, help="seconds the run may take (default 450)")
+    ap.add_argument("--budget", type=float, default=900.0, help="seconds the run may take (default 900)")
     ap.add_argument("--interval", type=float, default=1.0, help="least seconds between requests (default 1.0)")
+    ap.add_argument("--member-file", help="a test member's credential for sections 26 and 27: a file holding MEMBER_TOKEN=... "
+                    "(never printed); without it the run makes one through discovery's test_members, if the server lists it")
     args = ap.parse_args()
     args.only = set(x.strip() for x in args.only.split(",")) if args.only else None
     EXTRA_HEADERS.clear()
@@ -2595,6 +3257,14 @@ def main():
                     EXTRA_HEADERS[name.strip()] = val.strip()
         if not args.key:
             ap.error("no TEST_KEY= line in the key file")
+    args.member_token = None
+    if args.member_file:
+        with open(os.path.expanduser(args.member_file)) as f:
+            for line in f:
+                if line.strip().startswith("MEMBER_TOKEN="):
+                    args.member_token = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+        if not args.member_token:
+            ap.error("no MEMBER_TOKEN= line in the member file")
 
     if args.trace:
         sys.exit(print_trace())

@@ -349,8 +349,9 @@ async function connectionTask(env, request, key, b) {
 
 // a note on a task, in order (operations 1:00 PM CT); masked like a reply; at most 50 per task
 async function addNote(env, taskId, note, by, extra = {}) {
-  const row = await env.DB.prepare('SELECT notes_json FROM tasks WHERE id = ?').bind(taskId).first();
+  const row = await env.DB.prepare('SELECT notes_json, contacts_json FROM tasks WHERE id = ?').bind(taskId).first();
   const notes = row && row.notes_json ? JSON.parse(row.notes_json) : [];
+  if (row && row.contacts_json && row.contacts_json !== '[]') { const CT = await import('./contacts.js'); note = CT.toRefs(note, CT.parse(row.contacts_json)); }   // OWNER_router_35 item 1
   if (notes.length >= 50) throw fixable('invalid_field', 'note', 'This task has 50 notes; answer it, or start a new one.', null, {}, 422);
   notes.push({ at: iso(nowMs()), note, by, ...extra });   // extra: the name drawn for a person sender or passer; private between a passer and a receiver
   await env.DB.prepare('UPDATE tasks SET notes_json = ? WHERE id = ?').bind(JSON.stringify(notes), taskId).run();
@@ -512,7 +513,10 @@ export async function memberReply(env, request, m, taskId, b) {
   // WEB gap 36 (router_12 item 3): an approval from a client with no device key is allowed and carries no device_approved mark; it says so
   const CT = await import('./contacts.js'), clist = CT.parse(t.contacts_json), cref = action === 'answer' ? CT.contactRef(clist, step, choice) : undefined;
   // a signed approval of text that names a contact covers the text as the person saw it: only its digest is kept, never the name
-  const drawn = action === 'approve' && clist && CT.hasRefs(text || step.text) ? { approved_digest_drawn: await (await import('./tasksig.js')).taskDigest(CT.drawNames(text || step.text, clist)) } : {};
+  // OWNER_router_35 item 1 (ASKS-26): what the person saw and approved, names drawn; then their words are stored with references
+  const seen = action === 'approve' && clist ? CT.drawNames(text || step.text, clist) : null;
+  if (clist) { text = CT.toRefs(text, clist); note = CT.toRefs(note, clist); }
+  const drawn = seen !== null && seen !== (text || step.text) ? { approved_digest_drawn: await (await import('./tasksig.js')).taskDigest(seen) } : {};
   const reply = { action, choice, text, note, at: iso(now), ...(cref !== undefined ? { contact_ref: cref } : {}), ...drawn, ...(action === 'approve' ? { approved_text: text || step.text } : {}),   // the asker reads exactly what was approved
     ...(['approve', 'deny'].includes(action) ? { device_approved: false, mark: 'none: sent without a device signature, so it carries no device_approved mark' } : {}),
     ...(mt.masked || mn.masked ? { masked: 'A key-shaped value was removed; save it to the file the step names.' } : {}) };

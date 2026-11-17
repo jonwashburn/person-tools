@@ -3,7 +3,7 @@
   "groups": [],
   "history": [],
   "notice": {
-    "text": "Robin can send you tasks and questions here; you can mute or leave at any time.",
+    "text": "Robin can send you asks here; you can mute or leave at any time.",
     "from": "Robin",
     "read": "/v1/member/people/notice",
     "mute": {

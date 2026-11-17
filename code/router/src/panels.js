@@ -11,7 +11,7 @@ export function requireListedReal(key, what) {
 export const OWN_PANELS_PER_PRINCIPAL = 3, LIVE_PANELS_PER_PRINCIPAL = 5;   // OWN_PANELS.md rule 1 (TRUST 4:26 AM CT)
 export const OWN_PANEL_MAX_MEMBERS = 50, LIVE_PANEL_MAX_MEMBERS = 200, OWN_LINK_JOINS_PER_DAY = 25;   // rule 4
 export const OWN_NOTICE_IDS = ['tester-notice-own-1'];   // legal/tester_notice_own.json (TRUST 4:13 AM CT)
-export const PEOPLE_NOTICE_IDS = ['tester-notice-people-3', 'tester-notice-people-2'];   // TRUST 9:16: people-3 accepted; first once the page serves it   // TRUST 1:55 PM CT 16 Nov: people-2 adds the alerts sentence; people-1 still accepted   // legal/tester_notice_people.json (TRUST 8:19 PM CT 15 Nov; OWNER_router_23)
+export const PEOPLE_NOTICE_IDS = ['tester-notice-people-4', 'tester-notice-people-3'];   // OWNER_router_36 item 2: the page serves people-4   // TRUST 9:16: people-3 accepted; first once the page serves it   // TRUST 1:55 PM CT 16 Nov: people-2 adds the alerts sentence; people-1 still accepted   // legal/tester_notice_people.json (TRUST 8:19 PM CT 15 Nov; OWNER_router_23)
 // rule 12: the name a principal gives itself, as people read it everywhere
 export const askerDisplay = (n) => `${n} (named by the asker; not checked by person.tools)`;
 import * as SCREENING from './screening/index.js';
@@ -20,6 +20,7 @@ export async function checkAskerName(v, ctx = {}) {
   const n = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
   const bad = (why) => fixable('invalid_field', 'asker_name', `asker_name ${why}`, 'Maple Games');
   if (n.length < 2 || n.length > 60) throw bad('is 2 to 60 characters: the name your people know you by.');
+  if (/<[\p{L}\/]/u.test(n)) throw bad('carries no markup: words only.');   // TRUST 1:59 AM CT 17 Nov (ASKS-6's rule for every drawn name)
   // the screen's own fold (homoglyphs, accents, case, digits read as letters), so "Bаnk" and "Acc0unt" read as what they say
   const f = typeof SCREENING.foldForNames === 'function' ? SCREENING.foldForNames(n) : n.toLowerCase();
   if (SCREENING.NAME_ADDRESS_RX instanceof RegExp && (SCREENING.NAME_ADDRESS_RX.test(f) || SCREENING.NAME_ADDRESS_RX.test(n.toLowerCase()))) throw bad('has no address, link, phone or email.');

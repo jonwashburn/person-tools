@@ -93,6 +93,23 @@ export const drawRoles = (text, list) => { const s = String(text == null ? '' : 
 // the open card, as the person saw it (a signed approval's digest covers this)
 export const drawNames = (text, list) => String(text == null ? '' : text).replace(REF_RX, (m, n) => { const c = (list || []).find((x) => x.id === 'c' + n); return c ? (c.name || c.role) : m; });
 export const hasRefs = (text) => /\{c[1-9]\}/.test(String(text || ''));
+// OWNER_router_35 item 1 (ASKS-26 as PROTOCOL narrowed it, 12:47 AM CT 17 Nov): the person's words keep no contact's NAME: each name, as
+// whole words, in any case, with any run of spaces between its words, becomes the contact's reference, the longest name first. A part of
+// a name, a phone or an email the person typed stays as written (a reference stands for a name); so does any email or web address.
+const KEEP_RX = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}|https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/giu;
+export function toRefs(text, list) {
+  if (text == null || !list || !list.length) return text;
+  const names = [];
+  for (const c of list) { const v = c && typeof c.name === 'string' ? c.name.trim() : ''; if (v.length >= 2 && c.id) names.push([v, '{' + c.id + '}']); }
+  if (!names.length) return text;
+  names.sort((a, b) => b[0].length - a[0].length);
+  const pat = (v) => v.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+  const rx = new RegExp('(?<![\\p{L}\\p{N}])(?:' + names.map(([v]) => '(' + pat(v) + ')').join('|') + ')(?![\\p{L}\\p{N}])', 'giu');
+  const swap = (part) => part.replace(rx, (...a) => { const k = a.slice(1, names.length + 1).findIndex((g) => g !== undefined); return k >= 0 ? names[k][1] : a[0]; });
+  const s = String(text); let out = '', last = 0;
+  for (const m of s.matchAll(KEEP_RX)) { out += swap(s.slice(last, m.index)) + m[0]; last = m.index + m[0].length; }
+  return out + swap(s.slice(last));
+}
 // a reply's contact_ref: a call step's contact, or a choice that is a reference
 export function contactRef(list, step, choice) {
   const id = step && step.type === 'call' ? step.contact : (typeof choice === 'string' && /^\{c[1-4]\}$/.test(choice) ? choice.slice(1, -1) : null);

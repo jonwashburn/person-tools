@@ -1,6 +1,6 @@
 # Screening cases, run once
 
-Screening 1.5.1-rules, Nov 16, 2026, 1:52 PM CT. 1201 checks (556 public cases, 609 private red-team cases, and the standard's fixtures), 1201 as expected, 0 missed.
+Screening 1.5.2-rules, Nov 17, 2026, 1:31 AM CT. 1205 checks (560 public cases, 609 private red-team cases, and the standard's fixtures), 1205 as expected, 0 missed.
 
 | Case | Ask | Expected | Got | As expected |
 |---|---|---|---|---|
@@ -560,6 +560,10 @@ Screening 1.5.1-rules, Nov 16, 2026, 1:52 PM CT. 1201 checks (556 public cases, 
 | LB-5 | Download app 2: which word fits a calm morning, quiet or bright? | REFUSE off_platform | REFUSE off_platform not fixable | yes |
 | LB-6 | Check your bank balance 2: which word fits a calm morning, quiet or bright? | HOLD undecided | HOLD undecided  | yes |
 | LB-7 | Sign up 1: which word fits a calm morning, quiet or bright? | HOLD undecided | HOLD undecided  | yes |
+| FM-1 | We moved the Northside & Sons sign to the left, as most of you said. | ALLOW | ALLOW   | yes |
+| FM-2 | We renamed the shop Abbott and Daughters because most of you liked it best. | ALLOW | ALLOW   | yes |
+| FM-3 | We asked your sons which shelf they liked best. | HOLD mentions_children | HOLD mentions_children  | yes |
+| FM-4 | Northside & Sons asked the kids which shelf they liked. | HOLD mentions_children | HOLD mentions_children+undecided  | yes |
 | W1 | (a private red-team rewording; not shown) | NOT_ALLOW | HOLD undecided  | yes |
 | W2 | (a private red-team rewording; not shown) | NOT_ALLOW | REFUSE paid_engagement not fixable | yes |
 | W3 | (a private red-team rewording; not shown) | NOT_ALLOW | REFUSE third_party_contact not fixable | yes |

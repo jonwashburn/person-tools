@@ -216,6 +216,10 @@
     "connect_page": {
       "$ref": "common.json#/$defs/abs_url",
       "description": "For a server that offers 27.9: the address of its connect page, where a service sends a person to connect."
+    },
+    "test_members": {
+      "$ref": "common.json#/$defs/server_url",
+      "description": "For a server that lists person_client and makes test members for a conformance run (26.13): the address of that route."
     }
   },
   "additionalProperties": false
