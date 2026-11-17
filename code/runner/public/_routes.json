@@ -1,1 +1,1 @@
-{"version": 1, "include": ["/c/*", "/s/*", "/m/*", "/o/*", "/x/*", "/xp/*", "/r/*", "/j/*", "/push-key", "/mf/*", "/mx/*", "/p/*", "/.well-known/apple-app-site-association"], "exclude": []}
+{"version": 1, "include": ["/c/*", "/s/*", "/m/*", "/o/*", "/x/*", "/xp/*", "/r/*", "/j/*", "/push-key", "/mf/*", "/mx/*", "/p/*", "/.well-known/apple-app-site-association", "/connect"], "exclude": []}

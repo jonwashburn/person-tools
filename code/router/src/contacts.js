@@ -83,7 +83,10 @@ export const parse = (json) => { try { const v = JSON.parse(json || 'null'); ret
 // the person's own list: everything but the service's ref
 export const forPerson = (list) => list ? list.map(({ ref, ...c }) => c) : null;
 // where details never go (alerts, logs, any line outside the open card): a reference reads as the contact's role
-export const drawRoles = (text, list) => String(text == null ? '' : text).replace(REF_RX, (m, n) => { const c = (list || []).find((x) => x.id === 'c' + n); return c ? c.role : 'someone'; });
+// PROTOCOL 5:33 PM CT: drawn as "the <role>" (a role that already starts with the, a, an, my or your is left as it is)
+export const drawRoles = (text, list) => { const s = String(text == null ? '' : text); return s.replace(REF_RX, (m, n, at) => {
+  const c = (list || []).find((x) => x.id === 'c' + n); const w = c ? (/^(?:the|a|an|my|your)\s/i.test(c.role) ? c.role : 'the ' + c.role) : 'someone';
+  return at === 0 || /[.!?]\s+$/.test(s.slice(0, at)) ? w.charAt(0).toUpperCase() + w.slice(1) : w; }); };   // PROTOCOL 5:55 (CARD-12): a sentence's first word takes a capital
 // the open card, as the person saw it (a signed approval's digest covers this)
 export const drawNames = (text, list) => String(text == null ? '' : text).replace(REF_RX, (m, n) => { const c = (list || []).find((x) => x.id === 'c' + n); return c ? (c.name || c.role) : m; });
 export const hasRefs = (text) => /\{c[1-9]\}/.test(String(text || ''));

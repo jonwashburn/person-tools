@@ -1,0 +1,11 @@
+{
+  "title": "Send this quote to the shopper?",
+  "urgency": "today",
+  "group": "shopper:cv_812:rows",
+  "step": {
+    "type": "approve",
+    "text": "Send the out-the-door quote of 41,250.00 USD by text.",
+    "approve_label": "Send it",
+    "deny_label": "Hold it"
+  }
+}

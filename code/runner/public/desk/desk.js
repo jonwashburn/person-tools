@@ -175,10 +175,20 @@ const KIND_WORD = { choice: 'Pick one', words: 'Answer in words', approve: 'Appr
 const contactsOf = (t) => (Array.isArray(t && t.contacts) ? t.contacts.filter((c) => c && typeof c === 'object' && /^c[1-4]$/.test(c.id || '')) : []);
 const contactOf = (t, id) => contactsOf(t).find((c) => c.id === id) || null;
 const roleOf = (c) => 'the ' + String(c.role || 'contact');
+// settled in the service's own app: the person's list says answered_elsewhere (live, 7:43 PM CT 16 Nov), the asker's view elsewhere
+const settledElsewhere = (t) => !!(t && (t.answered_elsewhere || t.elsewhere));
+// Off the open card a reference reads as the role; two contacts with the same role are told apart: 'the shopper 1', 'the shopper 2'
+function roleWords(t) {
+  const cs = contactsOf(t), n = {}, seen = {}, out = {};
+  for (const c of cs) n[c.role] = (n[c.role] || 0) + 1;
+  for (const c of cs) { seen[c.role] = (seen[c.role] || 0) + 1; out[c.id] = roleOf(c) + (n[c.role] > 1 ? ' ' + seen[c.role] : ''); }
+  return out;
+}
 const capFirst = (w) => w.charAt(0).toUpperCase() + w.slice(1);
 function refs(t, str, open) {   // {c1}: the contact's name on the open card, "the <role>" everywhere else (CARD-12)
   if (typeof str !== 'string' || str.indexOf('{c') < 0 || !contactsOf(t).length) return str;
-  return str.replace(/\{(c[1-4])\}/g, (m, id, at) => { const c = contactOf(t, id); if (!c) return m; const w = open && c.name ? String(c.name) : roleOf(c); return at === 0 ? capFirst(w) : w; });
+  const rw = roleWords(t);
+  return str.replace(/\{(c[1-4])\}/g, (m, id, at) => { const c = contactOf(t, id); if (!c) return m; const w = open && c.name ? String(c.name) : rw[id]; return at === 0 ? capFirst(w) : w; });
 }
 function forgetDetails(t) {   // what History keeps of a closed ask's contacts: who they were to the person, never their details
   if (!contactsOf(t).length) return t;
@@ -191,7 +201,7 @@ function fmtPhone(p) {
 }
 function contactBlock(t, id, open) {   // CARD-13: the details, and under them whose statement the consent is
   const c = contactOf(t, id); if (!c) return null;
-  if (!open || !(c.name || c.phone || c.email)) return h('p', { class: 'b-contact gone' }, capFirst(roleOf(c)) + '\u2019s details were deleted when the ask closed.');
+  if (!open || !(c.name || c.phone || c.email)) return h('p', { class: 'b-contact gone' }, capFirst(roleWords(t)[c.id]) + '\u2019s details were deleted when the ask closed.');
   const b = brandOf(t), who = b ? b.name : whoName(t), nm = c.name ? String(c.name) : roleOf(c);
   const mail = typeof c.email === 'string' && /^[^\s@<>"]+@[^\s@<>"]+$/.test(c.email) ? c.email : null;
   return h('div', { class: 'b-contact' },
@@ -633,7 +643,7 @@ function absorb(data) {
   if (prevSel && !ids.has(prevSel) && !S.pending.has(prevSel) && !S.failed.has(prevSel) && !S.closed.has(prevSel)) {
     const order = lastOrder; const i = order.indexOf(prevSel);
     const w = taken.get(prevSel);
-    S.gone = w ? (w.elsewhere ? null : whoName(w) + ' took this ask back' + (w.withdraw_why ? ': ' + String(w.withdraw_why) : '') + '.')
+    S.gone = w ? (settledElsewhere(w) ? null : whoName(w) + ' took this ask back' + (w.withdraw_why ? ': ' + String(w.withdraw_why) : '') + '.')
       : 'That ask left your list: its AI withdrew it, or you answered it on another device.';
     S.sel = null;
     const next = flatOrder();
@@ -715,7 +725,9 @@ function labelFor(t, body) {
   if (body.action === 'pass') return 'Pass on to ' + (nameOfMember(body.to) || 'one of your people') + (body.note ? ', with your line' : '');
   if (body.action === 'call_not_now') return 'Decline this call';
   if (body.action === 'note') return 'Note: ' + body.note;
-  if (body.action === 'answer') return body.choice != null ? body.choice : '“' + (body.text || '') + '”';
+  if (body.action === 'answer' && t.step && t.step.type === 'call') return 'Called';
+  // the undo bar is not the open card: a choice that is a contact reads as their role (CARD-12)
+  if (body.action === 'answer') return body.choice != null ? refs(t, body.choice, false) + (body.text ? ': “' + body.text + '”' : '') : '“' + (body.text || '') + '”';
   if (body.action === 'done') return 'Done';
   if (body.action === 'not_now') return 'Not now';
   if (body.action === 'approve') return (t.step.approve_label || 'Approve') + (body.text ? ' (your edited words)' : '');
@@ -948,7 +960,7 @@ function renderBanner() {
   if (!now.length || S.view !== 'asks') { b.hidden = true; return; }
   const first = fair(now)[0];
   fill(b, h('span', { class: 'label' }, 'Now'),
-    h('span', null, now.length === 1 ? (first.isCall ? ['A call for you: ', String(first.offer.minutes || '?'), ' minutes', first.offer.pay && first.offer.pay.unpaid_test ? ', unpaid test' : '', '. ', whoName(first)] : [whoName(first), ': ', first.title])
+    h('span', null, now.length === 1 ? (first.isCall ? ['A call for you: ', String(first.offer.minutes || '?'), ' minutes', first.offer.pay && first.offer.pay.unpaid_test ? ', unpaid test' : '', '. ', whoName(first)] : [whoName(first), ': ', refs(first, first.title, false)])
       : [String(now.length), ' need you now. First: ', whoName(first), ': ', refs(first, first.title, false)]),
     ...(S.sel === first.task_id ? [] : [h('button', { class: 'btn', type: 'button', onclick: () => { S.sel = first.task_id; render(); focusCard(); } }, 'Show')]));
   b.hidden = false;
@@ -1511,14 +1523,14 @@ function historyAnswer(t) {
     const pt = t.passed_to, n = (pt && (typeof pt === 'string' ? nameOfMember(pt) : (pt.name || nameOfMember(pt.member_id)))) || 'one of your people';
     return 'Passed to ' + n;
   }
-  if (r.action === 'answer' && s.type === 'call') return 'Called ' + (contactOf(t, s.contact) ? roleOf(contactOf(t, s.contact)) : 'them');
+  if (r.action === 'answer' && s.type === 'call') return 'Called ' + (contactOf(t, s.contact) ? roleWords(t)[s.contact] : 'them');
   if (r.action === 'answer') return r.choice != null ? 'You picked ' + refs(t, r.choice, false) + (r.text ? ': ' + r.text : '') : r.text ? 'You wrote: ' + r.text : 'Answered';
   if (r.action === 'done') return 'Done';
   if (r.action === 'not_now') return 'Not now';
   if (r.action === 'approve') return (s.approve_label || 'Approve') + (r.approved_text && r.approved_text !== s.text ? ', with your words' : '');
   if (r.action === 'deny') return s.deny_label || 'Deny';
   // an ask settled in the service's own app says so; one it withdrew says who did (27.2, ASKS-4)
-  if (t.state === 'withdrawn') return t.elsewhere ? 'Answered in ' + ((brandOf(t) && brandOf(t).name) || whoName(t)) : 'Withdrawn by ' + whoName(t);
+  if (t.state === 'withdrawn') return settledElsewhere(t) ? 'Answered in ' + ((brandOf(t) && brandOf(t).name) || whoName(t)) : 'Withdrawn by ' + whoName(t);
   if (t.state === 'lapsed') return 'Closed without an answer';
   return t.state || 'Answered';
 }

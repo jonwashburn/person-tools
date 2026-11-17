@@ -47,9 +47,15 @@ export function offerAlert({ askerName, privatePanel, kind, minutes, payCents, c
 }
 
 // A "now" task's one ring (tasks.js ringTask): who it is from, never the task's words
-export function taskAlert({ program, taskId, sound = true }) {
-  return { aps: { alert: { title: 'A task for you', body: `From ${program || 'one of your programs'}. Open the app to see it.` }, category: 'TASK', 'thread-id': 'tasks',
-    ...(sound ? { sound: 'ring.caf' } : {}), 'interruption-level': 'time-sensitive' }, task_id: taskId };
+// OWNER_router_30: YESNO for a question answered Yes or No with no line and nothing signed; TASK otherwise. Both let the app's extension
+// fetch the line (mutable-content) when the person turned it on; an offer (a call's ring) never waits for an extension.
+export function isYesNo(step) {
+  return !!(step && step.type === 'question' && Array.isArray(step.choices) && step.choices.length === 2 && step.choices.includes('Yes') && step.choices.includes('No') && !step.line_for);
+}
+export function taskAlert({ program, taskId, sound = true, step = null }) {
+  const yesno = isYesNo(step), who = program || 'one of your programs';
+  return { aps: { alert: { title: 'A task for you', body: yesno ? `From ${who}. Press and hold to answer.` : `From ${who}.` }, category: yesno ? 'YESNO' : 'TASK', 'thread-id': 'tasks',
+    'mutable-content': 1, ...(sound ? { sound: 'ring.caf' } : {}), 'interruption-level': 'time-sensitive' }, task_id: taskId };
 }
 
 // Whether this Worker can reach Apple's push service at all (Apple speaks HTTP/2 only): one request with a made-up provider

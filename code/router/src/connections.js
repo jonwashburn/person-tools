@@ -163,7 +163,7 @@ export async function revokeConnection(env, request, memberByToken, token, id) {
 export async function connectionForKey(env, keyId) {
   return env.DB.prepare('SELECT * FROM connections WHERE key_id = ?').bind(keyId).first();
 }
-export const CONNECTION_PATHS = [/^\/v1\/tasks$/, /^\/v1\/tasks\/media$/, /^\/v1\/tasks\/tk_[a-z0-9]+$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/withdraw$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/notes$/, /^\/v1\/brand$/, /^\/v1\/brand\/mark$/, /^\/v1\/brand\/verify$/, /^\/mcp$/];   // its own brand too (OWNER_router_9)
+export const CONNECTION_PATHS = [/^\/v1\/tasks$/, /^\/v1\/tasks\/media$/, /^\/v1\/tasks\/tk_[a-z0-9]+$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/withdraw$/, /^\/v1\/tasks\/tk_[a-z0-9]+\/notes$/, /^\/v1\/brand$/, /^\/v1\/brand\/mark$/, /^\/v1\/brand\/verify$/, /^\/v1\/brand\/key$/, /^\/mcp$/];   // its own brand too (OWNER_router_9)
 
 // The app's proposal (APP_FOR_SERVICE 11:55): POST .../quiet {"quiet": true|false} and POST .../block {"blocked"?: true|false}
 export async function quietOrBlock(env, request, memberByToken, token, id, which, b) {

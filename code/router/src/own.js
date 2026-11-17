@@ -139,7 +139,7 @@ export async function deliver(env, id) {
   const t = await env.DB.prepare('SELECT id, state, reply_json, answered_at FROM tasks WHERE id = ?').bind(d.task_id).first();
   const now = nowMs();
   if (!c || c.revoked_at || !t || !c.secret_enc) { await env.DB.prepare('UPDATE webhook_deliveries SET given_up_at = ? WHERE id = ?').bind(now, id).run(); return { ok: false, why: 'gone' }; }
-  const body = JSON.stringify({ task_id: t.id, state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, answered_at: iso(t.answered_at) });   // that ask's answer and nothing else
+  const body = JSON.stringify({ task_id: t.id, key: t.idem || null, state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, answered_at: iso(t.answered_at) });   // key: OWNER_router_31 item 17   // that ask's answer and nothing else
   const ts = String(Math.floor(now / 1000));
   const hk = await crypto.subtle.importKey('raw', new TextEncoder().encode(await secretOf(env, c)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = [...new Uint8Array(await crypto.subtle.sign('HMAC', hk, new TextEncoder().encode(ts + '.' + body)))].map((x) => x.toString(16).padStart(2, '0')).join('');

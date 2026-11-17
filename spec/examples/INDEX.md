@@ -220,6 +220,7 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `valid/member_task/call_with_contact.json` | 27.6 and 27.7, a call to make, with its contact's details while the ask is open (never ref) |
 | `valid/member_connection/branded.json` | ASKS-24, a connection whose asks wear a brand |
 | `valid/member_connection_secret/new.json` | 26.8, a connection's new webhook secret, shown once |
+| `valid/member_task/withdrawn.json` | ASKS-4, a withdrawn ask still listed for a day, with when and why |
 
 ## Invalid (each for exactly one reason)
 
@@ -424,3 +425,4 @@ Where a valid example differs from the prose's own example, the reason is said b
 | `invalid/ask_request/group_bad_chars.json` | a group name outside letters, digits, ':', '_' and '-' (27.2) |
 | `invalid/ask_request/phone_not_e164.json` | a phone not written in E.164 is refused, not rewritten (27.7) |
 | `invalid/member_connection_secret/missing_secret.json` | the answer carries the new secret |
+| `invalid/ask_request/group_on_approval.json` | only questions carry a group (27.8) |

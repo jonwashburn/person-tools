@@ -201,5 +201,19 @@
       "pattern": "^https://\\S+$"
     }
   },
-  "description": "line_for keys must be among choices, references {c1}..{c4} must name a contact, a choices block must equal step.choices, and no label may be one of the client's own words: the server checks these (ASKS-11, ASKS-13, ASKS-17)."
+  "description": "line_for keys must be among choices, references {c1}..{c4} must name a contact, a choices block must equal step.choices, and no label may be one of the client's own words: the server checks these (ASKS-11, ASKS-13, ASKS-17).",
+  "dependentSchemas": {
+    "group": {
+      "properties": {
+        "step": {
+          "properties": {
+            "type": {
+              "const": "question"
+            }
+          }
+        }
+      },
+      "description": "Only questions carry a group (27.8)."
+    }
+  }
 }

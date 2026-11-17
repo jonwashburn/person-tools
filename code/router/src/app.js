@@ -15,7 +15,7 @@ import * as SCREENING from './screening/index.js';
 
 const VERSION = '0.1';
 const VH = BUILD.wire_prefix + '-version';
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': `Authorization, Content-Type, Idempotency-Key, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Session-Id, X-Person-Member, ${VH}`, 'Access-Control-Expose-Headers': `Mcp-Session-Id, ${VH}` };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': `Authorization, Content-Type, Idempotency-Key, Brand-Key, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Session-Id, X-Person-Member, ${VH}`, 'Access-Control-Expose-Headers': `Mcp-Session-Id, ${VH}` };
 
 // the private paths only (a reader that ignores Allow lines must still see /v1/status and the discovery file as open)
 const ROBOTS_TXT = 'User-agent: *\n' + ['/internal/', '/mcp', '/v1/members/', '/v1/seats/', '/v1/join/', '/v1/arrivals/', '/v1/approvals/', '/v1/calls/', '/v1/quotes',
@@ -453,6 +453,8 @@ export async function handle(request, env, ctx) {
       if (!m0[2] && request.method === 'GET') return json(await BL.listBlocks(env, mm));
       if (m0[2] && request.method === 'DELETE') return json(await BL.removeBlock(env, mm, m0[2]));
     }
+    // OWNER_router_31 (27.9): the person connects a service from their own page
+    if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/connect$/.exec(path)) && request.method === 'POST') { const { memberByToken } = await import('./seats.js'); const { connectForPerson } = await import('./connect.js'); return json(await connectForPerson(env, request, memberByToken, m0[1], await body(request)), 201); }
     // OWNER_router_27 item 1: an approval of a task, signed by the person's device (tasksig.js); a body without task_id goes on unchanged
     if ((m0 = /^\/v1\/members\/(mt_[a-z0-9]+)\/signatures$/.exec(path)) && request.method === 'POST') {
       const peek = await request.clone().json().catch(() => null);
@@ -588,6 +590,10 @@ export async function handle(request, env, ctx) {
     // OWNER_router_9: the asker's brand (its own principal's), a brand picture, and the picture served from our store
     if (path === '/v1/brand' && (request.method === 'PUT' || request.method === 'GET')) { const k = needKey(await authKey(env, request)); const C = await import('./cards.js');
       return json(request.method === 'PUT' ? await C.putBrand(env, k, await body(request)) : await C.getBrand(env, k)); }
+    // OWNER_router_31 (27.9): connecting from the service
+    if (path === '/v1/connect/brand' && request.method === 'POST') { const { connectInfo } = await import('./connect.js'); return json(await connectInfo(env, request, await body(request))); }
+    if (path === '/v1/connect/token' && request.method === 'POST') { const { connectToken } = await import('./connect.js'); return json(await connectToken(env, request, await body(request))); }
+    if (path === '/v1/brand/key' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { newBrandKey } = await import('./cards.js'); return json(await newBrandKey(env, k)); }   // OWNER_router_31 (ASKS-9)
     if (path === '/v1/brand/verify' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { verifyBrand } = await import('./cards.js'); return json(await verifyBrand(env, k)); }   // OWNER_router_10 C
     if (path === '/v1/brand/mark' && request.method === 'POST') { const k = needKey(await authKey(env, request)); const { uploadMark } = await import('./cards.js'); return json(await uploadMark(env, request, k), 201); }
     if ((m0 = /^\/v1\/brand_media\/(m_[a-z0-9_]+)$/.exec(path)) && request.method === 'GET') { const { serveMark } = await import('./cards.js'); return withHeaders(await serveMark(env, m0[1])); }

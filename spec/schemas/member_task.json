@@ -275,6 +275,24 @@
       ],
       "pattern": "^[A-Za-z0-9:_-]{1,80}$",
       "description": "Asks of one service drawn together (27.8)."
+    },
+    "group_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "description": "The group named with its asker ('<connection id>/<group name>'); a client groups by it, never by the name alone (27.8, CARD-15)."
+    },
+    "withdrawn_at": {
+      "$ref": "common.json#/$defs/time",
+      "description": "On a withdrawn ask: when it was taken back (ASKS-4)."
+    },
+    "withdraw_why": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "On a withdrawn ask: the service's words on why (ASKS-4)."
     }
   },
   "$defs": {

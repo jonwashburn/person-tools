@@ -15,6 +15,8 @@ const ALLOW = [
   ["POST", /^members\/mt_[a-z0-9]{4,80}\/blocks$/],
   ["DELETE", /^members\/mt_[a-z0-9]{4,80}\/blocks\/bk_[a-z0-9]{4,80}$/],
   ["POST", /^members\/mt_[a-z0-9]{4,80}\/connections$/],
+  ["POST", /^connect\/brand$/],   // OWNER_router_31 (27.9): the connect page reads the proved brand
+  ["POST", /^members\/mt_[a-z0-9]{4,80}\/connect$/],   // OWNER_router_31: the person connects a service
   ["DELETE", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}$/],
   ["POST", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}\/(quiet|block|secret)$/],
   ["GET", /^members\/mt_[a-z0-9]{4,80}\/connections\/cn_[a-z0-9]{4,80}\/icon$/],

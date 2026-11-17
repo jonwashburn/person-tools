@@ -128,7 +128,7 @@ function out(t, request, brand) {
   return { task_id: t.id, state: t.state, title: t.title, to: t.connection_id ? 'the person who connected this AI' : firstTo.startsWith('mb:') ? 'the panel\'s one member' : firstTo, urgency: t.urgency,
     step: JSON.parse(t.step_json), unlocks: t.unlocks || null, asker: { program: t.program || null, session: t.session || null },
     created_at: iso(t.created_at), rang: !!t.rang_at, reply: t.reply_json ? JSON.parse(t.reply_json) : null, url: apiBase(request) + '/v1/tasks/' + t.id,
-    card: t.card_json ? JSON.parse(t.card_json) : null, contacts: t.contacts_json ? JSON.parse(t.contacts_json) : null, group: null, webhook: t.webhook_url || null,   // OWNER_router_26 item 21: what was sent, null when not
+    card: t.card_json ? JSON.parse(t.card_json) : null, contacts: t.contacts_json ? JSON.parse(t.contacts_json) : null, group: t.group_name || null, key: t.idem || null, ...(t.elsewhere ? { elsewhere: true } : {}), webhook: t.webhook_url || null,   // OWNER_router_26 item 21: what was sent, null when not
     ...(brand !== undefined ? { brand } : {}),
     notes: t.notes_json ? JSON.parse(t.notes_json).filter(n => !n.private) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)), ...(t.lapsed_at ? { lapsed_at: iso(t.lapsed_at) } : {}),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}) };
@@ -138,6 +138,16 @@ function out(t, request, brand) {
 async function askerBrand(env, principalId) {
   const r = await env.DB.prepare('SELECT brand_json, brand_id FROM brands WHERE principal_id = ?').bind(principalId).first();
   if (!r) return null; try { return { id: r.brand_id || null, name: JSON.parse(r.brand_json).name || null }; } catch { return null; }
+}
+
+// OWNER_router_31 item 1 (27.8): a group of asks from one key to one person; question steps only; at most six open at once
+async function readGroup(env, b, step, keyId, panelId, to) {
+  if (b.group === undefined || b.group === null) return null;
+  if (typeof b.group !== 'string' || !/^[A-Za-z0-9:_-]{1,80}$/.test(b.group)) throw fixable('invalid_field', 'group', 'group is 1 to 80 letters, digits, colons, underscores and hyphens, the same for each ask about one thing.', 'holiday:2026-12-24', {}, 400);
+  if (step.type !== 'question') throw fixable('invalid_field', 'group', 'Only a question joins a group: an approval, a link, a command or a call stands on a card of its own.', null, {}, 400);
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM tasks WHERE key_id = ? AND group_name = ? AND panel_id = ? AND to_name = ? AND state = 'open'").bind(keyId, b.group, panelId, to).first();
+  if (n && n.n >= 6) throw fixable('group_full', 'group', 'This group has six open asks; wait for one to close, or start another group.', null, {}, 400);
+  return b.group;
 }
 
 async function panelFor(env, key, ref) {
@@ -172,6 +182,8 @@ async function addressee(env, panel, to) {
 export async function ringTask(env, t) {
   const { ringDecision } = await import('./rings.js');
   const now = nowMs();
+  // OWNER_router_31 (ASKS-22): one alert for a group's asks placed within a minute of each other
+  if (t.group_name && t.key_id && await env.DB.prepare('SELECT 1 AS x FROM tasks WHERE key_id = ? AND group_name = ? AND panel_id = ? AND to_name = ? AND id != ? AND rang_at IS NOT NULL AND rang_at >= ? LIMIT 1').bind(t.key_id, t.group_name, t.panel_id, t.to_name, t.id, now - 60000).first()) return false;
   const ms = (await env.DB.prepare(t.to_name.startsWith('mb:') ? 'SELECT * FROM members WHERE id = ? AND left_at IS NULL' : 'SELECT * FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL')
     .bind(...(t.to_name.startsWith('mb:') ? [t.to_name.slice(3)] : [t.panel_id, t.to_name])).all()).results || [];
   let rang = false;
@@ -182,7 +194,7 @@ export async function ringTask(env, t) {
     if (m.apns_token) {
       const { apnsConfigured, sendApns, taskAlert } = await import('./apns.js');
       if (apnsConfigured(env)) {
-        const payload = taskAlert({ program: t.program, taskId: t.id, sound: m.sounds !== 0 });   // OWNER_router_6: no sound for a person who chose none
+        const payload = taskAlert({ program: t.program, taskId: t.id, sound: m.sounds !== 0, step: (() => { try { return JSON.parse(t.step_json || '{}'); } catch { return null; } })() });   // OWNER_router_30: YESNO or TASK   // OWNER_router_6: no sound for a person who chose none
         const r = await sendApns(env, { token: m.apns_token, env: m.apns_env }, payload, { expiresAt: now + 3600000, collapseId: t.id }).catch(() => ({ ok: false }));
         ok = ok || !!r.ok;
       }
@@ -204,12 +216,12 @@ async function createTask0(env, request, key, b) {
     const pr = await env.DB.prepare('SELECT team FROM principals WHERE id = ?').bind(key.principal_id).first();
     if (!pr || pr.team !== 1 || !key.team) throw fixable('forbidden_for_key_class', 'Authorization', 'Tasks are open only to the operator\'s own keys for now; ask your people with POST /v1/calls, which is screened.', null, {}, 403);
   }
-  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card', 'expires_in', 'contacts'];
+  const KNOWN = ['panel', 'to', 'title', 'step', 'unlocks', 'asker', 'urgency', 'idempotency_key', 'card', 'expires_in', 'contacts', 'group'];
   for (const k of Object.keys(b || {})) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'task-001');
     const had = await env.DB.prepare('SELECT * FROM tasks WHERE key_id = ? AND idem = ?').bind(key.id, idem).first();
-    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.principal_id)), repeated: true } };
+    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.brand_principal_id || had.principal_id)), repeated: true } };
   }
   const title = str(b.title, 'title', 3, 120, 'Turn On in the app');
   const step = readStep(b.step);
@@ -224,19 +236,24 @@ async function createTask0(env, request, key, b) {
   await notUs({ title, step, unlocks });   // OWNER_router_11 item 1
   const card = await cardFor(env, key, b.card, true, null, step);   // OWNER_router_9
   const contacts = (await import('./contacts.js')).askContacts(b.contacts, { title, step, card, unlocks }, nowMs());   // OWNER_router_29
+  const bkey = await (await import('./cards.js')).brandByKey(env, request), brandPr = bkey ? bkey.pr : null;   // OWNER_router_31 (ASKS-9)
   const panel = await panelFor(env, key, b.panel);
   const to = await addressee(env, panel, b.to);
   { const { blocked } = await import('./blocks.js');   // OWNER_router_4 item 1: the asker hears only "not available"
     const ids = to.startsWith('mb:') ? [to.slice(3)] : ((await env.DB.prepare('SELECT id FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL').bind(panel.id, to).all()).results || []).map(r => r.id);
-    if (await blocked(env, key.principal_id, ids)) throw notFixable(403, 'not_available', 'This person is not available.'); }
+    if (await blocked(env, key.principal_id, ids)) throw notFixable(403, 'not_available', 'This person is not available.');
+    if (bkey && !bkey.proved && ids.length && (await env.DB.prepare(`SELECT COUNT(*) AS n FROM members WHERE id IN (${ids.map(() => '?').join(',')}) AND is_real != 0`).bind(...ids).first()).n) throw notFixable(400, 'brand_not_proved', 'A brand that has not proved its domain reaches test members only; nothing was stored.'); }   // OWNER_router_32
+  const group = await readGroup(env, b, step, key.id, panel.id, to);   // OWNER_router_31
   const id = rid('tk_'), now = nowMs();
   await env.DB.prepare(`INSERT INTO tasks (id, principal_id, key_id, panel_id, to_name, title, step_json, unlocks, program, session, urgency, state, created_at, idem, card_json, expires_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)`).bind(id, key.principal_id, key.id, panel.id, to, title, JSON.stringify(step), unlocks, program, session, urgency, now,
       b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000).run();
   if (contacts) await env.DB.prepare('UPDATE tasks SET contacts_json = ? WHERE id = ?').bind(JSON.stringify(contacts), id).run();
+  if (group) await env.DB.prepare('UPDATE tasks SET group_name = ? WHERE id = ?').bind(group, id).run();
+  if (brandPr) await env.DB.prepare('UPDATE tasks SET brand_principal_id = ? WHERE id = ?').bind(brandPr, id).run();
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (urgency === 'now') { try { await ringTask(env, t); } catch { } t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first(); }
-  return { status: 201, body: out(t, request, await askerBrand(env, t.principal_id)) };
+  return { status: 201, body: out(t, request, await askerBrand(env, t.brand_principal_id || t.principal_id)) };
 }
 
 // OWNER_router_11 item 1: no asker's text may claim to be us (title, step text, labels, choices, unlocks; cards in cardFor)
@@ -274,12 +291,12 @@ async function connectionTask(env, request, key, b) {
   const c = key.connection;
   if (c.blocked) throw notFixable(403, 'not_available', 'This person is not available to this AI.');
   { const { blocked } = await import('./blocks.js'); if (await blocked(env, key.principal_id, [c.member_id])) throw notFixable(403, 'not_available', 'This person is not available to this AI.'); }
-  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card', 'expires_in', 'contacts'];
+  const KNOWN = ['title', 'step', 'unlocks', 'urgency', 'idempotency_key', 'media', 'webhook', 'card', 'expires_in', 'contacts', 'group'];
   for (const k of Object.keys(b)) if (!KNOWN.includes(k)) throw fixable('unknown_field', k, ['panel', 'to', 'asker'].includes(k) ? 'This key asks one person, the one who connected it, under the name they gave it: leave out panel, to and asker.' : `"${k}" is not a field of a task; send ${KNOWN.join(', ')}.`, null);
   if (b.idempotency_key !== undefined) {
     const idem = str(b.idempotency_key, 'idempotency_key', 1, 128, 'ask-001');
     const had = await env.DB.prepare('SELECT * FROM tasks WHERE key_id = ? AND idem = ?').bind(key.id, idem).first();
-    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.principal_id)), repeated: true } };
+    if (had) return { status: 200, body: { ...out(had, request, await askerBrand(env, had.brand_principal_id || had.principal_id)), repeated: true } };
   }
   const title = str(b.title, 'title', 3, 120, 'Someone is at the front door');
   const step = readStep(b.step);
@@ -293,6 +310,9 @@ async function connectionTask(env, request, key, b) {
   if (c.lab) await bounds({ title, step, unlocks, urgency }, env);
   const card = await cardFor(env, key, b.card, !!c.lab, c.id, step);   // OWNER_router_9
   const contacts = (await import('./contacts.js')).askContacts(b.contacts, { title, step, card, unlocks }, nowMs());   // OWNER_router_29
+  const bkey = await (await import('./cards.js')).brandByKey(env, request);   // OWNER_router_31: Brand-Key, else the brand it was connected from
+  if (bkey && !bkey.proved) { const mm = await env.DB.prepare('SELECT is_real FROM members WHERE id = ?').bind(c.member_id).first(); if (!mm || Number(mm.is_real) !== 0) throw notFixable(400, 'brand_not_proved', 'A brand that has not proved its domain reaches test members only; nothing was stored.'); }   // OWNER_router_32
+  const brandPr = (bkey && bkey.pr) || c.brand_principal_id || null;
   const now = nowMs();
   const day = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(CASE WHEN created_at > ? THEN 1 ELSE 0 END) AS h FROM tasks WHERE connection_id = ? AND created_at > ?').bind(now - 3600000, c.id, now - 86400000).first();
   if (day && day.n >= 300) throw notFixable(429, 'rate_limited', 'This AI has asked 300 times today; nothing was stored. Its person reads the list tomorrow.', { retry_after_seconds: 3600 });
@@ -306,6 +326,7 @@ async function connectionTask(env, request, key, b) {
   const here = await env.DB.prepare(c.person_name ? 'SELECT id FROM members WHERE panel_id = ? AND person_name = ? AND left_at IS NULL LIMIT 1' : 'SELECT id FROM members WHERE id = ? AND left_at IS NULL')
     .bind(...(c.person_name ? [c.panel_id, c.person_name] : [c.member_id])).first();
   if (!here) throw notFixable(403, 'not_available', 'This person is not available to this AI.');
+  const group = await readGroup(env, b, step, key.id, c.panel_id, c.person_name || ('mb:' + c.member_id));   // OWNER_router_31
   const id = rid('tk_');
   const attach = b.media === undefined ? null : await (await import('./own.js')).attachOwn(env, c, b.media, id, now);
   await env.DB.batch([
@@ -313,12 +334,14 @@ async function connectionTask(env, request, key, b) {
       VALUES (?,?,?,?,?,?,?,?,?,NULL,?,'open',?,?,?,?,?,?)`).bind(id, key.principal_id, key.id, c.panel_id, c.person_name || ('mb:' + c.member_id), title, JSON.stringify(step), unlocks,
       c.name, urgency, now, b.idempotency_key === undefined ? null : String(b.idempotency_key).trim(), c.id, hook, card ? JSON.stringify(card) : null, now + expiresIn(b) * 1000),
     ...(contacts ? [env.DB.prepare('UPDATE tasks SET contacts_json = ? WHERE id = ?').bind(JSON.stringify(contacts), id)] : []),
+    ...(group ? [env.DB.prepare('UPDATE tasks SET group_name = ? WHERE id = ?').bind(group, id)] : []),
+    ...(brandPr ? [env.DB.prepare('UPDATE tasks SET brand_principal_id = ? WHERE id = ?').bind(brandPr, id)] : []),
     env.DB.prepare('UPDATE connections SET last_used_at = ? WHERE id = ?').bind(now, c.id),
     ...(attach ? [attach] : []),
   ]);
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (urgency === 'now' && !c.quiet) { try { await ringTask(env, t); } catch { } t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first(); }
-  return { status: 201, body: out(t, request, await askerBrand(env, t.principal_id)) };
+  return { status: 201, body: out(t, request, await askerBrand(env, t.brand_principal_id || t.principal_id)) };
 }
 
 // a note on a task, in order (operations 1:00 PM CT); masked like a reply; at most 50 per task
@@ -360,14 +383,14 @@ export async function getTask(env, request, key, id) {
   let t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ? AND principal_id = ?').bind(String(id || ''), key.principal_id).first();
   if (!t) throw notFixable(404, 'not_found', 'No task of yours has that id.');
   if (t.state === 'open' && (t.expires_at || t.created_at + 2592000000) < nowMs()) { await lapseNow(env, t); t = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(); }
-  return out(t, request, await askerBrand(env, t.principal_id));
+  return out(t, request, await askerBrand(env, t.brand_principal_id || t.principal_id));
 }
 
 export async function listTasks(env, request, key, state) {
   if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer real_...', {}, 401);
   const rows = (await env.DB.prepare(`SELECT * FROM tasks WHERE principal_id = ? ${state === 'all' ? '' : 'AND state = \'open\''} ORDER BY created_at DESC LIMIT 200`).bind(key.principal_id).all()).results || [];
-  const brands = new Map(); for (const t of rows) if (!brands.has(t.principal_id)) brands.set(t.principal_id, await askerBrand(env, t.principal_id));
-  return { tasks: rows.map(t => out(t, request, brands.get(t.principal_id))) };
+  const brands = new Map(); for (const t of rows) { const bp = t.brand_principal_id || t.principal_id; if (!brands.has(bp)) brands.set(bp, await askerBrand(env, bp)); }
+  return { tasks: rows.map(t => out(t, request, brands.get(t.brand_principal_id || t.principal_id))) };
 }
 
 // ---- the person's side: one list, and the reply
@@ -383,12 +406,12 @@ export async function memberTasks(env, request, m, q) {
   const like = typeof q === 'string' && q.trim() ? '%' + q.trim().slice(0, 80).replace(/[%_]/g, '') + '%' : null;
   const mine = `t.panel_id = ? AND ${w}`, mineArgs = [m.panel_id, ...args];
   const rs = ((await env.DB.batch([
-    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND COALESCE(t.hold_until, 0) <= ? AND ((t.state = 'open' AND COALESCE(t.expires_at, t.created_at + 2592000000) > ?) OR (t.state = 'withdrawn' AND t.withdrawn_at > ?)) ORDER BY t.created_at DESC LIMIT 200`)
+    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND COALESCE(t.hold_until, 0) <= ? AND ((t.state = 'open' AND COALESCE(t.expires_at, t.created_at + 2592000000) > ?) OR (t.state = 'withdrawn' AND t.withdrawn_at > ? AND COALESCE(t.elsewhere, 0) = 0)) ORDER BY t.created_at DESC LIMIT 200`)
       .bind(...mineArgs, now0, now0, now0 - 86400000),
-    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND t.state NOT IN ('open', 'withdrawn', 'lapsed')
-      ${like ? 'AND (t.title LIKE ? OR t.step_json LIKE ? OR t.unlocks LIKE ? OR t.program LIKE ?)' : ''} ORDER BY t.answered_at DESC LIMIT ?`)
+    env.DB.prepare(`SELECT t.* FROM tasks t WHERE ${mine} AND (t.state NOT IN ('open', 'withdrawn', 'lapsed') OR (t.state = 'withdrawn' AND t.elsewhere = 1))
+      ${like ? 'AND (t.title LIKE ? OR t.step_json LIKE ? OR t.unlocks LIKE ? OR t.program LIKE ?)' : ''} ORDER BY COALESCE(t.answered_at, t.withdrawn_at) DESC LIMIT ?`)
       .bind(...mineArgs, ...(like ? [like, like, like, like] : []), histLimit(request)),
-    env.DB.prepare(`SELECT DISTINCT b.principal_id, b.brand_json, b.domain, b.verified_at, b.brand_id FROM brands b JOIN tasks t ON t.principal_id = b.principal_id WHERE ${mine}`).bind(...mineArgs),
+    env.DB.prepare(`SELECT DISTINCT b.principal_id, b.brand_json, b.domain, b.verified_at, b.brand_id FROM brands b JOIN tasks t ON b.principal_id = COALESCE(t.brand_principal_id, t.principal_id) WHERE ${mine}`).bind(...mineArgs),
     env.DB.prepare(`SELECT DISTINCT c.id, c.name, c.icon FROM connections c JOIN tasks t ON t.connection_id = c.id WHERE ${mine}`).bind(...mineArgs),
     env.DB.prepare(`SELECT o.task_id, o.content_type, o.bytes, o.seconds, o.delete_at FROM own_material o JOIN tasks t ON t.id = o.task_id WHERE ${mine}`).bind(...mineArgs),
     ...P.deckStatements(env, m),
@@ -408,6 +431,8 @@ export async function memberTasks(env, request, m, q) {
     created_at: iso(t.created_at), state: t.state, reply: t.reply_json ? JSON.parse(t.reply_json) : null, notes: t.notes_json ? JSON.parse(t.notes_json) : [], expires_at: iso(t.expires_at || (t.created_at + 30 * 86400000)),
     ...(t.state === 'withdrawn' ? { withdrawn_at: iso(t.withdrawn_at), withdraw_why: t.withdraw_why } : {}),
     ...(t.contacts_json ? { contacts: CT.forPerson(CT.parse(t.contacts_json)) } : {}),   // OWNER_router_29: never the service's ref
+    ...(t.group_name ? { group: t.group_name, group_id: (t.connection_id || t.principal_id) + '/' + t.group_name } : {}),   // OWNER_router_31; group_id: TRUST 7:40 (one service's group)
+    ...(t.elsewhere ? { answered_elsewhere: true } : {}),   // OWNER_router_31 (CARD-17): settled in the service's own app
     ...(t.sender_member_id ? { sender: { name: t.program, kind: 'person', behind: `You joined ${t.program || 'this person'}'s people. The name is their account's, checked by person.tools; it is never typed into the ask.` } } : {}),
     ...(t.passed_by ? { passed_on_by: t.passed_by_name || 'one of your people' } : {}),
     shell_only: JSON.parse(t.step_json).type === 'command' ? 'Only you can run this: copy the line and paste it where it says. The service cannot run it for you.' : undefined });
@@ -420,7 +445,7 @@ export async function memberTasks(env, request, m, q) {
     for (const b of rs[2]) { const v = brandView(b, m, apiBase(request)); if (v) brands[b.principal_id] = v; }
     for (const [i, x] of [...out.open, ...out.history].entries()) { const t = rows[i];
       if (t.card_json) x.card = JSON.parse(t.card_json);
-      if (brands[t.principal_id]) x.brand = brands[t.principal_id]; } }
+      const bp = t.brand_principal_id || t.principal_id; if (brands[bp]) x.brand = brands[bp]; } }
   const own = [...out.open, ...out.history].filter((x, i) => (i < out.open.length ? open[i] : hist[i - out.open.length]).connection_id);
   if (own.length) {   // WEB 4:07: two queries for the whole list, not two per ask
     const rows = new Map([...open, ...hist].map(r => [r.id, r]));
@@ -606,14 +631,15 @@ export async function withdrawTask(env, request, key, id, b, admin = false) {
   if (!admin && (!key || key.anon)) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer real_...', {}, 401);
   const t = await env.DB.prepare(admin ? 'SELECT * FROM tasks WHERE id = ?' : 'SELECT * FROM tasks WHERE id = ? AND principal_id = ?').bind(...(admin ? [String(id || '')] : [String(id || ''), key.principal_id])).first();
   if (!t) throw notFixable(404, 'not_found', 'No task of yours has that id.');   // another principal's task answers the same (TRUST 10:17)
-  for (const k of Object.keys(b || {})) if (k !== 'why') throw fixable('unknown_field', k, `"${k}" is not a field here; send why.`, null);
+  for (const k of Object.keys(b || {})) if (!['why', 'elsewhere'].includes(k)) throw fixable('unknown_field', k, `"${k}" is not a field here; send why (and elsewhere).`, null);
+  if (b && b.elsewhere !== undefined && typeof b.elsewhere !== 'boolean') throw fixable('invalid_field', 'elsewhere', 'elsewhere is true when the person settled it in your own app, so the ask leaves their list without a word.', true);   // OWNER_router_31
   const why = str(b && b.why, 'why', 3, 200, 'Not needed any more: the step was done another way.');
   if (SECRET_RX.test(why.replace(URL_RX, ' '))) throw fixable('secret_in_task', 'why', 'Something here looks like a key or a token. Never send a key\'s value.', null, {}, 422);
-  if (t.state === 'withdrawn') return out(t, request, await askerBrand(env, t.principal_id));   // idempotent
+  if (t.state === 'withdrawn') return out(t, request, await askerBrand(env, t.brand_principal_id || t.principal_id));   // idempotent
   if (t.state !== 'open') throw notFixable(409, 'already_answered', `This task was already answered (${t.state}); it stays as it is.`);
-  await env.DB.prepare('UPDATE tasks SET state = \'withdrawn\', withdrawn_at = ?, withdraw_why = ? WHERE id = ? AND state = \'open\'').bind(nowMs(), why, t.id).run();
+  await env.DB.prepare('UPDATE tasks SET state = \'withdrawn\', withdrawn_at = ?, withdraw_why = ?, elsewhere = ? WHERE id = ? AND state = \'open\'').bind(nowMs(), why, b && b.elsewhere === true ? 1 : null, t.id).run();
   if (t.contacts_json) { try { await (await import('./contacts.js')).stripClosed(env, t.id); } catch { } }
-  return out(await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(), request, await askerBrand(env, t.principal_id));
+  return out(await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(t.id).first(), request, await askerBrand(env, t.brand_principal_id || t.principal_id));
 }
 
 // OWNER_router_1 item 4: every refused task, for the operator (GET /internal/task_refusals?hours=24). Never a matched secret.

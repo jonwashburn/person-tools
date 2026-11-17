@@ -223,7 +223,8 @@ keys: never in an address, a log or an ask.
 
 **Test brands.** **[ASKS-10]** A brand that has not proved its domain MUST be shown only to the server's own test members
 (members the server made for testing, never a real person), marked `"verified": false, "test": true`, whatever key gave it. Which test members a service may reach is the server's
-to say; a service with none proves its domain before its brand shows anywhere. **[CARD-7]** A client
+to say; a service with none proves its domain before its brand shows anywhere. A test brand may also hold a brand key
+(`POST /v1/brand/key`) and run the connect road of 27.9; both reach test members only. **[CARD-7]** A client
 MUST draw a test brand with the words "Test brand, not verified" in its own colours.
 
 ### 27.5 The card
@@ -326,7 +327,9 @@ E.164 is refused, not rewritten. `contact_ref` in a reply is the contact's `ref`
 a card's `headline`, `text`, `facts` values, `quote` and `when_where`. **[ASKS-17]** A server MUST refuse a reference to a contact
 the ask does not carry (`unknown_reference`), and a `role` that reads as a name: a role in which any word after the first
 starts with a capital letter, or which repeats a word of the contact's `name`, is refused on `role`. **[CARD-12]** On the open card (the ask as the person opens it, while it is open)
-a client MUST draw the contact's name for a reference; everywhere else it MUST draw the contact's `role`. A choice that is a
+a client MUST draw the contact's name for a reference ("the <role>" when it has none); everywhere else it MUST draw "the
+<role>". Two contacts of one ask with the same role are numbered in the order given ("the shopper 1", "the shopper 2"), and a
+reference that starts a sentence takes a capital ("The shopper wants ..."). A choice that is a
 reference is answered with that string, and the reply carries `contact_ref`. The digest of a signed approval covers the text as
 the person saw it, names drawn.
 
@@ -335,7 +338,7 @@ the person saw it, names drawn.
 count or a log; where a reference stands in any of those, the role stands in its place. **[CARD-13]** A client MUST show the
 details only on the open card, and under them, in its own words, whose statement the consent is: "Northside Motors says Avery Johnson got in touch first" for `they_contacted_the_asker`, and
 "... says Avery Johnson agreed to be contacted" for the other, naming the brand (or, with none, who is asking as the client shows
-it) and the contact's `name` as given. It never says what the person agreed to beyond being contacted.
+it) and the contact's `name` as given, or "the <role>" when it has none. It never says what the person agreed to beyond being contacted.
 
 **Deleted at close.** **[ASKS-19]** When the ask is answered, done, not now, withdrawn or lapsed, the server MUST delete the
 contact's `name`, `phone` and `email` within a minute, keeping `id`, `role`, `ref`, `consent` and `consent_at` (when the ask that stated it was placed).
@@ -358,11 +361,13 @@ the details of anyone who did not contact it or agree to be contacted.
 answer, and gives them the same `group`. A group belongs to one key asking one person; the oldest open ask in it (the first placed, in the server's order)
 heads the card, a lone open ask of a group is drawn alone, and
 a group's name may be used again once all its asks have closed. **[ASKS-22]** A server MUST alert the person at most once for
-the asks of one group placed within a minute of each other, so a service places them back to back. **[CARD-15]** A client MAY draw the open asks of one service that share a group as one
-card: the oldest ask's title, card, `unlocks`, urgency and expiry, then each ask's step as a row with its own answers (the
+the asks of one group placed within a minute of each other, so a service places them back to back. **[CARD-15]** A client MAY draw the open asks that share a `group_id` as one card (the
+person's list gives each grouped ask a `group_id` naming both its asker and its group, since two of a person's AIs may use the
+same group name; a client never groups by the name alone); such a card shows the oldest ask's title, card, `unlocks`, urgency and expiry, then each ask's step as a row with its own answers (the
 others' cards are not drawn); Done on the whole card sends Done for each open
 row. A client that does not group draws each ask alone and loses nothing. **[ASKS-23]** A server MUST refuse a seventh open ask in
-one group (`group_full`).
+one group (`group_full`), and an ask with a `group` whose step is not a question (400 `invalid_field` on `group`): an approval,
+a link, a command or a call stands on a card of its own, so another ask's card never frames what it does.
 
 **Speed.** `urgency` says how soon it matters and `expires_in` how long it stays open. **[CARD-16]** When an open ask expires
 within the hour, a client MUST show the time left, and when it lapses, MUST remove it. Nobody's ask is answered for them: a
@@ -378,14 +383,16 @@ A person connects their own AI by making a connection and giving the AI its key 
 people sign in start the connection, so that the key reaches the right account:
 
 1. The service sends the person to the server's connect page with `brand` (its `brand_id`), `state` (the service's own opaque
-   value) and `return` (an https address on the brand's proved domain).
+   value) and `return` (an https address on the brand's proved domain or a subdomain of it, on the default port: the proof covers no other).
 2. The person, signed in to the server, sees the brand, its domain, that it is proved, and the urgencies it may use; may rename
    it; and connects it or not.
 3. The server sends the person to `return` with `code` and the same `state`, or with `error=declined`.
 4. Within ten minutes, once, the service exchanges the code: `POST /v1/connect/token` `{"code"}` with `Brand-Key`, which answers
    the connection's `key`, `connection_id` and `webhook_secret`, as 26.8 gives them.
 
-**[ASKS-25]** A server that offers this MUST refuse a `return` outside the brand's proved domain (400 `invalid_field` on
+With a test brand (27.4) the connect page and the code exchange work only for the server's test members, and `return` must
+still be on the brand's own domain, so a service can walk the whole road before it proves its domain. **[ASKS-25]** A server
+that offers this MUST refuse a `return` outside the brand's proved domain (400 `invalid_field` on
 `return`), and a code used twice or after ten minutes (410 `expired`). The server never learns who the person is to the service, and the service learns nothing of the person but the
 connection.
 
@@ -393,7 +400,7 @@ connection.
 
 In `GET /v1/member/tasks`, an ask that wears a brand carries `brand`: the brand as given, with `id`, `domain`, `verified`
 (`true`; or `false` with `test: true`, 27.4), and a `url` on each picture state that serves it with no credential (`GET
-/v1/brand_media/{m_...}`). An ask that carries contacts has `contacts` (27.7; `ref` never), and an ask in a group has `group`.
+/v1/brand_media/{m_...}`). An ask that carries contacts has `contacts` (27.7; `ref` never), and an ask in a group has `group` and `group_id` (27.8).
 `from` and the connection's name stay the server's and the person's: the brand never names who is asking.
 
 ### 27.11 Errors and registries
@@ -418,8 +425,61 @@ A server that lists `branded_asks` conforms when it meets every `ASKS-` requirem
 that offers 27.9. A service conforms when it meets every `ASKER-` requirement. A client conforms when it meets every `CARD-`
 requirement against any server that lists `branded_asks`.
 
-### 27.13 Changes to this section
+### 27.13 One branded ask, from end to end (informative)
 
+Northside Motors' assistant holds a connection key that a person at the lot made for it (26.8). Shapes are abridged to the fields
+this section names; the server adds the others 27.2 lists.
+
+1. **The brand.** `PUT /v1/brand` with the connection key:
+
+   ```json
+   { "brand": { "name": "Northside Motors", "domain": "northside.example",
+       "mark": { "states": { "needs_you": { "glyph": "disc", "colour": "#e8590c" },
+                             "idle": { "glyph": "ring", "colour": "#8f8f8f" } } },
+       "colours": { "ink": "#0d0d0d", "ink_soft": "#5d5d5d", "rule": "#e6e6e6" },
+       "grounds": { "light": "#ffffff" }, "corners": "round", "quiet_line": "Nothing needs you." } }
+   ```
+
+   It answers 200 with the brand, its `id`, `"verified": false` and `prove_it`:
+   `{"token": "<token>", "file": "https://northside.example/.well-known/{{wire_prefix}}-brand", "txt_name":
+   "_{{wire_prefix}}-brand.northside.example"}`.
+2. **The proof.** Northside serves the token as one line of that file, then sends `POST /v1/brand/verify` with no body. It answers
+   `{"domain": "northside.example", "verified": true, "verified_at": "...", "how": "file", "brand_id": "br_...", "brand_key":
+   "bk_..."}`; the brand key is kept with Northside's other keys.
+3. **The ask.** `POST /v1/tasks` with the connection key:
+
+   ```json
+   { "title": "Christmas Eve is Thursday, Dec 24. Are you open?", "urgency": "whenever", "expires_in": 1209600,
+     "idempotency_key": "holiday:2026-12-24", "webhook": "https://northside.example/asks/answers",
+     "card": { "blocks": [ { "headline": "Christmas Eve is Thursday, Dec 24." },
+                           { "text": "Shoppers and callers will ask. Tell me once and the AI uses it." },
+                           { "when_where": { "when": "Thu 24 Dec" } },
+                           { "choices": ["Open as usual", "Closed", "Other hours"] } ] },
+     "step": { "type": "question", "text": "Are you open?", "choices": ["Open as usual", "Closed", "Other hours"],
+               "line_for": { "Other hours": "Your hours that day" } } }
+   ```
+
+   It answers 201 with `"task_id": "tk_..."`, `"state": "open"`, `"key": "holiday:2026-12-24"` and `"brand": {"id": "br_...",
+   "name": "Northside Motors"}`. A repeat of the same request answers 200 with the same ask and `"repeated": true`.
+4. **The person's phone.** `GET /v1/member/tasks` carries the ask with its `card`, its `step` and `brand` (the brand as given, with
+   `id`, `domain` and `"verified": true`). The client draws the lit lamp, "Northside Motors  northside.example", who is asking, the
+   headline, the line, the date, "Are you open?" and its own three answers, Done, Later and Not now.
+5. **The answer.** The person chooses Other hours and types the hours; the client sends `POST /v1/member/tasks/{task_id}`
+   `{"action": "answer", "choice": "Other hours", "text": "9 AM to 2 PM"}`, which answers 200 with `"state": "answered"` and the
+   reply.
+6. **The answer, sent.** The server posts to the webhook, signed (27.2):
+   `{"task_id": "tk_...", "key": "holiday:2026-12-24", "state": "answered", "reply": {"action": "answer", "choice": "Other
+   hours", "text": "9 AM to 2 PM", "note": null, "at": "..."}, "answered_at": "..."}`. Northside checks the signature, sets its
+   hours for the 24th, and acts on that delivery id once.
+7. **Clearing.** When an owner answers the New Year's Eve question in Northside's own app instead, Northside sends `POST
+   /v1/tasks/{task_id}/withdraw` `{"why": "Answered in Northside Motors' own app.", "elsewhere": true}`, which answers 200 with
+   `"state": "withdrawn"`; the person's client removes the ask without a word.
+
+### 27.14 Changes to this section
+
+- 16 Nov 2026, later: a worked example, from a brand to a cleared ask (27.13); only questions carry a group, and a client groups
+  only one asker's asks (27.8, CARD-15); a contact with
+  no name reads "the <role>", and two contacts with one role are numbered (CARD-12, CARD-13).
 - 16 Nov 2026: written from the draft's Cards paragraph, tested against a first service's eighteen moments, and then against a
   second service's brand and three asks built from sections 1 to 8, 26 and 27 alone. Each place a builder had to guess was closed
   in the text: the shape of `prove_it` and of a verification, the webhook's signing key, retries and delivery id, what a repeated

@@ -116,6 +116,9 @@ export async function setOwner(env, panelId, b) {
   if (!ms || ms.length < 1 || ms.length > 10) throw fixable('invalid_field', 'members', 'members are 1 to 10 member ids: the memberships that are this person (their app, their page).', ['mb_...']);
   const found = (await env.DB.prepare(`SELECT id FROM members WHERE id IN (${ms.map(() => '?').join(',')}) AND left_at IS NULL`).bind(...ms).all()).results || [];
   if (found.length !== ms.length) throw fixable('invalid_field', 'members', 'Every id must be a membership that has not left.', null);
+  // TRUST 5:44 PM CT 16 Nov: a panel whose principal holds a key could be called or asked by that key, so the people notice would not be
+  // true there: an owner is set only on a people-only panel (POST /internal/panels/people makes one)
+  if (await env.DB.prepare('SELECT 1 AS x FROM keys WHERE principal_id = ? LIMIT 1').bind(p.principal_id).first()) throw notFixable(409, 'panel_has_keys', 'This panel\'s principal holds a key, so others could call it or ask through it and the people notice would not be true. Make a people-only panel with POST /internal/panels/people and give that one an owner.');
   const now = nowMs(), had = await panelOwner(env, p.id);
   // a people-only panel (made by POST /internal/panels/people) already belongs to a person principal with no keys: its owner sends as it
   const own = !had ? await env.DB.prepare('SELECT id FROM principals WHERE id = ? AND owner = \'person\' AND NOT EXISTS (SELECT 1 FROM keys WHERE principal_id = principals.id)').bind(p.principal_id).first() : null;
@@ -447,7 +450,7 @@ export async function makePeoplePanel(env, b) {
   if (links.some(x => x.max_joins !== 1)) throw fixable('invalid_field', 'labels', 'Only single-use labelled links move (TRUST 6:47: a label must name one person).', null);
   const now = nowMs(), pr = rid('pr_'), pn = rid('p_');
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner) VALUES (?,?,?,?,?,?,?)').bind(pr, 'real', nm, 0, null, now, 'person'),
+    env.DB.prepare('INSERT INTO principals (id, class, name, team, created_ip_hash, created_at, owner, test_run) VALUES (?,?,?,?,?,?,?,(SELECT test_run FROM principals WHERE id = ?))').bind(pr, 'real', nm, 0, null, now, 'person', from.principal_id),   // a test panel's people panel is a test run's too
     env.DB.prepare('INSERT INTO panels (id, principal_id, name, kind, join_code_hash, created_at, asker_name) VALUES (?,?,?,?,?,?,?)').bind(pn, pr, nm, 'private', 'people:' + rid('x', 24), now, null),
     ...links.map(l => env.DB.prepare('UPDATE join_links SET panel_id = ? WHERE code_hash = ? AND panel_id = ?').bind(pn, l.code_hash, from.id)),
   ]);
@@ -578,7 +581,10 @@ export async function taskAlertLine(env, m, taskId) {
   const who = { from: plainText(from), ...(t.passed_by ? { passed_on_by: plainText(t.passed_by_name || 'one of your people') } : {}) };
   if (!(await alertWordsOf(env, m.id))) return { ...who, note: 'Only who is asking: turn on "Show the ask in my alerts" in your settings to see its first line here.' };
   const step = JSON.parse(t.step_json || '{}');
-  const src = ['question', 'approve', 'link'].includes(step.type) && step.text ? step.text : t.title;
+  const q = ['question', 'approve', 'link', 'call'].includes(step.type) && step.text ? step.text : t.title;
+  // OWNER_router_30 item 4: with a card headline, the line is the headline, then the question (cut at 80 after contacts are drawn)
+  const head = (() => { try { const b = (JSON.parse(t.card_json || 'null') || {}).blocks || []; const h = b.find((x) => x && x.headline); return h ? h.headline : null; } catch { return null; } })();
+  const src = head ? head + ' ' + q : q;
   const CT = await import('./contacts.js');   // OWNER_router_29: an alert draws a contact as their role, never their name
   return { ...who, line: firstLine(T.maskSecrets(CT.drawRoles(src, CT.parse(t.contacts_json))).v), note: 'Shown because you turned on "Show the ask in my alerts". Your phone\'s own preview setting decides what shows on a locked screen.' };
 }

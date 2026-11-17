@@ -187,6 +187,7 @@ export async function putBrand(env, key, b) {
 export async function getBrand(env, key) {
   if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer test_...', {}, 401);
   const r = await env.DB.prepare('SELECT brand_json, updated_at, domain, domain_token, verified_at, brand_id FROM brands WHERE principal_id = ?').bind(key.principal_id).first();
+  if (r && !r.brand_id) { r.brand_id = rid('br_'); await env.DB.prepare('UPDATE brands SET brand_id = ? WHERE principal_id = ? AND brand_id IS NULL').bind(r.brand_id, key.principal_id).run(); }   // OWNER_router_32
   return { brand: r ? JSON.parse(r.brand_json) : null, id: r ? r.brand_id || null : null, updated_at: r ? iso(r.updated_at) : null, domain: r ? r.domain : null, verified: !!(r && r.verified_at), verified_at: r ? iso(r.verified_at) : null,
     ...(r && r.domain && !r.verified_at ? { prove_it: proveIt(r.domain, r.domain_token) } : {}) };
 }
@@ -254,8 +255,29 @@ export async function verifyBrand(env, key) {
     } catch { }
   }
   if (!how) { const p = proveIt(r.domain, r.domain_token); return { domain: r.domain, verified: false, verified_at: null, note: `Not found yet. ${p.say} ${p.also}` }; }
-  await env.DB.prepare('UPDATE brands SET verified_at = ?, verified_how = ? WHERE principal_id = ?').bind(now, how, key.principal_id).run();
-  return { domain: r.domain, verified: true, verified_at: iso(now), how, brand_id: r.brand_id || null };
+  const { sha256hex } = await import('./util.js'); const bk = rid('bk_', 32);   // OWNER_router_31 (ASKS-9): shown once, kept as its hash
+  await env.DB.prepare('UPDATE brands SET verified_at = ?, verified_how = ?, brand_key_hash = ?, brand_key_at = ? WHERE principal_id = ?').bind(now, how, await sha256hex(bk), now, key.principal_id).run();
+  return { domain: r.domain, verified: true, verified_at: iso(now), how, brand_id: r.brand_id || null, brand_key: bk, brand_key_note: 'Shown once. An ask placed with the header Brand-Key wears this brand, whatever key places it. Keep it as you keep your other keys: never in an address, a log or an ask.' };
+}
+// OWNER_router_31 (ASKS-9): POST /v1/brand/key makes a new brand key for a proved brand and stops the old one
+export async function newBrandKey(env, key) {
+  if (!key || key.anon) throw fixable('unauthorized', 'Authorization', 'A key is needed.', 'Bearer test_...', {}, 401);
+  const r = await env.DB.prepare('SELECT brand_id, verified_at, domain FROM brands WHERE principal_id = ?').bind(key.principal_id).first();
+  if (!r) throw notFixable(400, 'brand_not_proved', 'Give a brand first: PUT /v1/brand.');
+  const proved = !!(r.verified_at && r.domain);   // OWNER_router_32: a test brand's key reaches test members only
+  const { sha256hex } = await import('./util.js'); const bk = rid('bk_', 32), now = nowMs();
+  await env.DB.prepare('UPDATE brands SET brand_key_hash = ?, brand_key_at = ? WHERE principal_id = ?').bind(await sha256hex(bk), now, key.principal_id).run();
+  return { brand_id: r.brand_id || null, brand_key: bk, ...(proved ? {} : { test: true }), note: proved ? 'Shown once; the old brand key is stopped.' : 'Shown once; the old brand key is stopped. This brand has not proved its domain, so its key reaches test members only, never a real person.' };
+}
+// an ask placed with Brand-Key: the proved brand it names (its principal), or 400 brand_not_proved and nothing stored
+export async function brandByKey(env, request) {
+  const raw = request && request.headers && request.headers.get('brand-key');
+  if (!raw) return null;
+  const v = String(raw).trim();
+  const { sha256hex } = await import('./util.js');
+  const r = /^bk_[a-z0-9]{8,80}$/.test(v) ? await env.DB.prepare('SELECT principal_id, verified_at, domain FROM brands WHERE brand_key_hash = ?').bind(await sha256hex(v)).first() : null;
+  if (!r) throw notFixable(400, 'brand_not_proved', 'That Brand-Key names no brand (unknown or stopped); nothing was stored.');
+  return { pr: r.principal_id, proved: !!(r.verified_at && r.domain) };   // OWNER_router_32: an unproved (test) brand reaches test members only
 }
 // OWNER_router_26 item 5 (C4, ASKS-11): a choices block shows the step's own choices, in order; the answers come from the step
 export function cardFitsStep(card, step) {
